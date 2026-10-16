@@ -4,13 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.database import init_db, seed_demo_data_if_empty
-from app.routers import inventario, pos, clientes, reportes, garantias
+from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
     title="Mi Inventario - Celulares Samuel Navarrete",
     description="Sistema web para control de inventario, punto de venta (POS) y reportes de telefonía móvil.",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 # Configuración de CORS
@@ -34,6 +34,9 @@ app.include_router(pos.router)
 app.include_router(clientes.router)
 app.include_router(reportes.router)
 app.include_router(garantias.router)
+app.include_router(accesorios.router)
+app.include_router(caja.router)
+app.include_router(backup.router)
 
 # Archivos estáticos y Single Page Application (SPA)
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")

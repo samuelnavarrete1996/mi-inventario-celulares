@@ -107,14 +107,51 @@ def init_db():
     CREATE TABLE IF NOT EXISTS venta_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         venta_id INTEGER NOT NULL,
-        equipo_id INTEGER NOT NULL,
+        equipo_id INTEGER,
+        accesorio_id INTEGER,
+        tipo_item TEXT NOT NULL DEFAULT 'equipo',
+        nombre_item TEXT,
+        cantidad INTEGER NOT NULL DEFAULT 1,
         precio_final REAL NOT NULL,
         costo_compra REAL NOT NULL,
         margen_ganancia REAL NOT NULL,
         FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE,
-        FOREIGN KEY (equipo_id) REFERENCES equipos (id) ON DELETE RESTRICT
+        FOREIGN KEY (equipo_id) REFERENCES equipos (id) ON DELETE SET NULL
     );
     """)
+
+    # Migración de venta_items si existe con esquema antiguo (equipo_id NOT NULL)
+    cursor.execute("PRAGMA table_info(venta_items);")
+    items_rows = cursor.fetchall()
+    items_cols = [row["name"] for row in items_rows]
+    equipo_id_row = next((r for r in items_rows if r["name"] == "equipo_id"), None)
+    equipo_id_notnull = equipo_id_row["notnull"] if equipo_id_row else 0
+
+    if "tipo_item" not in items_cols or equipo_id_notnull == 1:
+        cursor.execute("PRAGMA foreign_keys = OFF;")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS venta_items_migrated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venta_id INTEGER NOT NULL,
+            equipo_id INTEGER,
+            accesorio_id INTEGER,
+            tipo_item TEXT NOT NULL DEFAULT 'equipo',
+            nombre_item TEXT,
+            cantidad INTEGER NOT NULL DEFAULT 1,
+            precio_final REAL NOT NULL,
+            costo_compra REAL NOT NULL,
+            margen_ganancia REAL NOT NULL,
+            FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE,
+            FOREIGN KEY (equipo_id) REFERENCES equipos (id) ON DELETE SET NULL
+        );
+        """)
+        cursor.execute("""
+        INSERT INTO venta_items_migrated (id, venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, tipo_item, cantidad)
+        SELECT id, venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, 'equipo', 1 FROM venta_items;
+        """)
+        cursor.execute("DROP TABLE venta_items;")
+        cursor.execute("ALTER TABLE venta_items_migrated RENAME TO venta_items;")
+        cursor.execute("PRAGMA foreign_keys = ON;")
 
     # 5. Tabla Devoluciones por Garantía
     cursor.execute("""
@@ -138,6 +175,64 @@ def init_db():
     );
     """)
 
+    # 6. Tabla Accesorios y Servicios / Reparaciones (Sin IMEI)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS accesorios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        categoria TEXT NOT NULL DEFAULT 'Accesorio',
+        codigo_barras TEXT,
+        costo_compra REAL NOT NULL DEFAULT 0,
+        precio_venta REAL NOT NULL DEFAULT 0,
+        stock INTEGER NOT NULL DEFAULT 0,
+        es_servicio INTEGER NOT NULL DEFAULT 0,
+        fecha_registro TEXT NOT NULL
+    );
+    """)
+
+    cursor.execute("PRAGMA table_info(accesorios);")
+    acc_cols = [row["name"] for row in cursor.fetchall()]
+    if "codigo_barras" not in acc_cols:
+        cursor.execute("PRAGMA foreign_keys = OFF;")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS accesorios_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            categoria TEXT NOT NULL DEFAULT 'Accesorio',
+            codigo_barras TEXT,
+            costo_compra REAL NOT NULL DEFAULT 0,
+            precio_venta REAL NOT NULL DEFAULT 0,
+            stock INTEGER NOT NULL DEFAULT 0,
+            es_servicio INTEGER NOT NULL DEFAULT 0,
+            fecha_registro TEXT NOT NULL
+        );
+        """)
+        cursor.execute("""
+        INSERT INTO accesorios_new (id, nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro)
+        SELECT id, nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro FROM accesorios;
+        """)
+        cursor.execute("DROP TABLE accesorios;")
+        cursor.execute("ALTER TABLE accesorios_new RENAME TO accesorios;")
+        cursor.execute("PRAGMA foreign_keys = ON;")
+
+    # 7. Tabla Cortes de Caja Diarios (Arqueo / Reporte Z)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cortes_caja (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha_corte TEXT NOT NULL,
+        fecha_inicio_periodo TEXT,
+        total_ventas REAL NOT NULL DEFAULT 0,
+        total_efectivo REAL NOT NULL DEFAULT 0,
+        total_transferencia REAL NOT NULL DEFAULT 0,
+        total_garantia REAL NOT NULL DEFAULT 0,
+        efectivo_declarado REAL NOT NULL DEFAULT 0,
+        diferencia REAL NOT NULL DEFAULT 0,
+        cantidad_ventas INTEGER NOT NULL DEFAULT 0,
+        notas TEXT,
+        fecha_registro TEXT NOT NULL
+    );
+    """)
+
     # Índices
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_equipos_imei ON equipos(imei);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_equipos_estado ON equipos(estado);")
@@ -145,9 +240,12 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha_venta);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_venta_items_venta ON venta_items(venta_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_venta_items_equipo ON venta_items(equipo_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_venta_items_accesorio ON venta_items(accesorio_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_equipo ON garantias(equipo_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_venta ON garantias(venta_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_fecha ON garantias(fecha_devolucion);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_accesorios_categoria ON accesorios(categoria);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes_caja(fecha_corte);")
 
     conn.commit()
     conn.close()
@@ -160,9 +258,9 @@ def seed_demo_data_if_empty():
     cursor.execute("SELECT COUNT(*) as count FROM equipos;")
     count = cursor.fetchone()["count"]
 
-    if count == 0:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    if count == 0:
         demo_equipos = [
             ("iPhone 14 Pro Max", 256, "Morado Oscuro", "356789123456781", "A", 14500.0, 18900.0, "Disponible", now),
             ("iPhone 13", 128, "Azul Medianoche", "356789123456782", "A", 8200.0, 11500.0, "Disponible", now),
@@ -201,10 +299,28 @@ def seed_demo_data_if_empty():
         v_id_1 = cursor.lastrowid
 
         cursor.execute("""
-        INSERT INTO venta_items (venta_id, equipo_id, precio_final, costo_compra, margen_ganancia)
-        VALUES (?, ?, 9200.0, 6500.0, 2700.0);
+        INSERT INTO venta_items (venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, tipo_item, cantidad)
+        VALUES (?, ?, 9200.0, 6500.0, 2700.0, 'equipo', 1);
         """, (v_id_1, eq_id_1))
 
+        conn.commit()
+
+    # Sembrar accesorios demo si la tabla está vacía
+    cursor.execute("SELECT COUNT(*) as count FROM accesorios;")
+    if cursor.fetchone()["count"] == 0:
+        demo_acc = [
+            ("Funda Uso Rudo Silicona (Varios)", "Funda", 45.0, 150.0, 30, 0, now),
+            ("Mica de Cristal Templado 9D", "Mica", 20.0, 100.0, 50, 0, now),
+            ("Cargador Rápido 20W Carga Rápida", "Cargador", 85.0, 250.0, 20, 0, now),
+            ("Cable USB-C a Lightning 1m", "Cable", 35.0, 120.0, 25, 0, now),
+            ("Cable USB-C a USB-C 60W 1m", "Cable", 35.0, 120.0, 25, 0, now),
+            ("Servicio Cambio de Pantalla", "Reparación", 400.0, 850.0, 999, 1, now),
+            ("Servicio Cambio de Batería Original", "Reparación", 300.0, 650.0, 999, 1, now),
+        ]
+        cursor.executemany("""
+        INSERT INTO accesorios (nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """, demo_acc)
         conn.commit()
 
     conn.close()

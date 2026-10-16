@@ -54,7 +54,7 @@
                         <span class="text-slate-500">Stock Disponible:</span>
                         <span id="header-stock-count" class="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">--</span>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div id="box-header-ganancias" class="admin-only flex items-center gap-2">
                         <span class="text-slate-500">Ganancias (<span id="header-mes-nombre" class="font-medium text-slate-700">Mes</span>):</span>
                         <span id="header-ganancia-mes" class="font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
                             $0.00
@@ -62,25 +62,42 @@
                     </div>
                 </div>
 
-                <!-- Navegación de Pestañas Principales y Botón Garantía -->
+                <!-- Navegación de Pestañas Principales y Acciones Rápidas -->
                 <div class="flex items-center gap-2">
                     <nav class="flex space-x-1 bg-slate-100 p-1 rounded-xl">
-                        <button data-tab="inventario" class="nav-tab-btn flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white shadow-sm transition-all">
+                        <button data-tab="inventario" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white shadow-sm transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                             <span>Inventario</span>
                         </button>
-                        <button data-tab="pos" class="nav-tab-btn flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
+                        <button data-tab="pos" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                            <span>Punto de Venta</span>
+                            <span>POS / Venta</span>
                         </button>
-                        <button data-tab="reportes" class="nav-tab-btn flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
+                        <button data-tab="accesorios" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                            <span>Accesorios</span>
+                        </button>
+                        <button data-tab="reportes" class="admin-only nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                            <span>Reportes y Ganancias</span>
+                            <span>Reportes</span>
                         </button>
                     </nav>
+
                     <button onclick="Garantias.abrirModal()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-2xs transition-all" title="Procesar devolución o cambio de equipo por garantía">
                         <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                         <span>🛡️ Garantías</span>
+                    </button>
+
+                    <button onclick="Caja.abrirModalCorte()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 shadow-2xs transition-all" title="Corte de caja y arqueo diario">
+                        <span>💵 Corte Caja</span>
+                    </button>
+
+                    <button onclick="App.abrirModalRespaldo()" class="admin-only hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 shadow-2xs transition-all" title="Descargar o restaurar copia de seguridad">
+                        <span>💾 Respaldo</span>
+                    </button>
+
+                    <button id="btn-toggle-modo-admin" onclick="App.toggleAdminMode()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all shadow-2xs" title="Alternar entre Modo Dueño y Modo Vendedor">
+                        <span id="txt-modo-admin">👑 Modo Dueño</span>
                     </button>
                 </div>
             </div>
@@ -512,7 +529,75 @@
 
 
         <!-- ========================================== -->
-        <!-- PESTAÑA 3: MÓDULO DE REPORTES Y DASHBOARD -->
+        <!-- PESTAÑA 3: CATÁLOGO DE ACCESORIOS Y SERVICIOS -->
+        <!-- ========================================== -->
+        <section id="view-accesorios" class="tab-view hidden space-y-6">
+            
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-full">Artículos sin IMEI</span>
+                    </div>
+                    <h2 class="text-2xl font-black text-slate-900 mt-1">Accesorios y Servicios Técnicos</h2>
+                    <p class="text-xs text-slate-500">Fundas, micas 9D, cargadores, cables, reparaciones y mano de obra.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="Accesorios.abrirModalNuevo()" class="admin-only px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <span>Nuevo Accesorio / Servicio</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Barra de Búsqueda y Filtros de Categoría -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+                <div class="flex flex-col md:flex-row items-center gap-3">
+                    <div class="relative flex-1 w-full">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </span>
+                        <input type="text" id="acc-search-input" oninput="Accesorios.buscar(this.value)" placeholder="Buscar por nombre, código de barras o categoría..." class="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    </div>
+                    
+                    <!-- Filtros por Categoría -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 text-xs font-semibold">
+                        <button onclick="Accesorios.filtrarCategoria('Todos')" data-cat="Todos" class="btn-cat-acc px-3 py-1.5 rounded-xl bg-blue-600 text-white transition-all whitespace-nowrap">Todos</button>
+                        <button onclick="Accesorios.filtrarCategoria('Fundas')" data-cat="Fundas" class="btn-cat-acc px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all whitespace-nowrap">Fundas</button>
+                        <button onclick="Accesorios.filtrarCategoria('Micas y Micas 9D')" data-cat="Micas y Micas 9D" class="btn-cat-acc px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all whitespace-nowrap">Micas</button>
+                        <button onclick="Accesorios.filtrarCategoria('Cargadores')" data-cat="Cargadores" class="btn-cat-acc px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all whitespace-nowrap">Cargadores</button>
+                        <button onclick="Accesorios.filtrarCategoria('Cables')" data-cat="Cables" class="btn-cat-acc px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all whitespace-nowrap">Cables</button>
+                        <button onclick="Accesorios.filtrarCategoria('Audio')" data-cat="Audio" class="btn-cat-acc px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all whitespace-nowrap">Audio</button>
+                        <button onclick="Accesorios.filtrarCategoria('Reparaciones')" data-cat="Reparaciones" class="btn-cat-acc px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all whitespace-nowrap">Reparaciones</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Accesorios -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                                <th class="py-3 px-4">Artículo</th>
+                                <th class="py-3 px-4">Categoría</th>
+                                <th class="py-3 px-4 admin-only">Costo Compra</th>
+                                <th class="py-3 px-4">Precio Venta</th>
+                                <th class="py-3 px-4 admin-only">Margen Ganancia</th>
+                                <th class="py-3 px-4">Stock</th>
+                                <th class="py-3 px-4 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-accesorios">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 4: MÓDULO DE REPORTES Y DASHBOARD -->
         <!-- ========================================== -->
         <section id="view-reportes" class="tab-view hidden space-y-8">
             
@@ -725,13 +810,17 @@
             </div>
 
             <!-- BOTONES DE ACCIÓN (Ocultos al imprimir con @media print .no-print) -->
-            <div class="no-print p-4 bg-slate-50 border-t border-slate-200 flex gap-2">
+            <div class="no-print p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row gap-2">
+                <button type="button" onclick="POS.enviarWhatsApp()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                    <span>Enviar WhatsApp</span>
+                </button>
                 <button type="button" onclick="POS.imprimirRecibo()" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                    Imprimir Recibo
+                    <span>Imprimir Ticket</span>
                 </button>
                 <button type="button" onclick="POS.cerrarRecibo()" class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs transition-all">
-                    Cerrar / Nueva Venta
+                    Cerrar
                 </button>
             </div>
         </div>
@@ -1003,6 +1092,282 @@
     </div>
 
 
+    <!-- ==================================================== -->
+    <!-- MODAL: REGISTRAR / EDITAR ACCESORIO O SERVICIO     -->
+    <!-- ==================================================== -->
+    <div id="modal-accesorio" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200">
+            <button onclick="Accesorios.cerrarModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="mb-4 pb-3 border-b border-slate-100">
+                <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Catálogo General</span>
+                <h3 id="modal-accesorio-titulo" class="text-xl font-bold text-slate-900 mt-0.5">Nuevo Accesorio / Servicio</h3>
+            </div>
+
+            <form id="form-accesorio" onsubmit="event.preventDefault(); Accesorios.guardar();" class="space-y-4">
+                <input type="hidden" id="input-acc-id">
+                
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre del Producto / Servicio *</label>
+                    <input type="text" id="input-acc-nombre" required placeholder="Ej. Funda Uso Rudo iPhone 13, Mica 9D Curva..." class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Categoría *</label>
+                        <select id="input-acc-categoria" required class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                            <option value="Fundas">Fundas</option>
+                            <option value="Micas y Micas 9D">Micas y Micas 9D</option>
+                            <option value="Cargadores">Cargadores</option>
+                            <option value="Cables">Cables</option>
+                            <option value="Audio">Audio</option>
+                            <option value="Reparaciones">Reparaciones / Servicio</option>
+                            <option value="Otros">Otros</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Stock Inicial *</label>
+                        <input type="number" id="input-acc-stock" required min="0" value="10" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Costo de Compra ($)</label>
+                        <input type="number" id="input-acc-costo" step="0.50" min="0" value="0.00" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Precio al Público ($) *</label>
+                        <input type="number" id="input-acc-precio" required step="0.50" min="0" placeholder="0.00" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-bold text-blue-600">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="input-acc-servicio" class="rounded text-blue-600 focus:ring-blue-500 h-4 w-4">
+                    <label for="input-acc-servicio" class="text-xs text-slate-600 font-medium">Es un servicio o mano de obra (no descuenta inventario físico)</label>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="Accesorios.cerrarModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/20 transition-all">Guardar Artículo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: CORTE DE CAJA DIARIO (ARQUEO / REPORTE Z)     -->
+    <!-- ==================================================== -->
+    <div id="modal-corte-caja" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200">
+            <button onclick="Caja.cerrarModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
+                <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 border border-emerald-100">
+                    <span class="text-xl">💵</span>
+                </div>
+                <div>
+                    <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider">Cierre de Turno / Diario</span>
+                    <h3 class="text-xl font-bold text-slate-900">Arqueo y Corte de Caja (Z)</h3>
+                </div>
+            </div>
+
+            <!-- Resumen calculado del sistema -->
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs space-y-2 mb-4">
+                <div class="flex justify-between text-slate-500 text-[11px]">
+                    <span>Desde: <strong id="corte-periodo-inicio" class="text-slate-700">--</strong></span>
+                    <span>Corte: <strong id="corte-fecha-hora" class="text-slate-700">--</strong></span>
+                </div>
+                <div class="border-t border-slate-200 pt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <span class="text-slate-400 block">Total Ventas Turno:</span>
+                        <span id="corte-total-ventas" class="font-extrabold text-slate-900 text-sm">$0.00</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block">Operaciones:</span>
+                        <span id="corte-total-operaciones" class="font-bold text-slate-700">0 ventas</span>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg border border-slate-200">
+                        <span class="text-slate-500 block font-medium">💵 Efectivo en Sistema:</span>
+                        <span id="corte-total-efectivo-sistema" class="font-black text-emerald-700 text-sm">$0.00</span>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg border border-slate-200">
+                        <span class="text-slate-500 block font-medium">📱 Transferencias:</span>
+                        <span id="corte-total-transferencia" class="font-bold text-blue-700 text-sm">$0.00</span>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+                    <span>Cubierto por Garantías:</span>
+                    <span id="corte-total-garantia" class="font-bold text-indigo-700">$0.00</span>
+                </div>
+            </div>
+
+            <!-- Formulario de Conteo Físico -->
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Efectivo Físico Contado en Caja ($) *
+                    </label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold">$</span>
+                        <input type="number" id="corte-efectivo-declarado" step="0.50" min="0" oninput="Caja.calcularDiferencia()" placeholder="0.00" class="w-full pl-8 pr-3 py-2 text-sm font-black text-slate-900 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Badge de Diferencia Automática -->
+                <div id="corte-badge-diferencia" class="hidden">
+                    <span id="corte-txt-diferencia"></span>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Observaciones / Notas del turno</label>
+                    <input type="text" id="corte-notas" placeholder="Ej. Se dejaron $500 de fondo de caja para cambio..." class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none">
+                </div>
+
+                <div class="flex justify-between items-center pt-3 border-t border-slate-100">
+                    <button type="button" onclick="Caja.verHistorial()" class="text-xs text-blue-600 hover:text-blue-700 font-bold">
+                        📜 Ver Cortes Anteriores
+                    </button>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="Caja.cerrarModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">Cancelar</button>
+                        <button type="button" onclick="Caja.confirmarCorte()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 transition-all">
+                            Finalizar y Cerrar Turno
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: HISTORIAL DE CORTES DE CAJA                   -->
+    <!-- ==================================================== -->
+    <div id="modal-historial-cortes" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200">
+            <button onclick="Caja.cerrarHistorial()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="mb-4 pb-3 border-b border-slate-100">
+                <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider">Auditoría Financiera</span>
+                <h3 class="text-xl font-bold text-slate-900 mt-0.5">Historial de Cortes de Caja (Reportes Z)</h3>
+            </div>
+
+            <div class="overflow-x-auto max-h-96">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                            <th class="py-2.5 px-3">Folio</th>
+                            <th class="py-2.5 px-3">Fecha y Hora</th>
+                            <th class="py-2.5 px-3">Total Ventas</th>
+                            <th class="py-2.5 px-3">Efectivo Sistema</th>
+                            <th class="py-2.5 px-3">Efectivo Real</th>
+                            <th class="py-2.5 px-3">Diferencia</th>
+                            <th class="py-2.5 px-3">Notas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-historial-cortes">
+                        <!-- Filas dinámicas -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-100 mt-4">
+                <button type="button" onclick="Caja.cerrarHistorial()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: HISTORIAL UNIVERSAL DE IMEI (TRAZABILIDAD 360°)-->
+    <!-- ==================================================== -->
+    <div id="modal-historial-imei" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200">
+            <button onclick="Garantias.cerrarModalHistorial()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="mb-4 pb-3 border-b border-slate-100">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Línea de Tiempo 360°</span>
+                    <span id="historial-imei-estado" class="text-xs"></span>
+                </div>
+                <h3 id="historial-imei-titulo" class="text-lg font-black text-slate-900 mt-0.5">--</h3>
+                <p id="historial-imei-subtitulo" class="text-xs font-mono text-slate-500 mt-0.5">--</p>
+            </div>
+
+            <!-- Contenedor Timeline Vertical -->
+            <div id="timeline-imei-eventos" class="space-y-1 max-h-96 overflow-y-auto pr-1">
+                <!-- Eventos renderizados dinámicamente -->
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-100 mt-4">
+                <button type="button" onclick="Garantias.cerrarModalHistorial()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: RESPALDO Y RESTAURACIÓN DE BASE DE DATOS     -->
+    <!-- ==================================================== -->
+    <div id="modal-respaldo-db" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200">
+            <button onclick="App.cerrarModalRespaldo()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
+                <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 border border-blue-100">
+                    <span class="text-xl">💾</span>
+                </div>
+                <div>
+                    <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Copia de Seguridad</span>
+                    <h3 class="text-lg font-bold text-slate-900">Respaldar / Restaurar Sistema</h3>
+                </div>
+            </div>
+
+            <p class="text-xs text-slate-600 mb-4">
+                Descarga una copia completa de tu inventario, ventas y clientes para guardarla en tu computadora o restaurarla si cambias de equipo.
+            </p>
+
+            <div class="space-y-3">
+                <button onclick="App.descargarBackupDB()" class="w-full p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-between text-left transition-all">
+                    <div>
+                        <div class="font-bold text-slate-800 text-xs">Descargar Base de Datos (.db)</div>
+                        <div class="text-[11px] text-slate-400">Archivo SQLite completo con toda la información</div>
+                    </div>
+                    <span class="text-sm">📥</span>
+                </button>
+
+                <button onclick="App.exportarJSON()" class="w-full p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-between text-left transition-all">
+                    <div>
+                        <div class="font-bold text-slate-800 text-xs">Exportar Todo a Formato JSON</div>
+                        <div class="text-[11px] text-slate-400">Formato abierto compatible con Excel y herramientas externas</div>
+                    </div>
+                    <span class="text-sm">📄</span>
+                </button>
+
+                <div class="pt-2 border-t border-slate-100">
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Restaurar copia (.db)</label>
+                    <input type="file" accept=".db,.sqlite,.sqlite3" onchange="App.restaurarDB(this)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-slate-100 mt-4">
+                <button type="button" onclick="App.cerrarModalRespaldo()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+
     <!-- CONTENEDOR FLOTANTE DE NOTIFICACIONES TOAST -->
     <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 max-w-sm pointer-events-none"></div>
 
@@ -1010,6 +1375,8 @@
     <script src="/static/js/app.js?v=20261016"></script>
     <script src="/static/js/inventario.js?v=20261016"></script>
     <script src="/static/js/pos.js?v=20261016"></script>
+    <script src="/static/js/accesorios.js?v=20261016"></script>
+    <script src="/static/js/caja.js?v=20261016"></script>
     <script src="/static/js/garantias.js?v=20261016"></script>
     <script src="/static/js/reportes.js?v=20261016"></script>
 </body>

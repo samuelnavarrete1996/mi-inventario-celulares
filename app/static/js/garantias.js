@@ -190,5 +190,91 @@ const Garantias = {
             btnSubmit.disabled = false;
             btnSubmit.innerHTML = originalText;
         }
+    },
+
+    async consultarHistorialIMEI(imei) {
+        if (!imei) return;
+        const modal = document.getElementById('modal-historial-imei');
+        const containerEventos = document.getElementById('timeline-imei-eventos');
+        const titleImei = document.getElementById('historial-imei-titulo');
+        const subImei = document.getElementById('historial-imei-subtitulo');
+        const badgeEstado = document.getElementById('historial-imei-estado');
+
+        if (modal) modal.classList.remove('hidden');
+        if (titleImei) titleImei.textContent = `Consultando IMEI ${imei}...`;
+        if (containerEventos) {
+            containerEventos.innerHTML = `
+                <div class="py-8 text-center text-slate-400">
+                    <svg class="animate-spin h-6 w-6 text-blue-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Cargando trazabilidad 360°...
+                </div>
+            `;
+        }
+
+        try {
+            const res = await fetch(`/api/garantias/historial-imei/${encodeURIComponent(imei)}`);
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "No se encontró historial");
+            }
+            const data = await res.json();
+
+            if (titleImei) titleImei.textContent = `${data.modelo} (${data.capacidad_gb}GB • ${data.color})`;
+            if (subImei) subImei.textContent = `IMEI: ${data.imei} | Grado ${data.grado}`;
+            if (badgeEstado) {
+                const colores = {
+                    'Disponible': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                    'Vendido': 'bg-blue-100 text-blue-800 border-blue-200',
+                    'En Garantia': 'bg-amber-100 text-amber-800 border-amber-200',
+                    'Baja por Garantia': 'bg-rose-100 text-rose-800 border-rose-200'
+                };
+                badgeEstado.className = `px-2.5 py-0.5 rounded-full text-xs font-bold border ${colores[data.estado_actual] || 'bg-slate-100 text-slate-700'}`;
+                badgeEstado.textContent = data.estado_actual;
+            }
+
+            if (containerEventos) {
+                if (data.eventos.length === 0) {
+                    containerEventos.innerHTML = `<div class="py-6 text-center text-slate-400">Sin eventos registrados para este IMEI</div>`;
+                    return;
+                }
+
+                containerEventos.innerHTML = data.eventos.map((ev, idx) => {
+                    const iconMap = {
+                        'INGRESO': { icon: '📥', bg: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+                        'VENTA': { icon: '🏷️', bg: 'bg-blue-50 text-blue-600 border-blue-200' },
+                        'GARANTIA_RECLAMO': { icon: '🛡️', bg: 'bg-amber-50 text-amber-600 border-amber-200' },
+                        'REEMPLAZO': { icon: '🔄', bg: 'bg-purple-50 text-purple-600 border-purple-200' }
+                    };
+                    const conf = iconMap[ev.tipo] || { icon: '📌', bg: 'bg-slate-50 text-slate-600 border-slate-200' };
+
+                    return `
+                    <div class="relative pl-8 pb-6 last:pb-0">
+                        ${idx < data.eventos.length - 1 ? `<span class="absolute left-3.5 top-6 bottom-0 w-0.5 bg-slate-200"></span>` : ''}
+                        <span class="absolute left-0 top-0.5 w-7 h-7 rounded-full flex items-center justify-center text-sm border ${conf.bg} shadow-xs">
+                            ${conf.icon}
+                        </span>
+
+                        <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:border-slate-300 transition-all">
+                            <div class="flex justify-between items-start gap-2 mb-1">
+                                <h5 class="font-bold text-slate-900 text-xs sm:text-sm">${ev.titulo}</h5>
+                                <span class="text-[11px] font-mono text-slate-400 whitespace-nowrap">${App.formatDate(ev.fecha)}</span>
+                            </div>
+                            <p class="text-xs text-slate-600 leading-relaxed">${ev.descripcion}</p>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            }
+        } catch (e) {
+            if (containerEventos) {
+                containerEventos.innerHTML = `<div class="py-6 text-center text-rose-500 font-semibold">${e.message}</div>`;
+            }
+        }
+    },
+
+    cerrarModalHistorial() {
+        const modal = document.getElementById('modal-historial-imei');
+        if (modal) modal.classList.add('hidden');
     }
 };
+

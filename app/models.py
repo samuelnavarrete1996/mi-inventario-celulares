@@ -46,6 +46,8 @@ class EquipoResponse(BaseModel):
     fecha_registro: str
     margen_proyectado: Optional[float] = None
     porcentaje_margen: Optional[float] = None
+    dias_en_stock: Optional[int] = 0
+    estado_antiguedad: Optional[str] = "Fresco"
 
 class ClienteCreate(BaseModel):
     nombre: str = Field(..., min_length=2, description="Nombre completo del cliente")
@@ -57,9 +59,47 @@ class ClienteResponse(BaseModel):
     telefono: str
     fecha_registro: str
 
+# --- MODELOS DE ACCESORIOS Y SERVICIOS ---
+
+class AccesorioCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, description="Nombre del accesorio o servicio")
+    categoria: str = Field("Accesorio", description="Funda, Mica, Cargador, Cable, Audio, Reparación, Servicio, Accesorio, Otro")
+    codigo_barras: Optional[str] = Field(None, description="Código de barras o SKU del producto")
+    costo_compra: float = Field(0.0, ge=0, description="Costo unitario de compra")
+    precio_venta: float = Field(..., gt=0, description="Precio de venta unitario")
+    stock: int = Field(0, ge=0, description="Cantidad en stock")
+    es_servicio: bool = Field(False, description="True si es servicio/mano de obra")
+
+class AccesorioUpdate(BaseModel):
+    nombre: Optional[str] = None
+    categoria: Optional[str] = None
+    codigo_barras: Optional[str] = None
+    costo_compra: Optional[float] = None
+    precio_venta: Optional[float] = None
+    stock: Optional[int] = None
+    es_servicio: Optional[bool] = None
+
+class AccesorioResponse(BaseModel):
+    id: int
+    nombre: str
+    categoria: str
+    codigo_barras: Optional[str] = None
+    costo_compra: float
+    precio_venta: float
+    stock: int
+    es_servicio: int
+    fecha_registro: str
+    margen_unitario: Optional[float] = None
+
+# --- MODELOS DE CARRITO Y VENTAS ---
+
 class ItemCarrito(BaseModel):
-    equipo_id: int = Field(..., description="ID del equipo a vender")
-    precio_final: float = Field(..., ge=0, description="Precio acordado para este equipo")
+    tipo_item: str = Field("equipo", description="'equipo' o 'accesorio'")
+    equipo_id: Optional[int] = Field(None, description="ID del equipo celular (si aplica)")
+    accesorio_id: Optional[int] = Field(None, description="ID del accesorio/servicio (si aplica)")
+    nombre_item: Optional[str] = Field(None, description="Nombre o descripción para el recibo")
+    cantidad: int = Field(1, ge=1, description="Cantidad")
+    precio_final: float = Field(..., ge=0, description="Precio acordado para esta línea")
 
 class VentaCreate(BaseModel):
     cliente_nombre: str = Field(..., min_length=2, description="Nombre del comprador")
@@ -71,7 +111,7 @@ class VentaCreate(BaseModel):
     monto_garantia: float = Field(0.0, ge=0, description="Monto cubierto por equipo en garantía")
     notas: Optional[str] = None
     
-    # Soporte para carrito de múltiples equipos
+    # Soporte para carrito de múltiples items
     items: Optional[List[ItemCarrito]] = None
     
     # Retrocompatibilidad con venta de un solo equipo
@@ -81,10 +121,10 @@ class VentaCreate(BaseModel):
     @model_validator(mode='after')
     def validate_items_and_payment(self):
         if not self.items and self.equipo_id is not None and self.precio_final is not None:
-            self.items = [ItemCarrito(equipo_id=self.equipo_id, precio_final=self.precio_final)]
+            self.items = [ItemCarrito(equipo_id=self.equipo_id, precio_final=self.precio_final, tipo_item='equipo')]
 
         if not self.items or len(self.items) == 0:
-            raise ValueError("El carrito debe contener al menos un teléfono celular.")
+            raise ValueError("El carrito debe contener al menos un artículo o servicio.")
 
         total_venta = round(sum(item.precio_final for item in self.items), 2)
 
@@ -115,15 +155,19 @@ class VentaCreate(BaseModel):
 class VentaItemResponse(BaseModel):
     id: int
     venta_id: int
-    equipo_id: int
+    equipo_id: Optional[int] = None
+    accesorio_id: Optional[int] = None
+    tipo_item: str = "equipo"
+    nombre_item: Optional[str] = None
+    cantidad: int = 1
     precio_final: float
     costo_compra: float
     margen_ganancia: float
-    modelo: str
-    capacidad_gb: int
-    color: str
-    imei: str
-    grado: str
+    modelo: Optional[str] = None
+    capacidad_gb: Optional[int] = None
+    color: Optional[str] = None
+    imei: Optional[str] = None
+    grado: Optional[str] = None
 
 class VentaDetalleResponse(BaseModel):
     id: int
@@ -202,3 +246,42 @@ class DashboardMetrics(BaseModel):
     ventas_por_dia: List[Dict[str, Any]] = []
     distribucion_grados: Dict[str, int] = {}
     desglose_metodos_pago: Dict[str, float] = {}
+
+# --- MODELOS DE CORTE DE CAJA ---
+
+class CorteCajaCreate(BaseModel):
+    efectivo_declarado: float = Field(..., ge=0, description="Efectivo físico contado en caja")
+    notas: Optional[str] = None
+
+class CorteCajaResponse(BaseModel):
+    id: Optional[int] = None
+    fecha_corte: str
+    fecha_inicio_periodo: Optional[str] = None
+    total_ventas: float
+    total_efectivo: float
+    total_transferencia: float
+    total_garantia: float
+    efectivo_declarado: float
+    diferencia: float
+    cantidad_ventas: int
+    notas: Optional[str] = None
+    fecha_registro: Optional[str] = None
+
+# --- MODELOS DE HISTORIAL DE IMEI (TRAZABILIDAD 360°) ---
+
+class HistorialImeiEvento(BaseModel):
+    tipo: str  # 'INGRESO', 'VENTA', 'GARANTIA_RECLAMO', 'REEMPLAZO'
+    fecha: str
+    titulo: str
+    descripcion: str
+    detalles: Dict[str, Any] = {}
+
+class HistorialImeiResponse(BaseModel):
+    imei: str
+    modelo: Optional[str] = None
+    color: Optional[str] = None
+    capacidad_gb: Optional[int] = None
+    grado: Optional[str] = None
+    estado_actual: str
+    eventos: List[HistorialImeiEvento] = []
+

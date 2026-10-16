@@ -5,7 +5,7 @@ from app.database import get_db_connection
 from app.models import EquipoCreate, EquipoUpdate, ItemCarrito, GarantiaCreate
 
 def format_equipo_dict(row: sqlite3.Row) -> Dict[str, Any]:
-    """Convierte un row de equipo a dict y añade cálculos de margen proyectado."""
+    """Convierte un row de equipo a dict y añade cálculos de margen proyectado y días en almacén."""
     d = dict(row)
     costo = d.get("costo_compra", 0.0)
     precio = d.get("precio_venta", 0.0)
@@ -13,6 +13,26 @@ def format_equipo_dict(row: sqlite3.Row) -> Dict[str, Any]:
     porcentaje = round((margen / costo * 100), 1) if costo > 0 else 0.0
     d["margen_proyectado"] = margen
     d["porcentaje_margen"] = porcentaje
+
+    # Cálculo de antigüedad en inventario (Aging Stock)
+    fecha_reg_str = d.get("fecha_registro")
+    dias = 0
+    if fecha_reg_str:
+        try:
+            dt_reg = datetime.strptime(fecha_reg_str[:10], "%Y-%m-%d")
+            dias = max(0, (datetime.now() - dt_reg).days)
+        except Exception:
+            dias = 0
+    d["dias_en_stock"] = dias
+    if dias < 15:
+        d["estado_antiguedad"] = "Fresco"
+    elif dias <= 30:
+        d["estado_antiguedad"] = "Normal"
+    elif dias <= 45:
+        d["estado_antiguedad"] = "Lento"
+    else:
+        d["estado_antiguedad"] = "Remate"
+
     return d
 
 def get_equipos(solo_disponibles: bool = True, search: Optional[str] = None, grado: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -179,15 +199,11 @@ def registrar_venta_carrito(
     notas: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Registra una venta con múltiples equipos y métodos de pago:
+    Registra una venta con múltiples equipos o accesorios/servicios y métodos de pago:
     Efectivo, Transferencia, Combinado o Equipo Garantía.
     """
     if not items or len(items) == 0:
-        raise ValueError("El carrito de compras no contiene equipos.")
-
-    item_ids = [it.equipo_id for it in items]
-    if len(item_ids) != len(set(item_ids)):
-        raise ValueError("El carrito contiene equipos duplicados. Cada teléfono debe registrarse una sola vez.")
+        raise ValueError("El carrito de compras no contiene artículos.")
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -195,16 +211,74 @@ def registrar_venta_carrito(
     try:
         cursor.execute("BEGIN TRANSACTION;")
 
-        # 1. Validar disponibilidad
-        equipos_db = {}
+        # 1. Validar equipos y accesorios
+        detalles_items = []
+        total_precio_final = 0.0
+        total_margen_ganancia = 0.0
+        equipos_ids_usados = []
+
         for item in items:
-            cursor.execute("SELECT * FROM equipos WHERE id = ?", (item.equipo_id,))
-            eq = cursor.fetchone()
-            if not eq:
-                raise ValueError(f"El equipo con ID {item.equipo_id} no existe.")
-            if eq["estado"] != "Disponible":
-                raise ValueError(f"El equipo '{eq['modelo']}' (IMEI: {eq['imei']}) ya no está disponible (Estado actual: {eq['estado']}).")
-            equipos_db[item.equipo_id] = eq
+            t_item = getattr(item, "tipo_item", "equipo") or "equipo"
+            if item.equipo_id:
+                if item.equipo_id in equipos_ids_usados:
+                    raise ValueError(f"El equipo con ID {item.equipo_id} está duplicado en el carrito.")
+                equipos_ids_usados.append(item.equipo_id)
+
+                cursor.execute("SELECT * FROM equipos WHERE id = ?", (item.equipo_id,))
+                eq = cursor.fetchone()
+                if not eq:
+                    raise ValueError(f"El equipo con ID {item.equipo_id} no existe.")
+                if eq["estado"] != "Disponible":
+                    raise ValueError(f"El equipo '{eq['modelo']}' (IMEI: {eq['imei']}) ya no está disponible (Estado actual: {eq['estado']}).")
+
+                costo = float(eq["costo_compra"])
+                precio_item = round(float(item.precio_final), 2)
+                margen_item = round(precio_item - costo, 2)
+
+                total_precio_final += precio_item
+                total_margen_ganancia += margen_item
+
+                detalles_items.append({
+                    "tipo_item": "equipo",
+                    "equipo_id": item.equipo_id,
+                    "accesorio_id": None,
+                    "nombre_item": f"{eq['modelo']} ({eq['imei']})",
+                    "cantidad": 1,
+                    "precio_final": precio_item,
+                    "costo_compra": costo,
+                    "margen_ganancia": margen_item
+                })
+
+            elif item.accesorio_id:
+                cursor.execute("SELECT * FROM accesorios WHERE id = ?", (item.accesorio_id,))
+                acc = cursor.fetchone()
+                if not acc:
+                    raise ValueError(f"El accesorio/servicio con ID {item.accesorio_id} no existe.")
+                
+                cant = getattr(item, "cantidad", 1) or 1
+                if not acc["es_servicio"] and acc["stock"] < cant:
+                    raise ValueError(f"Stock insuficiente para '{acc['nombre']}'. Disponible: {acc['stock']}, Solicitado: {cant}")
+
+                costo_total = round(float(acc["costo_compra"]) * cant, 2)
+                precio_item = round(float(item.precio_final), 2)
+                margen_item = round(precio_item - costo_total, 2)
+
+                total_precio_final += precio_item
+                total_margen_ganancia += margen_item
+
+                detalles_items.append({
+                    "tipo_item": "servicio" if acc["es_servicio"] else "accesorio",
+                    "equipo_id": None,
+                    "accesorio_id": item.accesorio_id,
+                    "nombre_item": acc["nombre"],
+                    "cantidad": cant,
+                    "precio_final": precio_item,
+                    "costo_compra": costo_total,
+                    "margen_ganancia": margen_item,
+                    "es_servicio": bool(acc["es_servicio"])
+                })
+            else:
+                raise ValueError("Cada línea del carrito debe especificar un equipo o un accesorio.")
 
         # 2. Cliente
         clean_tel = cliente_telefono.strip()
@@ -223,31 +297,10 @@ def registrar_venta_carrito(
             """, (cliente_nombre.strip(), clean_tel, now))
             cliente_id = cursor.lastrowid
 
-        # 3. Totales y Márgenes
-        total_precio_final = 0.0
-        total_margen_ganancia = 0.0
-        detalles_items = []
-
-        for item in items:
-            eq = equipos_db[item.equipo_id]
-            costo = float(eq["costo_compra"])
-            precio_item = round(float(item.precio_final), 2)
-            margen_item = round(precio_item - costo, 2)
-
-            total_precio_final += precio_item
-            total_margen_ganancia += margen_item
-
-            detalles_items.append({
-                "equipo_id": item.equipo_id,
-                "precio_final": precio_item,
-                "costo_compra": costo,
-                "margen_ganancia": margen_item
-            })
-
         total_precio_final = round(total_precio_final, 2)
         total_margen_ganancia = round(total_margen_ganancia, 2)
 
-        # 4. Validar método de pago (Efectivo, Transferencia, Combinado, Equipo Garantía)
+        # 3. Validar método de pago
         metodo = metodo_pago.strip()
         if metodo.lower() in ("equipo garantia", "equipo garantía", "garantia", "garantía"):
             metodo = "Equipo Garantía"
@@ -274,8 +327,8 @@ def registrar_venta_carrito(
             if abs(suma_pagos - total_precio_final) > 0.05:
                 raise ValueError(f"En pago combinado, la suma de montos (${suma_pagos:,.2f}) debe coincidir con el total (${total_precio_final:,.2f}).")
 
-        # 5. Insertar Cabecera de Venta
-        primer_equipo_id = items[0].equipo_id
+        # 4. Insertar Cabecera de Venta
+        primer_equipo_id = equipos_ids_usados[0] if equipos_ids_usados else None
         cursor.execute("""
         INSERT INTO ventas (
             equipo_id, cliente_id, precio_final, margen_ganancia, fecha_venta,
@@ -288,14 +341,27 @@ def registrar_venta_carrito(
         ))
         venta_id = cursor.lastrowid
 
-        # 6. Insertar items y actualizar estado
+        # 5. Insertar items y actualizar estado/stock
         for det in detalles_items:
             cursor.execute("""
-            INSERT INTO venta_items (venta_id, equipo_id, precio_final, costo_compra, margen_ganancia)
-            VALUES (?, ?, ?, ?, ?)
-            """, (venta_id, det["equipo_id"], det["precio_final"], det["costo_compra"], det["margen_ganancia"]))
+            INSERT INTO venta_items (venta_id, equipo_id, accesorio_id, tipo_item, nombre_item, cantidad, precio_final, costo_compra, margen_ganancia)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                venta_id,
+                det["equipo_id"],
+                det["accesorio_id"],
+                det["tipo_item"],
+                det["nombre_item"],
+                det["cantidad"],
+                det["precio_final"],
+                det["costo_compra"],
+                det["margen_ganancia"]
+            ))
 
-            cursor.execute("UPDATE equipos SET estado = 'Vendido' WHERE id = ?", (det["equipo_id"],))
+            if det["equipo_id"]:
+                cursor.execute("UPDATE equipos SET estado = 'Vendido' WHERE id = ?", (det["equipo_id"],))
+            elif det["accesorio_id"] and not det.get("es_servicio", False):
+                cursor.execute("UPDATE accesorios SET stock = stock - ? WHERE id = ?", (det["cantidad"], det["accesorio_id"]))
 
         conn.commit()
         return get_venta_detalle(venta_id, conn)
@@ -344,16 +410,21 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
         vi.id,
         vi.venta_id,
         vi.equipo_id,
+        vi.accesorio_id,
+        COALESCE(vi.tipo_item, 'equipo') as tipo_item,
+        COALESCE(vi.nombre_item, e.modelo, a.nombre, 'Artículo') as nombre_item,
+        COALESCE(vi.cantidad, 1) as cantidad,
         vi.precio_final,
         vi.costo_compra,
         vi.margen_ganancia,
-        e.modelo,
+        COALESCE(e.modelo, a.nombre, vi.nombre_item, 'Artículo') as modelo,
         e.capacidad_gb,
         e.color,
         e.imei,
         e.grado
     FROM venta_items vi
-    JOIN equipos e ON vi.equipo_id = e.id
+    LEFT JOIN equipos e ON vi.equipo_id = e.id
+    LEFT JOIN accesorios a ON vi.accesorio_id = a.id
     WHERE vi.venta_id = ?
     ORDER BY vi.id ASC
     """, (venta_id,))
@@ -368,6 +439,10 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
                 "id": 1,
                 "venta_id": venta_id,
                 "equipo_id": eq["id"],
+                "accesorio_id": None,
+                "tipo_item": "equipo",
+                "nombre_item": eq["modelo"],
+                "cantidad": 1,
                 "precio_final": venta_dict["precio_final"],
                 "costo_compra": eq["costo_compra"],
                 "margen_ganancia": venta_dict["margen_ganancia"],
@@ -381,17 +456,25 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
     venta_dict["items"] = items
     venta_dict["total_equipos"] = len(items)
 
-    modelos_nombres = [f"{it['modelo']} ({it['capacidad_gb']}GB)" for it in items]
-    venta_dict["resumen_modelos"] = ", ".join(modelos_nombres) if modelos_nombres else "Sin equipos"
+    modelos_nombres = []
+    for it in items:
+        nom = it.get("modelo") or it.get("nombre_item") or "Item"
+        if it.get("capacidad_gb"):
+            nom += f" ({it['capacidad_gb']}GB)"
+        if it.get("cantidad", 1) > 1:
+            nom += f" x{it['cantidad']}"
+        modelos_nombres.append(nom)
+
+    venta_dict["resumen_modelos"] = ", ".join(modelos_nombres) if modelos_nombres else "Sin artículos"
 
     if items:
         p = items[0]
-        venta_dict["modelo"] = p["modelo"]
-        venta_dict["capacidad_gb"] = p["capacidad_gb"]
-        venta_dict["color"] = p["color"]
-        venta_dict["imei"] = p["imei"]
-        venta_dict["grado"] = p["grado"]
-        venta_dict["costo_compra"] = p["costo_compra"]
+        venta_dict["modelo"] = p.get("modelo") or p.get("nombre_item")
+        venta_dict["capacidad_gb"] = p.get("capacidad_gb")
+        venta_dict["color"] = p.get("color")
+        venta_dict["imei"] = p.get("imei")
+        venta_dict["grado"] = p.get("grado")
+        venta_dict["costo_compra"] = p.get("costo_compra")
 
     if not conn_ext:
         conn.close()
@@ -766,3 +849,368 @@ def get_dashboard_metrics() -> Dict[str, Any]:
         "distribucion_grados": grados_inv,
         "desglose_metodos_pago": desglose_pagos
     }
+
+# ==============================================================================
+# ACCESORIOS Y SERVICIOS (SIN IMEI)
+# ==============================================================================
+
+def format_accesorio_dict(row: sqlite3.Row) -> Dict[str, Any]:
+    d = dict(row)
+    c = float(d.get("costo_compra", 0.0))
+    p = float(d.get("precio_venta", 0.0))
+    d["margen_unitario"] = round(p - c, 2)
+    return d
+
+def get_accesorios(
+    categoria: Optional[str] = None,
+    solo_con_stock: bool = False,
+    search: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM accesorios WHERE 1=1"
+    params = []
+
+    if categoria and categoria != "Todos":
+        query += " AND categoria = ?"
+        params.append(categoria)
+
+    if solo_con_stock:
+        query += " AND (stock > 0 OR es_servicio = 1)"
+
+    if search:
+        s = f"%{search.strip()}%"
+        query += " AND (nombre LIKE ? OR categoria LIKE ? OR codigo_barras LIKE ?)"
+        params.extend([s, s, s])
+
+    query += " ORDER BY id DESC"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [format_accesorio_dict(r) for r in rows]
+
+def get_accesorio_by_id(acc_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM accesorios WHERE id = ?", (acc_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return format_accesorio_dict(row) if row else None
+
+def create_accesorio(nombre: str, categoria: str, costo_compra: float, precio_venta: float, stock: int, es_servicio: bool, codigo_barras: Optional[str] = None) -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+    INSERT INTO accesorios (nombre, categoria, codigo_barras, costo_compra, precio_venta, stock, es_servicio, fecha_registro)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        nombre.strip(),
+        categoria.strip(),
+        codigo_barras.strip() if codigo_barras else None,
+        round(costo_compra, 2),
+        round(precio_venta, 2),
+        stock if not es_servicio else 999,
+        1 if es_servicio else 0,
+        now
+    ))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return get_accesorio_by_id(new_id)
+
+def update_accesorio(acc_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    current = get_accesorio_by_id(acc_id)
+    if not current:
+        conn.close()
+        return None
+
+    fields, values = [], []
+    for k in ("nombre", "categoria", "codigo_barras", "costo_compra", "precio_venta", "stock", "es_servicio"):
+        if k in datos and datos[k] is not None:
+            fields.append(f"{k} = ?")
+            if k in ("costo_compra", "precio_venta"):
+                values.append(round(float(datos[k]), 2))
+            elif k == "es_servicio":
+                values.append(1 if datos[k] else 0)
+            elif k == "codigo_barras":
+                values.append(datos[k].strip() if datos[k] else None)
+            else:
+                values.append(datos[k])
+
+    if fields:
+        values.append(acc_id)
+        cursor.execute(f"UPDATE accesorios SET {', '.join(fields)} WHERE id = ?", values)
+        conn.commit()
+    conn.close()
+    return get_accesorio_by_id(acc_id)
+
+def delete_accesorio(acc_id: int) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM accesorios WHERE id = ?", (acc_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+# ==============================================================================
+# CORTES DE CAJA DIARIOS (ARQUEO / REPORTE Z)
+# ==============================================================================
+
+def obtener_resumen_corte_actual() -> Dict[str, Any]:
+    """Calcula el balance acumulado de ventas desde el último corte de caja registrado (o del día de hoy)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT fecha_corte FROM cortes_caja ORDER BY id DESC LIMIT 1")
+    ultimo_corte = cursor.fetchone()
+
+    now = datetime.now()
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    if ultimo_corte and ultimo_corte["fecha_corte"]:
+        fecha_inicio = ultimo_corte["fecha_corte"]
+    else:
+        # Inicio del día actual a las 00:00:00
+        fecha_inicio = now.strftime("%Y-%m-%d 00:00:00")
+
+    cursor.execute("""
+    SELECT 
+        COUNT(id) as total_operaciones,
+        COALESCE(SUM(precio_final), 0) as total_ventas,
+        COALESCE(SUM(monto_efectivo), 0) as total_efectivo,
+        COALESCE(SUM(monto_transferencia), 0) as total_transferencia,
+        COALESCE(SUM(monto_garantia), 0) as total_garantia
+    FROM ventas
+    WHERE fecha_venta >= ? AND fecha_venta <= ?
+    """, (fecha_inicio, now_str))
+    r = cursor.fetchone()
+
+    cursor.execute("""
+    SELECT v.id, v.fecha_venta, v.precio_final, v.metodo_pago, v.monto_efectivo, v.monto_transferencia, v.monto_garantia, c.nombre as cliente_nombre
+    FROM ventas v
+    JOIN clientes c ON v.cliente_id = c.id
+    WHERE v.fecha_venta >= ? AND v.fecha_venta <= ?
+    ORDER BY v.id DESC
+    """, (fecha_inicio, now_str))
+    ventas_rows = [dict(v) for v in cursor.fetchall()]
+
+    conn.close()
+
+    return {
+        "fecha_corte": now_str,
+        "fecha_inicio_periodo": fecha_inicio,
+        "cantidad_ventas": r["total_operaciones"],
+        "total_ventas": round(r["total_ventas"], 2),
+        "total_efectivo": round(r["total_efectivo"], 2),
+        "total_transferencia": round(r["total_transferencia"], 2),
+        "total_garantia": round(r["total_garantia"], 2),
+        "ventas_periodo": ventas_rows
+    }
+
+def guardar_corte_caja(efectivo_declarado: float, notas: Optional[str] = None) -> Dict[str, Any]:
+    resumen = obtener_resumen_corte_actual()
+    total_efectivo_sistema = resumen["total_efectivo"]
+    efectivo_declarado = round(float(efectivo_declarado), 2)
+    diferencia = round(efectivo_declarado - total_efectivo_sistema, 2)
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO cortes_caja (
+        fecha_corte, fecha_inicio_periodo, total_ventas, total_efectivo, total_transferencia,
+        total_garantia, efectivo_declarado, diferencia, cantidad_ventas, notas, fecha_registro
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        now_str,
+        resumen["fecha_inicio_periodo"],
+        resumen["total_ventas"],
+        total_efectivo_sistema,
+        resumen["total_transferencia"],
+        resumen["total_garantia"],
+        efectivo_declarado,
+        diferencia,
+        resumen["cantidad_ventas"],
+        notas,
+        now_str
+    ))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+
+    resumen["id"] = new_id
+    resumen["efectivo_declarado"] = efectivo_declarado
+    resumen["diferencia"] = diferencia
+    resumen["notas"] = notas
+    resumen["fecha_registro"] = now_str
+    return resumen
+
+def get_cortes_caja(limit: int = 50) -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM cortes_caja ORDER BY id DESC LIMIT ?", (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+# ==============================================================================
+# HISTORIAL UNIVERSAL POR IMEI (TRAZABILIDAD 360°)
+# ==============================================================================
+
+def obtener_historial_imei(imei: str) -> Dict[str, Any]:
+    clean_imei = imei.strip().replace(" ", "").replace("-", "")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM equipos WHERE imei = ?", (clean_imei,))
+    eq = cursor.fetchone()
+    if not eq:
+        conn.close()
+        raise ValueError(f"No se encontró ningún equipo con el IMEI '{imei}' en el sistema.")
+
+    eq_dict = format_equipo_dict(eq)
+    eventos = []
+
+    # Evento 1: Ingreso al inventario
+    eventos.append({
+        "tipo": "INGRESO",
+        "fecha": eq["fecha_registro"],
+        "titulo": "Ingreso a Almacén",
+        "descripcion": f"Registrado en inventario como Grado {eq['grado']} ({eq['color']}).",
+        "detalles": {
+            "costo_compra": eq["costo_compra"],
+            "precio_venta": eq["precio_venta"],
+            "grado": eq["grado"]
+        }
+    })
+
+    # Evento 2: Ventas asociadas a este equipo
+    cursor.execute("""
+    SELECT 
+        v.id as venta_id,
+        v.fecha_venta,
+        v.metodo_pago,
+        v.precio_final as venta_total,
+        vi.precio_final as precio_equipo,
+        c.nombre as cliente_nombre,
+        c.telefono as cliente_telefono
+    FROM venta_items vi
+    JOIN ventas v ON vi.venta_id = v.id
+    JOIN clientes c ON v.cliente_id = c.id
+    WHERE vi.equipo_id = ?
+    ORDER BY v.id ASC
+    """, (eq["id"],))
+    ventas = cursor.fetchall()
+    for v in ventas:
+        eventos.append({
+            "tipo": "VENTA",
+            "fecha": v["fecha_venta"],
+            "titulo": f"Vendido a {v['cliente_nombre']}",
+            "descripcion": f"Venta #{v['venta_id']} por ${v['precio_equipo']:,.2f} con método '{v['metodo_pago']}'.",
+            "detalles": {
+                "venta_id": v["venta_id"],
+                "cliente_nombre": v["cliente_nombre"],
+                "cliente_telefono": v["cliente_telefono"],
+                "precio_cobrado": v["precio_equipo"],
+                "metodo_pago": v["metodo_pago"]
+            }
+        })
+
+    # Evento 3: Garantías registradas para este equipo
+    cursor.execute("""
+    SELECT 
+        g.id as garantia_id,
+        g.fecha_devolucion,
+        g.motivo,
+        g.falla_descripcion,
+        g.solucion,
+        g.estado_equipo_recibido,
+        g.monto_cubierto,
+        eq_rep.modelo as reemplazo_modelo,
+        eq_rep.imei as reemplazo_imei
+    FROM garantias g
+    LEFT JOIN equipos eq_rep ON g.equipo_reemplazo_id = eq_rep.id
+    WHERE g.equipo_id = ?
+    ORDER BY g.id ASC
+    """, (eq["id"],))
+    garantias = cursor.fetchall()
+    for g in garantias:
+        desc = f"Devuelto por: {g['motivo']}. Solución: {g['solucion']}."
+        if g["reemplazo_imei"]:
+            desc += f" (Se entregó {g['reemplazo_modelo']} IMEI {g['reemplazo_imei']})"
+        eventos.append({
+            "tipo": "GARANTIA_RECLAMO",
+            "fecha": g["fecha_devolucion"],
+            "titulo": f"Reclamo de Garantía #{g['garantia_id']}",
+            "descripcion": desc,
+            "detalles": {
+                "motivo": g["motivo"],
+                "falla": g["falla_descripcion"],
+                "solucion": g["solucion"],
+                "estado_final": g["estado_equipo_recibido"]
+            }
+        })
+
+    # Evento 4: ¿Fue entregado como equipo de reemplazo en otra garantía?
+    cursor.execute("""
+    SELECT g.id, g.fecha_devolucion, eq_orig.modelo as orig_modelo, eq_orig.imei as orig_imei
+    FROM garantias g
+    JOIN equipos eq_orig ON g.equipo_id = eq_orig.id
+    WHERE g.equipo_reemplazo_id = ?
+    """, (eq["id"],))
+    como_reemplazo = cursor.fetchall()
+    for cr in como_reemplazo:
+        eventos.append({
+            "tipo": "REEMPLAZO",
+            "fecha": cr["fecha_devolucion"],
+            "titulo": "Entregado como Reemplazo de Garantía",
+            "descripcion": f"Entregado al cliente en sustitución del equipo defectuoso {cr['orig_modelo']} (IMEI: {cr['orig_imei']}).",
+            "detalles": {
+                "garantia_id": cr["id"],
+                "imei_defectuoso": cr["orig_imei"]
+            }
+        })
+
+    # Ordenar cronológicamente
+    eventos.sort(key=lambda x: x["fecha"])
+    conn.close()
+
+    return {
+        "imei": eq_dict["imei"],
+        "modelo": eq_dict["modelo"],
+        "color": eq_dict["color"],
+        "capacidad_gb": eq_dict["capacidad_gb"],
+        "grado": eq_dict["grado"],
+        "estado_actual": eq_dict["estado"],
+        "costo_compra": eq_dict["costo_compra"],
+        "precio_venta": eq_dict["precio_venta"],
+        "dias_en_stock": eq_dict["dias_en_stock"],
+        "estado_antiguedad": eq_dict["estado_antiguedad"],
+        "eventos": eventos
+    }
+
+# ==============================================================================
+# RESPALDO Y EXPORTACIÓN COMPLETA
+# ==============================================================================
+
+def exportar_todo_json() -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    tablas = ["equipos", "clientes", "ventas", "venta_items", "garantias", "accesorios", "cortes_caja"]
+    resultado = {
+        "version": "2.0",
+        "app": "Mi Inventario Samuel Navarrete",
+        "fecha_exportacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "datos": {}
+    }
+    for t in tablas:
+        cursor.execute(f"SELECT * FROM {t}")
+        resultado["datos"][t] = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return resultado
+

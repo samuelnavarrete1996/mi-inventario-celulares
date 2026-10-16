@@ -1,0 +1,187 @@
+// accesorios.js - Gestión de catálogo de accesorios y servicios
+const Accesorios = {
+    items: [],
+    categoriaFiltro: 'Todos',
+    busqueda: '',
+
+    init() {
+        this.cargar();
+    },
+
+    async cargar() {
+        const tbody = document.getElementById('tbody-accesorios');
+        if (!tbody) return;
+
+        try {
+            let url = '/api/accesorios?';
+            if (this.categoriaFiltro !== 'Todos') url += `categoria=${encodeURIComponent(this.categoriaFiltro)}&`;
+            if (this.busqueda) url += `search=${encodeURIComponent(this.busqueda)}&`;
+
+            const res = await fetch(url);
+            if (res.ok) {
+                this.items = await res.json();
+                this.renderizar();
+            }
+        } catch (e) {
+            console.error("Error al cargar accesorios:", e);
+        }
+    },
+
+    filtrarCategoria(cat) {
+        this.categoriaFiltro = cat;
+        document.querySelectorAll('.btn-cat-acc').forEach(b => {
+            if (b.dataset.cat === cat) {
+                b.classList.add('bg-blue-600', 'text-white');
+                b.classList.remove('bg-slate-100', 'text-slate-600');
+            } else {
+                b.classList.remove('bg-blue-600', 'text-white');
+                b.classList.add('bg-slate-100', 'text-slate-600');
+            }
+        });
+        this.cargar();
+    },
+
+    buscar(q) {
+        this.busqueda = q;
+        this.cargar();
+    },
+
+    renderizar() {
+        const tbody = document.getElementById('tbody-accesorios');
+        if (!tbody) return;
+
+        if (this.items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-400">No hay accesorios ni servicios registrados</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = this.items.map(acc => {
+            const stockBadge = acc.es_servicio 
+                ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">Servicio</span>`
+                : (acc.stock <= 5 
+                    ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700">Bajo (${acc.stock})</span>`
+                    : `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">${acc.stock} pzas</span>`);
+
+            return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs sm:text-sm">
+                <td class="py-3 px-4 font-bold text-slate-800">
+                    <div class="flex items-center gap-2">
+                        <span class="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                            ${acc.es_servicio ? '🔧' : '🔌'}
+                        </span>
+                        <div>
+                            <div>${acc.nombre}</div>
+                            <span class="text-xs text-slate-400 font-normal">${acc.categoria}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="py-3 px-4 text-slate-600">${acc.categoria}</td>
+                <td class="py-3 px-4 text-slate-600 admin-only">${App.formatCurrency(acc.costo_compra)}</td>
+                <td class="py-3 px-4 font-bold text-slate-900">${App.formatCurrency(acc.precio_venta)}</td>
+                <td class="py-3 px-4 text-emerald-600 font-semibold admin-only">+${App.formatCurrency(acc.margen_unitario)}</td>
+                <td class="py-3 px-4">${stockBadge}</td>
+                <td class="py-3 px-4 text-right space-x-1">
+                    <button onclick="POS.agregarAccesorioAlCarrito(${acc.id})" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-all" title="Vender en POS">
+                        + Vender
+                    </button>
+                    <button onclick="Accesorios.editar(${acc.id})" class="p-1.5 text-slate-400 hover:text-blue-600 admin-only rounded-lg transition-colors" title="Editar">
+                        ✏️
+                    </button>
+                    <button onclick="Accesorios.eliminar(${acc.id})" class="p-1.5 text-slate-400 hover:text-rose-600 admin-only rounded-lg transition-colors" title="Eliminar">
+                        🗑️
+                    </button>
+                </td>
+            </tr>
+            `;
+        }).join('');
+    },
+
+    abrirModalNuevo() {
+        document.getElementById('form-accesorio').reset();
+        document.getElementById('input-acc-id').value = '';
+        document.getElementById('modal-accesorio-titulo').textContent = 'Nuevo Accesorio / Servicio';
+        document.getElementById('modal-accesorio').classList.remove('hidden');
+    },
+
+    cerrarModal() {
+        document.getElementById('modal-accesorio').classList.add('hidden');
+    },
+
+    editar(id) {
+        const item = this.items.find(x => x.id === id);
+        if (!item) return;
+
+        document.getElementById('input-acc-id').value = item.id;
+        document.getElementById('input-acc-nombre').value = item.nombre;
+        document.getElementById('input-acc-categoria').value = item.categoria;
+        document.getElementById('input-acc-costo').value = item.costo_compra;
+        document.getElementById('input-acc-precio').value = item.precio_venta;
+        document.getElementById('input-acc-stock').value = item.stock;
+        document.getElementById('input-acc-servicio').checked = Boolean(item.es_servicio);
+
+        document.getElementById('modal-accesorio-titulo').textContent = 'Editar Accesorio / Servicio';
+        document.getElementById('modal-accesorio').classList.remove('hidden');
+    },
+
+    async guardar() {
+        const id = document.getElementById('input-acc-id').value;
+        const nombre = document.getElementById('input-acc-nombre').value.trim();
+        const categoria = document.getElementById('input-acc-categoria').value;
+        const costo_compra = parseFloat(document.getElementById('input-acc-costo').value) || 0;
+        const precio_venta = parseFloat(document.getElementById('input-acc-precio').value) || 0;
+        const stock = parseInt(document.getElementById('input-acc-stock').value, 10) || 0;
+        const es_servicio = document.getElementById('input-acc-servicio').checked;
+
+        if (!nombre || precio_venta <= 0) {
+            App.showToast("Ingresa un nombre y precio de venta válidos", "error");
+            return;
+        }
+
+        const data = { nombre, categoria, costo_compra, precio_venta, stock, es_servicio };
+
+        try {
+            let res;
+            if (id) {
+                res = await fetch(`/api/accesorios/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+            } else {
+                res = await fetch('/api/accesorios', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+            }
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "Error al guardar");
+            }
+
+            App.showToast(id ? "Accesorio actualizado" : "Accesorio registrado con éxito", "success");
+            this.cerrarModal();
+            this.cargar();
+        } catch (e) {
+            App.showToast(e.message, "error");
+        }
+    },
+
+    async eliminar(id) {
+        if (!confirm("¿Deseas eliminar este accesorio o servicio?")) return;
+
+        try {
+            const res = await fetch(`/api/accesorios/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                App.showToast("Accesorio eliminado", "info");
+                this.cargar();
+            } else {
+                const err = await res.json();
+                throw new Error(err.detail || "Error al eliminar");
+            }
+        } catch (e) {
+            App.showToast(e.message, "error");
+        }
+    }
+};

@@ -43,3 +43,18 @@ def procesar_devolucion_garantia(garantia: GarantiaCreate):
 def listar_historial_garantias(limit: int = 100):
     """Obtiene el historial de todas las devoluciones y reclamos de garantía procesados."""
     return crud.get_historial_garantias(limit=limit)
+
+@router.get("/historial-imei/{imei}")
+def obtener_historial_completo_imei(imei: str):
+    """
+    Trazabilidad 360° por IMEI:
+    Línea de tiempo cronológica completa de la vida del equipo
+    (Ingreso, ventas, reclamos de garantía, reemplazos entregados).
+    """
+    try:
+        return crud.obtener_historial_imei(imei)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+

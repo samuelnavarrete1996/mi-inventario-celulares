@@ -1,8 +1,8 @@
-// pos.js - Módulo de Punto de Venta (POS) con Carrito Múltiple, Pagos y Equipo Garantía
+// pos.js - Módulo de Punto de Venta (POS) con Carrito Múltiple, Teléfonos, Accesorios, Pagos y Barcode Scanner
 
 const POS = {
     debounceTimer: null,
-    carrito: [], // Array de { equipo, precio_final }
+    carrito: [], // Array de { tipo: 'equipo'|'accesorio', id, equipo|accesorio, cantidad, precio_unitario, precio_final, costo_unitario }
     metodoPago: 'Efectivo', // 'Efectivo', 'Transferencia', 'Combinado', 'Equipo Garantía'
     reciboActual: null,
 
@@ -11,6 +11,7 @@ const POS = {
         this.setupPhoneLookup();
         this.setupPaymentMethodListeners();
         this.setupCartListeners();
+        this.setupBarcodeScanner();
         this.renderCarrito();
     },
 
@@ -23,6 +24,16 @@ const POS = {
                 this.debounceTimer = setTimeout(() => {
                     this.buscarEquipos(query);
                 }, 200);
+            });
+
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const query = searchInput.value.trim();
+                    if (query) {
+                        this.procesarCodigoEscaneado(query);
+                    }
+                }
             });
         }
     },
@@ -43,7 +54,7 @@ const POS = {
                             if (cliente && cliente.nombre) {
                                 inputNombre.value = cliente.nombre;
                                 if (badgeCliente) {
-                                    badgeCliente.textContent = "Cliente registrado";
+                                    badgeCliente.textContent = "Cliente registrado ✓";
                                     badgeCliente.classList.remove('hidden');
                                 }
                             } else {
@@ -217,38 +228,115 @@ const POS = {
     obtenerMargenTotalCarrito() {
         return this.carrito.reduce((acc, item) => {
             const precio = parseFloat(item.precio_final) || 0;
-            const costo = parseFloat(item.equipo.costo_compra) || 0;
+            const costo = (parseFloat(item.costo_unitario) || 0) * (item.cantidad || 1);
             return acc + (precio - costo);
         }, 0);
     },
 
-    // --- GESTIÓN DEL CARRITO ---
+    // --- GESTIÓN DEL CARRITO (TELÉFONOS Y ACCESORIOS) ---
 
     agregarAlCarrito(equipo) {
-        const existe = this.carrito.some(it => it.equipo.id === equipo.id);
+        const existe = this.carrito.some(it => it.tipo === 'equipo' && it.id === equipo.id);
         if (existe) {
             App.showToast(`"${equipo.modelo}" (IMEI: ${equipo.imei}) ya está en el carrito.`, "info");
             return;
         }
 
         this.carrito.push({
+            tipo: 'equipo',
+            id: equipo.id,
             equipo: equipo,
-            precio_final: equipo.precio_venta
+            cantidad: 1,
+            precio_unitario: equipo.precio_venta,
+            precio_final: equipo.precio_venta,
+            costo_unitario: equipo.costo_compra
         });
 
-        App.showToast(`Agregado al carrito: ${equipo.modelo}`, "success");
+        App.showToast(`Agregado: ${equipo.modelo}`, "success");
         this.renderCarrito();
         this.actualizarBotonCatalogo(equipo.id, true);
     },
 
-    quitarDelCarrito(equipoId) {
-        this.carrito = this.carrito.filter(it => it.equipo.id !== equipoId);
+    async agregarAccesorioAlCarrito(accesorioOrId) {
+        let accesorio = accesorioOrId;
+        if (typeof accesorioOrId === 'number' || typeof accesorioOrId === 'string') {
+            if (typeof Accesorios !== 'undefined' && Accesorios.items && Accesorios.items.length > 0) {
+                accesorio = Accesorios.items.find(x => x.id === parseInt(accesorioOrId, 10));
+            }
+            if (!accesorio) {
+                try {
+                    const res = await fetch(`/api/accesorios`);
+                    if (res.ok) {
+                        const lista = await res.json();
+                        accesorio = lista.find(x => x.id === parseInt(accesorioOrId, 10));
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        }
+        if (!accesorio) {
+            App.showToast("No se encontró el accesorio especificado.", "error");
+            return;
+        }
+
+        const item = this.carrito.find(it => it.tipo === 'accesorio' && it.id === accesorio.id);
+        if (item) {
+            if (!accesorio.es_servicio && item.cantidad >= accesorio.stock) {
+                App.showToast(`Stock máximo alcanzado para ${accesorio.nombre} (${accesorio.stock} disp.)`, "warning");
+                return;
+            }
+            item.cantidad += 1;
+            item.precio_final = item.cantidad * item.precio_unitario;
+        } else {
+            if (accesorio.stock <= 0 && !accesorio.es_servicio) {
+                App.showToast(`No hay stock de "${accesorio.nombre}".`, "error");
+                return;
+            }
+            this.carrito.push({
+                tipo: 'accesorio',
+                id: accesorio.id,
+                accesorio: accesorio,
+                cantidad: 1,
+                precio_unitario: accesorio.precio_venta,
+                precio_final: accesorio.precio_venta,
+                costo_unitario: accesorio.costo_compra
+            });
+        }
+
+        App.showToast(`Accesorio agregado: ${accesorio.nombre}`, "success");
         this.renderCarrito();
-        this.actualizarBotonCatalogo(equipoId, false);
     },
 
-    actualizarPrecioItem(equipoId, nuevoPrecio) {
-        const item = this.carrito.find(it => it.equipo.id === equipoId);
+    modificarCantidadAccesorio(id, delta) {
+        const item = this.carrito.find(it => it.tipo === 'accesorio' && it.id === id);
+        if (!item) return;
+
+        const nuevaCant = item.cantidad + delta;
+        if (nuevaCant <= 0) {
+            this.quitarDelCarrito(id, 'accesorio');
+            return;
+        }
+        if (nuevaCant > item.accesorio.stock) {
+            App.showToast(`Stock máximo alcanzado (${item.accesorio.stock} disponibles)`, "warning");
+            return;
+        }
+
+        item.cantidad = nuevaCant;
+        item.precio_final = item.cantidad * item.precio_unitario;
+        this.renderCarrito();
+    },
+
+    quitarDelCarrito(id, tipo = 'equipo') {
+        this.carrito = this.carrito.filter(it => !(it.id === id && it.tipo === tipo));
+        this.renderCarrito();
+        if (tipo === 'equipo') {
+            this.actualizarBotonCatalogo(id, false);
+        }
+    },
+
+    actualizarPrecioItem(id, nuevoPrecio, tipo = 'equipo') {
+        const item = this.carrito.find(it => it.id === id && it.tipo === tipo);
         if (item) {
             item.precio_final = parseFloat(nuevoPrecio) || 0;
             this.actualizarTotalesCarrito();
@@ -292,10 +380,10 @@ const POS = {
         const badgeCount = document.getElementById('cart-badge-count');
         const cartContent = document.getElementById('cart-active-content');
 
-        const totalItems = this.carrito.length;
-        if (badgeCount) badgeCount.textContent = `${totalItems} ${totalItems === 1 ? 'equipo' : 'equipos'}`;
+        const totalItems = this.carrito.reduce((acc, it) => acc + (it.cantidad || 1), 0);
+        if (badgeCount) badgeCount.textContent = `${totalItems} ${totalItems === 1 ? 'artículo' : 'artículos'}`;
 
-        if (totalItems === 0) {
+        if (this.carrito.length === 0) {
             if (emptyState) emptyState.classList.remove('hidden');
             if (cartContent) cartContent.classList.add('hidden');
             if (container) container.innerHTML = '';
@@ -307,52 +395,111 @@ const POS = {
 
         if (container) {
             container.innerHTML = this.carrito.map((item) => {
-                const eq = item.equipo;
-                const margen = item.precio_final - eq.costo_compra;
-                const pct = eq.costo_compra > 0 ? ((margen / eq.costo_compra) * 100).toFixed(1) : 0;
+                if (item.tipo === 'accesorio') {
+                    const acc = item.accesorio;
+                    const costoTotal = (item.costo_unitario || 0) * item.cantidad;
+                    const margen = item.precio_final - costoTotal;
+                    const pct = costoTotal > 0 ? ((margen / costoTotal) * 100).toFixed(1) : 0;
 
-                return `
-                <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs hover:border-slate-300 transition-all space-y-2">
-                    <div class="flex justify-between items-start gap-2">
-                        <div class="flex-1 min-w-0">
+                    return `
+                    <div class="p-3 bg-white rounded-xl border border-blue-200/80 shadow-2xs hover:border-blue-300 transition-all space-y-2">
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-sm">🎧</span>
+                                    <h5 class="font-bold text-slate-800 text-sm truncate">${acc.nombre}</h5>
+                                </div>
+                                <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                    <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium">${acc.categoria}</span>
+                                    ${acc.codigo_barras ? `<span>•</span><span class="font-mono text-[10px] text-slate-500">${acc.codigo_barras}</span>` : ''}
+                                    <span>•</span>
+                                    <span class="text-[10px] text-slate-500">Stock: ${acc.stock}</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button type="button" onclick="POS.quitarDelCarrito(${acc.id}, 'accesorio')" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Quitar accesorio">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                            <!-- Cantidad -->
+                            <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                <button type="button" onclick="POS.modificarCantidadAccesorio(${acc.id}, -1)" class="text-slate-500 hover:text-slate-800 font-bold px-1 text-sm leading-none">−</button>
+                                <span class="font-bold text-slate-800 text-xs px-1 min-w-[20px] text-center">${item.cantidad}</span>
+                                <button type="button" onclick="POS.modificarCantidadAccesorio(${acc.id}, 1)" class="text-slate-500 hover:text-slate-800 font-bold px-1 text-sm leading-none">+</button>
+                            </div>
+
+                            <!-- Precio Final -->
                             <div class="flex items-center gap-1.5">
-                                <h5 class="font-bold text-slate-800 text-sm truncate">${eq.modelo}</h5>
-                                <span class="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-medium">${eq.capacidad_gb}GB</span>
+                                <div class="relative w-24">
+                                    <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-slate-400 text-xs font-bold">$</span>
+                                    <input type="number" step="0.50" min="0" value="${item.precio_final}" 
+                                        onchange="POS.actualizarPrecioItem(${acc.id}, this.value, 'accesorio')"
+                                        oninput="POS.actualizarPrecioItem(${acc.id}, this.value, 'accesorio')"
+                                        class="w-full pl-5 pr-2 py-1 text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                </div>
                             </div>
-                            <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                <span>${eq.color}</span>
-                                <span>•</span>
-                                <span class="font-mono text-[11px] text-slate-600">IMEI: ${eq.imei}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            ${App.getGradeBadge(eq.grado)}
-                            <button type="button" onclick="POS.quitarDelCarrito(${eq.id})" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Quitar este equipo">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
-                        </div>
-                    </div>
 
-                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
-                        <div class="flex items-center gap-1.5">
-                            <label class="text-[11px] uppercase font-bold text-slate-400">Precio:</label>
-                            <div class="relative w-28">
-                                <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-slate-400 text-xs font-bold">$</span>
-                                <input type="number" step="0.50" min="0" value="${item.precio_final}" 
-                                    onchange="POS.actualizarPrecioItem(${eq.id}, this.value)"
-                                    oninput="POS.actualizarPrecioItem(${eq.id}, this.value)"
-                                    class="w-full pl-5 pr-2 py-1 text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                            <!-- Margen (Admin Only) -->
+                            <div class="text-right admin-only">
+                                <span class="text-[10px] text-slate-400 block">Margen:</span>
+                                <span class="text-xs font-bold ${margen >= 0 ? 'text-emerald-600' : 'text-rose-600'}">
+                                    +${App.formatCurrency(margen)} (${pct}%)
+                                </span>
                             </div>
                         </div>
-                        <div class="text-right">
-                            <span class="text-[10px] text-slate-400 block">Margen:</span>
-                            <span class="text-xs font-bold ${margen >= 0 ? 'text-emerald-600' : 'text-rose-600'}">
-                                +${App.formatCurrency(margen)} (${pct}%)
-                            </span>
+                    </div>
+                    `;
+                } else {
+                    const eq = item.equipo;
+                    const margen = item.precio_final - eq.costo_compra;
+                    const pct = eq.costo_compra > 0 ? ((margen / eq.costo_compra) * 100).toFixed(1) : 0;
+
+                    return `
+                    <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs hover:border-slate-300 transition-all space-y-2">
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-1.5">
+                                    <h5 class="font-bold text-slate-800 text-sm truncate">${eq.modelo}</h5>
+                                    <span class="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-medium">${eq.capacidad_gb}GB</span>
+                                </div>
+                                <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                    <span>${eq.color}</span>
+                                    <span>•</span>
+                                    <span class="font-mono text-[11px] text-slate-600">IMEI: ${eq.imei}</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                ${App.getGradeBadge(eq.grado)}
+                                <button type="button" onclick="POS.quitarDelCarrito(${eq.id}, 'equipo')" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Quitar este equipo">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-1.5">
+                                <label class="text-[11px] uppercase font-bold text-slate-400">Precio:</label>
+                                <div class="relative w-28">
+                                    <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-slate-400 text-xs font-bold">$</span>
+                                    <input type="number" step="0.50" min="0" value="${item.precio_final}" 
+                                        onchange="POS.actualizarPrecioItem(${eq.id}, this.value, 'equipo')"
+                                        oninput="POS.actualizarPrecioItem(${eq.id}, this.value, 'equipo')"
+                                        class="w-full pl-5 pr-2 py-1 text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                            </div>
+                            <div class="text-right admin-only">
+                                <span class="text-[10px] text-slate-400 block">Margen:</span>
+                                <span class="text-xs font-bold ${margen >= 0 ? 'text-emerald-600' : 'text-rose-600'}">
+                                    +${App.formatCurrency(margen)} (${pct}%)
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                `;
+                    `;
+                }
             }).join('');
         }
 
@@ -370,7 +517,7 @@ const POS = {
     actualizarTotalesCarrito() {
         const total = this.obtenerTotalCarrito();
         const margen = this.obtenerMargenTotalCarrito();
-        const totalCosto = this.carrito.reduce((acc, it) => acc + it.equipo.costo_compra, 0);
+        const totalCosto = this.carrito.reduce((acc, it) => acc + ((parseFloat(it.costo_unitario) || 0) * (it.cantidad || 1)), 0);
         const pctMargen = totalCosto > 0 ? ((margen / totalCosto) * 100).toFixed(1) : 0;
 
         const elTotal = document.getElementById('cart-total-cobrar');
@@ -401,7 +548,7 @@ const POS = {
             });
     },
 
-    // --- BÚSQUEDA Y CATÁLOGO ---
+    // --- BÚSQUEDA Y CATÁLOGO POS ---
 
     async buscarEquipos(query) {
         const container = document.getElementById('pos-grid-equipos');
@@ -424,7 +571,7 @@ const POS = {
             if (emptyState) emptyState.classList.add('hidden');
 
             container.innerHTML = equipos.map(equipo => {
-                const enCarrito = this.carrito.some(it => it.equipo.id === equipo.id);
+                const enCarrito = this.carrito.some(it => it.tipo === 'equipo' && it.id === equipo.id);
 
                 return `
                 <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between group">
@@ -433,7 +580,10 @@ const POS = {
                             <span class="text-[11px] font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium select-all">
                                 ${equipo.imei}
                             </span>
-                            ${App.getGradeBadge(equipo.grado)}
+                            <div class="flex items-center gap-1">
+                                ${App.getGradeBadge(equipo.grado)}
+                                ${App.getAgingBadge ? App.getAgingBadge(equipo.estado_antiguedad, equipo.dias_en_stock) : ''}
+                            </div>
                         </div>
                         <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors">
                             ${equipo.modelo}
@@ -451,14 +601,14 @@ const POS = {
                                 <span class="text-[10px] uppercase font-bold text-slate-400 block">Precio</span>
                                 <span class="text-base font-extrabold text-slate-900">${App.formatCurrency(equipo.precio_venta)}</span>
                             </div>
-                            <div class="text-right">
+                            <div class="text-right admin-only">
                                 <span class="text-[10px] text-slate-400 block">Margen</span>
                                 <span class="text-xs font-bold text-emerald-600">+${App.formatCurrency(equipo.precio_venta - equipo.costo_compra)}</span>
                             </div>
                         </div>
 
                         ${enCarrito ? `
-                            <button id="btn-add-cart-${equipo.id}" onclick="POS.quitarDelCarrito(${equipo.id})" class="w-full bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-xs transition-all">
+                            <button id="btn-add-cart-${equipo.id}" onclick="POS.quitarDelCarrito(${equipo.id}, 'equipo')" class="w-full bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-xs transition-all">
                                 <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                 <span>En Carrito ✓</span>
                             </button>
@@ -482,7 +632,7 @@ const POS = {
 
     async procesarVenta() {
         if (this.carrito.length === 0) {
-            App.showToast("Agrega al menos un teléfono al carrito antes de cobrar.", "error");
+            App.showToast("Agrega al menos un artículo (teléfono o accesorio) al carrito.", "error");
             return;
         }
 
@@ -512,7 +662,7 @@ const POS = {
 
             const suma = mEf + mTr + mGt;
             if (Math.abs(suma - totalVenta) > 0.05) {
-                App.showToast(`En pago combinado, la suma ($${suma.toLocaleString('es-MX', {minimumFractionDigits: 2})}) debe coincidir exactamente con el total ($${totalVenta.toLocaleString('es-MX', {minimumFractionDigits: 2})}).`, "error");
+                App.showToast(`En pago combinado, la suma ($${suma.toLocaleString('es-MX', {minimumFractionDigits: 2})}) debe coincidir con el total ($${totalVenta.toLocaleString('es-MX', {minimumFractionDigits: 2})}).`, "error");
                 return;
             }
         }
@@ -536,10 +686,25 @@ const POS = {
                 monto_efectivo: mEf,
                 monto_transferencia: mTr,
                 monto_garantia: mGt,
-                items: this.carrito.map(it => ({
-                    equipo_id: it.equipo.id,
-                    precio_final: it.precio_final
-                }))
+                items: this.carrito.map(it => {
+                    if (it.tipo === 'accesorio') {
+                        return {
+                            tipo_item: 'accesorio',
+                            accesorio_id: it.id,
+                            nombre_item: it.accesorio.nombre,
+                            cantidad: it.cantidad,
+                            precio_final: it.precio_final
+                        };
+                    } else {
+                        return {
+                            tipo_item: 'equipo',
+                            equipo_id: it.id,
+                            nombre_item: `${it.equipo.modelo} ${it.equipo.capacidad_gb}GB`,
+                            cantidad: 1,
+                            precio_final: it.precio_final
+                        };
+                    }
+                })
             };
 
             const res = await fetch('/api/pos/vender', {
@@ -563,11 +728,12 @@ const POS = {
             const inputPagaCon = document.getElementById('efectivo-paga-con');
             if (inputPagaCon) inputPagaCon.value = '';
 
-            // Mostrar Nota de Venta / Recibo con todos los equipos
+            // Mostrar Recibo / Ticket
             this.mostrarRecibo(result);
 
             // Refrescar inventario y estadísticas de cabecera
             App.updateHeaderStats();
+            if (typeof Accesorios !== 'undefined') Accesorios.cargarAccesorios();
 
         } catch (err) {
             App.showToast(err.message, "error");
@@ -577,7 +743,7 @@ const POS = {
         }
     },
 
-    // --- NOTA DE VENTA / RECIBO ---
+    // --- NOTA DE VENTA / TICKET TÉRMICO / WHATSAPP ---
 
     mostrarRecibo(datosVenta) {
         this.reciboActual = datosVenta;
@@ -598,11 +764,29 @@ const POS = {
         }];
 
         if (containerItems) {
-            containerItems.innerHTML = items.map((it, idx) => `
+            containerItems.innerHTML = items.map((it, idx) => {
+                const esAccesorio = it.tipo_item === 'accesorio' || (!it.imei && it.accesorio_id);
+
+                if (esAccesorio) {
+                    return `
+                    <div class="py-2 ${idx > 0 ? 'border-t border-slate-100' : ''}">
+                        <div class="flex justify-between items-start text-xs">
+                            <div class="font-bold text-slate-800">
+                                🎧 ${it.nombre_item || it.modelo} <span class="font-medium text-slate-500">x${it.cantidad || 1}</span>
+                            </div>
+                            <div class="font-extrabold text-slate-900 ml-2">
+                                ${App.formatCurrency(it.precio_final)}
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }
+
+                return `
                 <div class="py-2.5 ${idx > 0 ? 'border-t border-slate-100' : ''}">
                     <div class="flex justify-between items-start text-xs">
                         <div class="font-bold text-slate-800">
-                            ${it.modelo} <span class="font-normal text-slate-500">(${it.capacidad_gb}GB • ${it.color})</span>
+                            📱 ${it.modelo} <span class="font-normal text-slate-500">(${it.capacidad_gb || ''}GB • ${it.color || ''})</span>
                         </div>
                         <div class="font-extrabold text-slate-900 ml-2">
                             ${App.formatCurrency(it.precio_final)}
@@ -610,12 +794,13 @@ const POS = {
                     </div>
                     <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1">
                         <span class="font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 select-all font-semibold">
-                            IMEI: ${it.imei}
+                            IMEI: ${it.imei || 'N/A'}
                         </span>
-                        <div>${App.getGradeBadge(it.grado)}</div>
+                        <div>${it.grado ? App.getGradeBadge(it.grado) : ''}</div>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // Totales y Desglose de Pago
@@ -645,7 +830,7 @@ const POS = {
                             <span>Forma de Pago:</span>
                             <span>🛡️ Equipo por Garantía</span>
                         </div>
-                        <p class="text-[11px] text-indigo-700">Cubierto 100% por cambio de equipo bajo póliza de garantía.</p>
+                        <p class="text-[11px] text-indigo-700">Cubierto 100% por cambio bajo póliza de garantía.</p>
                     </div>
                 `;
             } else {
@@ -660,7 +845,7 @@ const POS = {
 
         const garantiaEl = document.getElementById('recibo-garantia-texto');
         if (garantiaEl) {
-            garantiaEl.textContent = "Garantía válida únicamente con este comprobante original. Aplica en funcionamiento de placa base y componentes lógicos (no aplica en equipos mojados, sobrecargados, golpeados o intervenidos por terceros).";
+            garantiaEl.textContent = "Garantía válida únicamente con este comprobante original o número registrado. Aplica en placa base y componentes lógicos de fábrica (no cubre humedad, sobrecargas eléctricas, golpes o intervenciones ajenas).";
         }
 
         const modal = document.getElementById('modal-recibo-venta');
@@ -675,5 +860,138 @@ const POS = {
         const modal = document.getElementById('modal-recibo-venta');
         if (modal) modal.classList.add('hidden');
         this.reciboActual = null;
+    },
+
+    enviarWhatsApp() {
+        if (!this.reciboActual) return;
+        const v = this.reciboActual;
+        const tel = (v.cliente_telefono || '').replace(/\D/g, '');
+        if (!tel) {
+            App.showToast("El cliente no tiene un teléfono válido registrado.", "error");
+            return;
+        }
+
+        // Si son 10 dígitos (México), anteponemos el código 52
+        const phoneNum = tel.length === 10 ? `52${tel}` : tel;
+        const fecha = App.formatDate(v.fecha_venta);
+        const folio = String(v.id).padStart(5, '0');
+
+        let itemsTexto = '';
+        if (v.items && v.items.length > 0) {
+            itemsTexto = v.items.map(it => {
+                if (it.tipo_item === 'accesorio' || (!it.imei && it.accesorio_id)) {
+                    return `• 🎧 *${it.nombre_item || it.modelo}* x${it.cantidad || 1} - $${(it.precio_final || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+                } else {
+                    return `• 📱 *${it.modelo}* ${it.capacidad_gb || ''}GB (${it.color || ''})
+  IMEI: \`${it.imei || 'N/A'}\`
+  Precio: $${(it.precio_final || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+                }
+            }).join('\n\n');
+        } else {
+            itemsTexto = `• 📱 *${v.modelo}* ${v.capacidad_gb || ''}GB (${v.color || ''})
+  IMEI: \`${v.imei || 'N/A'}\`
+  Precio: $${(v.precio_final || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+        }
+
+        const mensaje = `¡Hola, *${v.cliente_nombre}*! 👋
+Muchas gracias por tu compra en *Mi Inventario Celulares*. Aquí tienes tu comprobante digital y póliza oficial:
+
+📋 *COMPROBANTE DE VENTA*
+━━━━━━━━━━━━━━━━━━━━
+*Folio:* #${folio}
+*Fecha:* ${fecha}
+*Forma de Pago:* ${v.metodo_pago}
+*Total Pagado:* $${(v.precio_final || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}
+
+🛒 *DETALLE DE ARTÍCULOS:*
+${itemsTexto}
+
+🛡️ *PÓLIZA DE GARANTÍA:*
+Válida presentando este comprobante o tu número registrado. Aplica directamente en placa base y funcionamiento de fábrica. No aplica en daños por humedad, golpes o intervención ajena.
+
+¡Estamos a tus órdenes para lo que necesites! 🚀`;
+
+        const url = `https://wa.me/${phoneNum}?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, '_blank');
+    },
+
+    // --- ESCÁNER DE CÓDIGOS DE BARRA / QR (PISTOLA USB O TECLADO) ---
+
+    setupBarcodeScanner() {
+        let barcodeBuffer = '';
+        let lastKeyTime = Date.now();
+
+        window.addEventListener('keydown', (e) => {
+            const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+            const activeId = document.activeElement ? document.activeElement.id : '';
+
+            // Si está escribiendo en otro input que NO sea el de búsqueda POS, no interceptar
+            if (activeTag === 'input' && activeId !== 'pos-search-input') {
+                return;
+            }
+            if (activeTag === 'textarea' || activeTag === 'select') {
+                return;
+            }
+
+            const currentTime = Date.now();
+            // Las pistolas de código de barras disparan las teclas en menos de 100ms
+            if (currentTime - lastKeyTime > 120) {
+                barcodeBuffer = '';
+            }
+            lastKeyTime = currentTime;
+
+            if (e.key === 'Enter') {
+                if (barcodeBuffer.length >= 4) {
+                    e.preventDefault();
+                    this.procesarCodigoEscaneado(barcodeBuffer);
+                    barcodeBuffer = '';
+                }
+            } else if (e.key.length === 1) {
+                barcodeBuffer += e.key;
+            }
+        });
+    },
+
+    async procesarCodigoEscaneado(codigo) {
+        codigo = (codigo || '').trim();
+        if (!codigo) return;
+
+        try {
+            // 1. Intentar buscar en teléfonos disponibles (IMEI o modelo)
+            const resEq = await fetch(`/api/pos/buscar?q=${encodeURIComponent(codigo)}`);
+            if (resEq.ok) {
+                const equipos = await resEq.json();
+                const exacto = equipos.find(eq => eq.imei.toLowerCase() === codigo.toLowerCase() || eq.modelo.toLowerCase() === codigo.toLowerCase());
+                if (exacto) {
+                    this.agregarAlCarrito(exacto);
+                    App.showToast(`Escaneado: ${exacto.modelo} (${exacto.imei})`, "success");
+                    return;
+                } else if (equipos.length === 1) {
+                    this.agregarAlCarrito(equipos[0]);
+                    App.showToast(`Escaneado: ${equipos[0].modelo}`, "success");
+                    return;
+                }
+            }
+
+            // 2. Intentar buscar en accesorios por código de barras o nombre
+            const resAcc = await fetch(`/api/accesorios?q=${encodeURIComponent(codigo)}`);
+            if (resAcc.ok) {
+                const accesorios = await resAcc.json();
+                const exactoAcc = accesorios.find(a => (a.codigo_barras && a.codigo_barras.toLowerCase() === codigo.toLowerCase()) || a.nombre.toLowerCase().includes(codigo.toLowerCase()));
+                if (exactoAcc) {
+                    this.agregarAccesorioAlCarrito(exactoAcc);
+                    return;
+                } else if (accesorios.length === 1) {
+                    this.agregarAccesorioAlCarrito(accesorios[0]);
+                    return;
+                }
+            }
+
+            App.showToast(`No se encontró producto con código "${codigo}".`, "warning");
+        } catch (e) {
+            console.error("Error al procesar escáner:", e);
+        }
     }
 };
+
+window.POS = POS;

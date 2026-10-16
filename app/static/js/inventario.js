@@ -261,11 +261,17 @@ const Inventario = {
         }
     },
 
+    filtroAntiguedad: '',
+
     filtrarYRenderizar() {
         let filtrados = this.equipos;
 
         if (this.filtroGrado) {
             filtrados = filtrados.filter(e => e.grado.toUpperCase() === this.filtroGrado.toUpperCase());
+        }
+
+        if (this.filtroAntiguedad) {
+            filtrados = filtrados.filter(e => e.estado_antiguedad === this.filtroAntiguedad);
         }
 
         if (this.filtroBusqueda) {
@@ -278,6 +284,11 @@ const Inventario = {
         }
 
         this.renderTabla(filtrados);
+    },
+
+    filtrarPorAntiguedad(antiguedad) {
+        this.filtroAntiguedad = antiguedad;
+        this.filtrarYRenderizar();
     },
 
     actualizarResumenInventario() {
@@ -311,6 +322,7 @@ const Inventario = {
         tableBody.innerHTML = lista.map(equipo => {
             const margen = equipo.margen_proyectado || (equipo.precio_venta - equipo.costo_compra);
             const pct = equipo.porcentaje_margen || ((margen / equipo.costo_compra) * 100).toFixed(1);
+            const agingBadge = App.getAgingBadge(equipo.dias_en_stock || 0, equipo.estado_antiguedad || 'Fresco');
 
             return `
             <tr class="hover:bg-slate-50 border-b border-slate-100 transition-colors">
@@ -320,7 +332,10 @@ const Inventario = {
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                         </span>
                         <div>
-                            <div>${equipo.modelo}</div>
+                            <div class="flex items-center gap-1.5">
+                                <span>${equipo.modelo}</span>
+                                ${agingBadge}
+                            </div>
                             <span class="text-xs text-slate-400 font-normal">${equipo.capacidad_gb} GB</span>
                         </div>
                     </div>
@@ -337,24 +352,27 @@ const Inventario = {
                 <td class="py-3 px-4">
                     ${App.getGradeBadge(equipo.grado)}
                 </td>
-                <td class="py-3 px-4 text-slate-600">
+                <td class="py-3 px-4 text-slate-600 admin-only">
                     ${App.formatCurrency(equipo.costo_compra)}
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-800">
                     ${App.formatCurrency(equipo.precio_venta)}
                 </td>
-                <td class="py-3 px-4">
+                <td class="py-3 px-4 admin-only">
                     <span class="text-emerald-700 font-semibold text-sm">
                         +${App.formatCurrency(margen)}
                     </span>
                     <span class="text-xs text-emerald-600 block">(${pct}%)</span>
                 </td>
-                <td class="py-3 px-4 text-right space-x-1">
+                <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
                     <button onclick="POS.iniciarVentaDirecta(${equipo.id})" class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-all" title="Vender este equipo en POS">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                         Vender
                     </button>
-                    <button onclick="Inventario.eliminarEquipo(${equipo.id}, '${equipo.modelo}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Eliminar equipo">
+                    <button onclick="Garantias.consultarHistorialIMEI('${equipo.imei}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver Historial Universal 360°">
+                        📋
+                    </button>
+                    <button onclick="Inventario.eliminarEquipo(${equipo.id}, '${equipo.modelo}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors admin-only" title="Eliminar equipo">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </td>
