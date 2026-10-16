@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.database import init_db, seed_demo_data_if_empty
-from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup
+from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup, reparaciones, catalogo
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
@@ -37,6 +37,8 @@ app.include_router(garantias.router)
 app.include_router(accesorios.router)
 app.include_router(caja.router)
 app.include_router(backup.router)
+app.include_router(reparaciones.router)
+app.include_router(catalogo.router)
 
 # Archivos estáticos y Single Page Application (SPA)
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -50,6 +52,20 @@ def serve_index():
     index_path = os.path.join(STATIC_DIR, "index.html")
     return FileResponse(index_path)
 
+@app.get("/manifest.json")
+def serve_manifest():
+    """Sirve el manifest de PWA."""
+    return FileResponse(os.path.join(STATIC_DIR, "manifest.json"), media_type="application/manifest+json")
+
+@app.get("/service-worker.js")
+def serve_service_worker():
+    """Sirve el Service Worker para capacidad offline."""
+    return FileResponse(
+        os.path.join(STATIC_DIR, "service-worker.js"),
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"}
+    )
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "app": "Mi Inventario Samuel Navarrete", "version": "1.0.0"}
+    return {"status": "ok", "app": "Mi Inventario Samuel Navarrete", "version": "2.0.0"}

@@ -8,6 +8,15 @@ const App = {
         this.setupNavigation();
         this.aplicarModoAdmin();
         this.updateHeaderStats();
+        this.registerServiceWorker();
+    },
+
+    registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/service-worker.js').catch(e => console.warn(e));
+            });
+        }
     },
 
     setupNavigation() {
@@ -67,6 +76,8 @@ const App = {
         } else if (tabName === 'reportes') {
             Reportes.cargarDashboard();
             Reportes.cargarHistorialVentas();
+        } else if (tabName === 'reparaciones') {
+            if (typeof Reparaciones !== 'undefined') Reparaciones.cargar();
         }
 
         // Si estamos en POS móvil, verificar visibilidad del carrito flotante

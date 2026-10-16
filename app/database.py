@@ -233,6 +233,33 @@ def init_db():
     );
     """)
 
+    # 8. Tabla Reparaciones y Servicio Técnico (Taller)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS reparaciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folio TEXT UNIQUE NOT NULL,
+        cliente_nombre TEXT NOT NULL,
+        cliente_telefono TEXT NOT NULL,
+        dispositivo_modelo TEXT NOT NULL,
+        color TEXT,
+        imei_serie TEXT,
+        codigo_patron TEXT,
+        falla_reportada TEXT NOT NULL,
+        diagnostico_tecnico TEXT,
+        condicion_recepcion TEXT,
+        costo_refaccion REAL NOT NULL DEFAULT 0,
+        precio_servicio REAL NOT NULL DEFAULT 0,
+        anticipo REAL NOT NULL DEFAULT 0,
+        saldo_pendiente REAL NOT NULL DEFAULT 0,
+        estado TEXT NOT NULL DEFAULT 'Recibido' CHECK(estado IN ('Recibido', 'En Revision', 'Esperando Refaccion', 'Listo para Entrega', 'Entregado', 'Cancelado')),
+        fecha_ingreso TEXT NOT NULL,
+        fecha_prometida TEXT,
+        fecha_entrega TEXT,
+        tecnico_responsable TEXT,
+        notas TEXT
+    );
+    """)
+
     # Índices
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_equipos_imei ON equipos(imei);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_equipos_estado ON equipos(estado);")
@@ -246,6 +273,9 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_fecha ON garantias(fecha_devolucion);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_accesorios_categoria ON accesorios(categoria);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes_caja(fecha_corte);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_folio ON reparaciones(folio);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_estado ON reparaciones(estado);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_telefono ON reparaciones(cliente_telefono);")
 
     conn.commit()
     conn.close()
@@ -321,6 +351,19 @@ def seed_demo_data_if_empty():
         INSERT INTO accesorios (nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro)
         VALUES (?, ?, ?, ?, ?, ?, ?);
         """, demo_acc)
+        conn.commit()
+
+    # Sembrar reparaciones demo si la tabla está vacía
+    cursor.execute("SELECT COUNT(*) as count FROM reparaciones;")
+    if cursor.fetchone()["count"] == 0:
+        demo_rep = [
+            ("REP-0001", "Roberto Gómez", "5511223344", "iPhone 11", "Negro", "356789123000111", "1234", "Pantalla estrellada y touch no responde", "Cambio de display OLED completo", "Detalles leves en esquinas", 450.0, 950.0, 300.0, 650.0, "En Revision", now, now, None, "Samuel N.", "Pieza en inventario"),
+            ("REP-0002", "Ana Patricia Solís", "5599887766", "Samsung Galaxy A52", "Azul", "358888000999222", "Patrón en L", "No carga, puerto flojo", "Cambio de centro de carga flex", "Buen estado general", 120.0, 380.0, 200.0, 180.0, "Listo para Entrega", now, now, None, "Samuel N.", "Probado con carga rápida OK"),
+        ]
+        cursor.executemany("""
+        INSERT INTO reparaciones (folio, cliente_nombre, cliente_telefono, dispositivo_modelo, color, imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico, condicion_recepcion, costo_refaccion, precio_servicio, anticipo, saldo_pendiente, estado, fecha_ingreso, fecha_prometida, fecha_entrega, tecnico_responsable, notas)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, demo_rep)
         conn.commit()
 
     conn.close()

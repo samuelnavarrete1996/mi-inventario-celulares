@@ -7,11 +7,17 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <title>Mi Inventario - Celulares Samuel Navarrete</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- JsBarcode CDN para generar códigos de barras imprimibles -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <!-- Html5Qrcode CDN para escaneo directo con la cámara del celular -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -81,13 +87,24 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
                             <span>Accesorios</span>
                         </button>
+                        <button data-tab="reparaciones" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            <span>Taller</span>
+                        </button>
                         <button data-tab="reportes" class="admin-only nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                             <span>Reportes</span>
                         </button>
                     </nav>
 
+                    <a href="/catalogo" target="_blank" class="hidden xl:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs transition-all" title="Ver catálogo digital público como lo ven tus clientes">
+                        <span>🌐 Catálogo Web</span>
+                    </a>
+
                     <button onclick="Garantias.abrirModal()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-2xs transition-all" title="Procesar devolución o cambio de equipo por garantía">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        <span>🛡️ Garantías</span>
+                    </button>
                         <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                         <span>🛡️ Garantías</span>
                     </button>
@@ -240,12 +257,15 @@
                     <!-- Tarjeta de Filtros y Resumen de Stock -->
                     <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
                         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <!-- Búsqueda -->
+                            <!-- Búsqueda con Cámara -->
                             <div class="relative flex-1">
                                 <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                                 </span>
-                                <input type="text" id="search-inventario" placeholder="Buscar por modelo, IMEI o color..." class="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                                <input type="text" id="search-inventario" placeholder="Buscar por modelo, IMEI o color..." class="w-full pl-10 pr-12 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                                <button type="button" onclick="ScannerCamara.abrir(val => { document.getElementById('search-inventario').value = val; Inventario.filtroBusqueda = val; Inventario.filtrarYRenderizar(); })" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-blue-600 transition-colors" title="Escanear IMEI o código con la cámara">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                </button>
                             </div>
 
                             <!-- Filtros de Grado -->
@@ -345,11 +365,14 @@
                             <span class="text-xs text-slate-400 hidden sm:inline">Agrega al carrito con 1 toque</span>
                         </div>
 
-                        <div class="relative">
+                        <div class="relative flex items-center">
                             <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                             </span>
-                            <input type="text" id="pos-search-input" placeholder="🔍 Escribe IMEI o modelo (ej. iPhone 14, 356789123456...)" class="w-full pl-12 pr-4 py-3 text-sm bg-slate-50 border border-slate-300 rounded-xl shadow-inner focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                            <input type="text" id="pos-search-input" placeholder="🔍 Escribe IMEI o modelo (ej. iPhone 14, 356789123456...)" class="w-full pl-12 pr-28 py-3 text-sm bg-slate-50 border border-slate-300 rounded-xl shadow-inner focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                            <button type="button" onclick="ScannerCamara.abrir('pos')" class="absolute right-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-all" title="Escanear código de barras con la cámara">
+                                📷 <span>Escanear</span>
+                            </button>
                         </div>
                     </div>
 
@@ -791,6 +814,210 @@
 
                     <div id="ventas-empty-state" class="hidden py-10 text-center">
                         <p class="text-slate-400 text-sm">No se encontraron ventas para el periodo seleccionado.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ============================================================== -->
+        <!-- PESTAÑA 5: MÓDULO DE REPARACIONES Y TALLER TÉCNICO              -->
+        <!-- ============================================================== -->
+        <section id="view-reparaciones" class="tab-view hidden space-y-6 md:space-y-8">
+            
+            <!-- Botón Desplegable en Móvil para Registrar Orden de Servicio -->
+            <button type="button" onclick="document.getElementById('form-nueva-reparacion-container').classList.toggle('hidden'); document.getElementById('icon-chevron-rep-form').classList.toggle('rotate-180')" class="lg:hidden flex items-center justify-between w-full p-4 bg-white rounded-2xl border border-slate-200 shadow-xs font-bold text-slate-800 transition-all active:scale-[0.99]">
+                <div class="flex items-center gap-2.5">
+                    <span class="p-2 bg-purple-50 text-purple-600 rounded-xl">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </span>
+                    <span class="text-sm">+ Nueva Orden de Servicio</span>
+                </div>
+                <svg id="icon-chevron-rep-form" class="w-5 h-5 text-slate-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+                
+                <!-- COLUMNA IZQUIERDA: Formulario Nueva Reparación (4 columnas) -->
+                <div id="form-nueva-reparacion-container" class="hidden lg:block lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm sticky top-24">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+                        <div class="flex items-center gap-2">
+                            <span class="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </span>
+                            <h2 class="text-lg font-bold text-slate-800">Orden de Servicio</h2>
+                        </div>
+                        <span class="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md">Taller Técnico</span>
+                    </div>
+
+                    <form id="form-nueva-reparacion" onsubmit="event.preventDefault(); Reparaciones.guardar();" class="space-y-4">
+                        <!-- Datos del Cliente -->
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Datos del Cliente</h4>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Nombre Completo *</label>
+                                <input type="text" id="rep-input-cliente" required placeholder="ej. Carlos Mendoza" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Teléfono / WhatsApp *</label>
+                                <input type="tel" id="rep-input-telefono" required placeholder="ej. 5512345678" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Datos del Dispositivo -->
+                        <div class="space-y-3 pt-2 border-t border-slate-100">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dispositivo a Reparar</h4>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Marca y Modelo *</label>
+                                <input type="text" id="rep-input-modelo" required placeholder="ej. iPhone 13 Pro / Samsung S22" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Color</label>
+                                    <input type="text" id="rep-input-color" placeholder="ej. Azul Sierra" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">PIN / Patrón</label>
+                                    <input type="text" id="rep-input-patron" placeholder="ej. 1234 / L invertida" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">IMEI o Serie (opcional)</label>
+                                <input type="text" id="rep-input-imei" placeholder="15 dígitos o número de serie" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Falla y Diagnóstico -->
+                        <div class="space-y-3 pt-2 border-t border-slate-100">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Diagnóstico y Falla</h4>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Falla Reportada por Cliente *</label>
+                                <textarea id="rep-input-falla" required rows="2" placeholder="ej. Cambio de pantalla estrellada, no da touch" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Detalles Estéticos de Recepción</label>
+                                <input type="text" id="rep-input-condicion" placeholder="ej. Rayón leve en tapa trasera, marco intacto" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Diagnóstico / Refacción requerida</label>
+                                <input type="text" id="rep-input-diag" placeholder="ej. Pantalla OLED GX + TrueTone" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Presupuesto y Anticipo -->
+                        <div class="space-y-3 pt-2 border-t border-slate-100">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Costos y Cobro</h4>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="admin-only">
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Costo Refacción ($)</label>
+                                    <input type="number" step="0.5" id="rep-input-costo" placeholder="0.00" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                                </div>
+                                <div class="col-span-2 sm:col-span-1">
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Presupuesto al Cliente ($) *</label>
+                                    <input type="number" step="0.5" id="rep-input-precio" required placeholder="0.00" class="w-full px-3 py-2 text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Anticipo / Dejó ($)</label>
+                                    <input type="number" step="0.5" id="rep-input-anticipo" placeholder="0.00" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Fecha Prometida</label>
+                                    <input type="date" id="rep-input-fecha-prom" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                                </div>
+                            </div>
+
+                            <div class="bg-purple-50/70 p-3 rounded-xl border border-purple-100 flex items-center justify-between text-xs">
+                                <span class="font-bold text-purple-900">Resta por Pagar al Entregar:</span>
+                                <span id="rep-txt-saldo-calculado" class="font-extrabold text-sm text-purple-700">$0.00</span>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full py-3 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-600/20 transition-all flex items-center justify-center gap-2">
+                            <span>Crear Orden y Generar Boleta</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- COLUMNA DERECHA: Listado y Gestión de Órdenes (8 columnas) -->
+                <div class="lg:col-span-8 space-y-5">
+                    
+                    <!-- Tarjetas Rápidas de Estado del Taller -->
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase block">Total Órdenes</span>
+                            <span id="stat-rep-total" class="text-xl font-black text-slate-900">0</span>
+                        </div>
+                        <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200/80 shadow-xs">
+                            <span class="text-[10px] font-bold text-amber-700 uppercase block">En Taller Activos</span>
+                            <span id="stat-rep-taller" class="text-xl font-black text-amber-800">0</span>
+                        </div>
+                        <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200/80 shadow-xs">
+                            <span class="text-[10px] font-bold text-emerald-700 uppercase block">Listos para Entrega</span>
+                            <span id="stat-rep-listos" class="text-xl font-black text-emerald-800">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Buscador y Filtros por Estado -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </span>
+                            <input type="text" id="search-reparaciones" placeholder="Buscar por cliente, teléfono, folio (ej. REP-20261016) o modelo..." class="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none transition-all">
+                        </div>
+
+                        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                            <button type="button" onclick="Reparaciones.filtrarEstado('Todos', this)" class="rep-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white transition-all">
+                                Todos
+                            </button>
+                            <button type="button" onclick="Reparaciones.filtrarEstado('Recibido', this)" class="rep-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">
+                                📥 Recibido
+                            </button>
+                            <button type="button" onclick="Reparaciones.filtrarEstado('En Revision', this)" class="rep-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">
+                                🔍 En Revisión
+                            </button>
+                            <button type="button" onclick="Reparaciones.filtrarEstado('Esperando Refaccion', this)" class="rep-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">
+                                ⏳ Esperando Pieza
+                            </button>
+                            <button type="button" onclick="Reparaciones.filtrarEstado('Listo para Entrega', this)" class="rep-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">
+                                ✅ Listo para Entrega
+                            </button>
+                            <button type="button" onclick="Reparaciones.filtrarEstado('Entregado', this)" class="rep-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">
+                                🤝 Entregado
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Órdenes de Reparación -->
+                    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                                        <th class="py-3 px-4">Folio / Fecha</th>
+                                        <th class="py-3 px-4">Cliente / Contacto</th>
+                                        <th class="py-3 px-4">Dispositivo & Falla</th>
+                                        <th class="py-3 px-4">Estado del Trabajo</th>
+                                        <th class="py-3 px-4">Presupuesto / Saldo</th>
+                                        <th class="py-3 px-4 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-reparaciones" class="divide-y divide-slate-100">
+                                    <!-- Filas renderizadas por reparaciones.js -->
+                                </tbody>
+                            </table>
+
+                            <div id="reparaciones-empty-state" class="hidden py-12 text-center">
+                                <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                </div>
+                                <h4 class="font-semibold text-slate-700">No se encontraron órdenes de servicio</h4>
+                                <p class="text-xs text-slate-400 max-w-xs mx-auto mt-1">Registra una nueva orden con el formulario lateral para comenzar a controlar tus reparaciones.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1428,6 +1655,207 @@
     <div id="toast-container" class="fixed bottom-20 md:bottom-5 right-4 md:right-5 z-50 flex flex-col space-y-2 max-w-sm pointer-events-none"></div>
 
     <!-- ==================================================== -->
+    <!-- MODAL: ESCÁNER DE CÁMARA (CÓDIGO DE BARRAS / IMEI)   -->
+    <!-- ==================================================== -->
+    <div id="modal-camara-scanner" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 text-center space-y-4 animate-in fade-in zoom-in duration-150">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div class="flex items-center gap-2">
+                    <span class="p-2 bg-blue-50 text-blue-600 rounded-xl">📷</span>
+                    <h3 class="font-bold text-slate-800 text-base">Escanear Código / IMEI</h3>
+                </div>
+                <button type="button" onclick="ScannerCamara.cerrar()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="reader-camara" class="w-full rounded-2xl overflow-hidden bg-black min-h-[250px] shadow-inner"></div>
+            <p class="text-xs text-slate-500">Apunta la cámara del celular al código de barras o IMEI del equipo.</p>
+            <button type="button" onclick="ScannerCamara.cerrar()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">
+                Cerrar Escáner
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================================================== -->
+    <!-- MODAL: GENERADOR DE ETIQUETA IMPRIMIBLE (CÓDIGO 128) -->
+    <!-- ==================================================== -->
+    <div id="modal-imprimir-etiqueta" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm">🏷️</span>
+                    <h3 class="font-bold text-slate-800 text-sm">Etiqueta de Precio & Código</h3>
+                </div>
+                <button type="button" onclick="Etiquetas.cerrar()" class="text-slate-400 hover:text-slate-600 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Vista previa de etiqueta térmica (50x30mm) -->
+            <div id="area-etiqueta-imprimible" class="p-4 border-2 border-dashed border-slate-300 rounded-xl bg-white text-center space-y-1.5 shadow-2xs">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Samuel Navarrete Celulares</p>
+                <h4 id="etiqueta-preview-modelo" class="font-black text-slate-900 text-base leading-tight">--</h4>
+                <p id="etiqueta-preview-detalles" class="text-xs text-slate-600">--</p>
+                <div class="flex justify-center py-1">
+                    <svg id="etiqueta-barcode-svg" class="max-w-full"></svg>
+                </div>
+                <p id="etiqueta-preview-precio" class="text-xl font-black text-blue-600">$0.00</p>
+            </div>
+
+            <div class="flex gap-2">
+                <button type="button" onclick="Etiquetas.imprimir()" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all">
+                    🖨️ <span>Imprimir Etiqueta</span>
+                </button>
+                <button type="button" onclick="Etiquetas.cerrar()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================== -->
+    <!-- MODAL: REGISTRAR ABONO / LIQUIDACIÓN DE REPARACIÓN   -->
+    <!-- ==================================================== -->
+    <div id="modal-abono-reparacion" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                    <span class="text-xs font-bold text-purple-600 uppercase tracking-wider">Abono / Liquidación</span>
+                    <h3 class="text-lg font-bold text-slate-900 leading-tight">Registrar Pago a Orden</h3>
+                </div>
+                <button type="button" onclick="Reparaciones.cerrarModalAbono()" class="text-slate-400 hover:text-slate-600 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <input type="hidden" id="abono-rep-id">
+            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Folio:</span>
+                    <span id="abono-rep-folio" class="font-mono font-bold text-slate-800">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Cliente / Equipo:</span>
+                    <span id="abono-rep-cliente" class="font-bold text-slate-800 text-right">--</span>
+                </div>
+                <div class="flex justify-between pt-1 border-t border-slate-200">
+                    <span class="text-slate-500">Precio Total:</span>
+                    <span id="abono-rep-precio" class="font-bold text-slate-800">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Abonado previamente:</span>
+                    <span id="abono-rep-anticipo" class="font-bold text-emerald-600">--</span>
+                </div>
+                <div class="flex justify-between font-bold text-sm text-rose-600 pt-1 border-t border-slate-200">
+                    <span>Saldo Pendiente:</span>
+                    <span id="abono-rep-saldo">--</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Monto que entrega el cliente ($ MXN) *</label>
+                <input type="number" id="abono-monto-input" step="0.5" class="w-full px-3.5 py-2.5 text-base font-bold text-slate-900 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none">
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button type="button" onclick="Reparaciones.guardarAbono()" class="flex-1 py-3 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold rounded-xl text-xs shadow-xs transition-all">
+                    Confirmar y Registrar Abono
+                </button>
+                <button type="button" onclick="Reparaciones.cerrarModalAbono()" class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================== -->
+    <!-- MODAL: BOLETA DE RECEPCIÓN / ENTREGA DE REPARACIÓN   -->
+    <!-- ==================================================== -->
+    <div id="modal-boleta-reparacion" class="modal-sheet-mobile hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden relative">
+            <div id="boleta-modal-content" class="p-6 bg-white text-slate-900 font-sans">
+                <!-- Encabezado de la Boleta -->
+                <div class="text-center pb-4 border-b border-dashed border-slate-300">
+                    <div class="w-10 h-10 mx-auto rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-lg mb-2">
+                        🔧
+                    </div>
+                    <h2 class="text-lg font-black tracking-tight uppercase">Taller Técnico Especializado</h2>
+                    <p class="text-xs font-semibold text-slate-600">Samuel Navarrete | Celulares y Servicio</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Diagnóstico, mantenimiento y reparación profesional</p>
+
+                    <div class="mt-3 flex justify-between items-center text-xs text-slate-500 bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
+                        <span id="boleta-folio" class="font-mono font-bold text-purple-700">FOLIO #00000</span>
+                        <span id="boleta-fecha" class="text-slate-600">--</span>
+                    </div>
+                </div>
+
+                <!-- Datos del Cliente -->
+                <div class="py-3 border-b border-dashed border-slate-300 text-xs space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Cliente:</span>
+                        <span id="boleta-cliente-nombre" class="font-bold text-slate-800 text-right">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Teléfono:</span>
+                        <span id="boleta-cliente-telefono" class="font-mono text-slate-700 text-right">--</span>
+                    </div>
+                </div>
+
+                <!-- Datos del Equipo y Falla -->
+                <div class="py-3 border-b border-dashed border-slate-300 text-xs space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Equipo Recibido:</span>
+                        <span id="boleta-modelo" class="font-bold text-slate-900 text-right">--</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block mb-0.5">Falla Reportada:</span>
+                        <p id="boleta-falla" class="font-semibold text-slate-800 bg-slate-50 p-2 rounded-lg border border-slate-100">--</p>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block mb-0.5">Condición Física de Recepción:</span>
+                        <p id="boleta-condicion" class="text-slate-600 italic bg-slate-50 p-2 rounded-lg border border-slate-100 text-[11px]">--</p>
+                    </div>
+                </div>
+
+                <!-- Presupuesto y Saldos -->
+                <div class="py-3 border-b border-dashed border-slate-300 text-xs space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Costo Total Presupuestado:</span>
+                        <span id="boleta-total" class="font-bold text-slate-900">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Anticipo / Pagado:</span>
+                        <span id="boleta-anticipo" class="font-bold text-emerald-600">--</span>
+                    </div>
+                    <div class="flex justify-between pt-1 border-t border-slate-200 text-sm font-black">
+                        <span class="text-slate-800">Saldo al Recoger:</span>
+                        <span id="boleta-saldo" class="text-purple-700">--</span>
+                    </div>
+                </div>
+
+                <!-- Términos del Taller -->
+                <div class="pt-3 text-[10px] text-slate-500 leading-relaxed text-center space-y-1">
+                    <p class="font-semibold text-slate-700 uppercase tracking-wider">Políticas de Taller</p>
+                    <p class="italic">Toda reparación cuenta con garantía sobre el componente reemplazado. Equipos no reclamados después de 30 días generarán cargo por almacenaje. Indispensable presentar esta boleta física o digital para su entrega.</p>
+                    <div class="pt-1 font-mono text-[9px] text-slate-400 uppercase tracking-widest">
+                        ¡Gracias por tu confianza!
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="no-print p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row gap-2">
+                <button type="button" onclick="Reparaciones.imprimirBoleta()" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+                    🖨️ <span>Imprimir Boleta</span>
+                </button>
+                <button type="button" onclick="Reparaciones.cerrarBoleta()" class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs transition-all">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================== -->
     <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (BOTTOM NAV) -->
     <!-- ==================================================== -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] mobile-bottom-nav">
@@ -1470,6 +1898,16 @@
             </div>
 
             <div class="grid grid-cols-2 gap-3">
+                <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.switchTab('reparaciones');" class="p-4 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 text-purple-800 rounded-2xl border border-purple-200/80 flex flex-col items-center justify-center gap-2 text-center transition-all">
+                    <span class="text-2xl">🔧</span>
+                    <span class="text-xs font-bold">Taller Técnico</span>
+                </button>
+
+                <a href="/catalogo" target="_blank" onclick="App.cerrarMenuAccionesMovil()" class="p-4 bg-teal-50 hover:bg-teal-100 active:bg-teal-200 text-teal-800 rounded-2xl border border-teal-200/80 flex flex-col items-center justify-center gap-2 text-center transition-all">
+                    <span class="text-2xl">🌐</span>
+                    <span class="text-xs font-bold">Catálogo Web</span>
+                </a>
+
                 <button type="button" onclick="App.cerrarMenuAccionesMovil(); Caja.abrirModalCorte();" class="p-4 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 rounded-2xl border border-emerald-200/80 flex flex-col items-center justify-center gap-2 text-center transition-all">
                     <span class="text-2xl">💵</span>
                     <span class="text-xs font-bold">Corte de Caja</span>
@@ -1498,12 +1936,14 @@
     </div>
 
     <!-- SCRIPTS DE LA APLICACIÓN (con cache-busting) -->
-    <script src="/static/js/app.js?v=20261016_v2"></script>
-    <script src="/static/js/inventario.js?v=20261016_v2"></script>
-    <script src="/static/js/pos.js?v=20261016_v2"></script>
-    <script src="/static/js/accesorios.js?v=20261016_v2"></script>
-    <script src="/static/js/caja.js?v=20261016_v2"></script>
-    <script src="/static/js/garantias.js?v=20261016_v2"></script>
-    <script src="/static/js/reportes.js?v=20261016_v2"></script>
+    <script src="/static/js/app.js?v=20261016_v3"></script>
+    <script src="/static/js/inventario.js?v=20261016_v3"></script>
+    <script src="/static/js/pos.js?v=20261016_v3"></script>
+    <script src="/static/js/accesorios.js?v=20261016_v3"></script>
+    <script src="/static/js/caja.js?v=20261016_v3"></script>
+    <script src="/static/js/garantias.js?v=20261016_v3"></script>
+    <script src="/static/js/reportes.js?v=20261016_v3"></script>
+    <script src="/static/js/reparaciones.js?v=20261016_v3"></script>
+    <script src="/static/js/etiquetas_scanner.js?v=20261016_v3"></script>
 </body>
 </html>

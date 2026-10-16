@@ -84,6 +84,9 @@ const Accesorios = {
                     <button onclick="POS.agregarAccesorioAlCarrito(${acc.id})" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-all" title="Vender en POS">
                         + Vender
                     </button>
+                    <button onclick="Accesorios.imprimirEtiqueta(${acc.id})" class="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg transition-colors" title="Imprimir Etiqueta con Código">
+                        🏷️
+                    </button>
                     <button onclick="Accesorios.editar(${acc.id})" class="p-1.5 text-slate-400 hover:text-blue-600 admin-only rounded-lg transition-colors" title="Editar">
                         ✏️
                     </button>
@@ -182,6 +185,13 @@ const Accesorios = {
             }
         } catch (e) {
             App.showToast(e.message, "error");
+        }
+    },
+
+    imprimirEtiqueta(id) {
+        const acc = this.items.find(x => x.id === id);
+        if (acc && typeof Etiquetas !== 'undefined') {
+            Etiquetas.abrirParaAccesorio(acc);
         }
     }
 };

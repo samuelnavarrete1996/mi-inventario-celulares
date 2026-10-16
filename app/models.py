@@ -285,3 +285,72 @@ class HistorialImeiResponse(BaseModel):
     estado_actual: str
     eventos: List[HistorialImeiEvento] = []
 
+
+# --- MODELOS DE REPARACIONES Y TALLER TÉCNICO ---
+
+class ReparacionCreate(BaseModel):
+    cliente_nombre: str = Field(..., min_length=2, description="Nombre del cliente")
+    cliente_telefono: str = Field(..., min_length=7, description="Teléfono de contacto para avisos por WhatsApp")
+    dispositivo_modelo: str = Field(..., min_length=1, description="Ej. iPhone 13, Galaxy A54")
+    color: Optional[str] = ""
+    imei_serie: Optional[str] = ""
+    codigo_patron: Optional[str] = Field(None, description="PIN, contraseña o patrón para probar el equipo")
+    falla_reportada: str = Field(..., min_length=2, description="Problema que reporta el cliente")
+    diagnostico_tecnico: Optional[str] = None
+    condicion_recepcion: Optional[str] = Field(None, description="Detalles estéticos con los que ingresa")
+    costo_refaccion: float = Field(0.0, ge=0)
+    precio_servicio: float = Field(..., ge=0, description="Precio total a cobrar al cliente")
+    anticipo: float = Field(0.0, ge=0, description="Monto dejado a cuenta")
+    tecnico_responsable: Optional[str] = "Samuel N."
+    notas: Optional[str] = None
+    fecha_prometida: Optional[str] = None
+
+class ReparacionUpdate(BaseModel):
+    cliente_nombre: Optional[str] = None
+    cliente_telefono: Optional[str] = None
+    dispositivo_modelo: Optional[str] = None
+    color: Optional[str] = None
+    imei_serie: Optional[str] = None
+    codigo_patron: Optional[str] = None
+    falla_reportada: Optional[str] = None
+    diagnostico_tecnico: Optional[str] = None
+    condicion_recepcion: Optional[str] = None
+    costo_refaccion: Optional[float] = None
+    precio_servicio: Optional[float] = None
+    anticipo: Optional[float] = None
+    saldo_pendiente: Optional[float] = None
+    estado: Optional[str] = None
+    tecnico_responsable: Optional[str] = None
+    notas: Optional[str] = None
+    fecha_prometida: Optional[str] = None
+    fecha_entrega: Optional[str] = None
+
+class ReparacionAbono(BaseModel):
+    monto_abono: float = Field(..., gt=0, description="Monto del abono en efectivo o transferencia")
+    metodo_pago: str = Field("Efectivo", description="Efectivo o Transferencia")
+    notas: Optional[str] = None
+
+class ReparacionResponse(BaseModel):
+    id: int
+    folio: str
+    cliente_nombre: str
+    cliente_telefono: str
+    dispositivo_modelo: str
+    color: Optional[str] = None
+    imei_serie: Optional[str] = None
+    codigo_patron: Optional[str] = None
+    falla_reportada: str
+    diagnostico_tecnico: Optional[str] = None
+    condicion_recepcion: Optional[str] = None
+    costo_refaccion: float
+    precio_servicio: float
+    anticipo: float
+    saldo_pendiente: float
+    estado: str
+    fecha_ingreso: str
+    fecha_prometida: Optional[str] = None
+    fecha_entrega: Optional[str] = None
+    tecnico_responsable: Optional[str] = None
+    notas: Optional[str] = None
+    margen_ganancia: Optional[float] = None
+

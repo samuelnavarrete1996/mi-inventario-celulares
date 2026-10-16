@@ -1201,7 +1201,7 @@ def obtener_historial_imei(imei: str) -> Dict[str, Any]:
 def exportar_todo_json() -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    tablas = ["equipos", "clientes", "ventas", "venta_items", "garantias", "accesorios", "cortes_caja"]
+    tablas = ["equipos", "clientes", "ventas", "venta_items", "garantias", "accesorios", "cortes_caja", "reparaciones"]
     resultado = {
         "version": "2.0",
         "app": "Mi Inventario Samuel Navarrete",
@@ -1209,8 +1209,170 @@ def exportar_todo_json() -> Dict[str, Any]:
         "datos": {}
     }
     for t in tablas:
-        cursor.execute(f"SELECT * FROM {t}")
-        resultado["datos"][t] = [dict(r) for r in cursor.fetchall()]
+        try:
+            cursor.execute(f"SELECT * FROM {t}")
+            resultado["datos"][t] = [dict(r) for r in cursor.fetchall()]
+        except Exception:
+            resultado["datos"][t] = []
     conn.close()
     return resultado
+
+
+# ==============================================================================
+# MÓDULO DE REPARACIONES Y TALLER TÉCNICO
+# ==============================================================================
+
+def generar_siguiente_folio_reparacion(cursor) -> str:
+    cursor.execute("SELECT id FROM reparaciones ORDER BY id DESC LIMIT 1")
+    row = cursor.fetchone()
+    next_id = (row["id"] + 1) if row else 1
+    return f"REP-{next_id:04d}"
+
+def get_reparaciones(estado: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM reparaciones WHERE 1=1"
+    params = []
+
+    if estado and estado != "Todos":
+        query += " AND estado = ?"
+        params.append(estado)
+
+    if search:
+        s = f"%{search.strip()}%"
+        query += " AND (folio LIKE ? OR cliente_nombre LIKE ? OR cliente_telefono LIKE ? OR dispositivo_modelo LIKE ? OR imei_serie LIKE ?)"
+        params.extend([s, s, s, s, s])
+
+    query += " ORDER BY id DESC"
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+
+    for r in rows:
+        r["margen_ganancia"] = round(r["precio_servicio"] - r["costo_refaccion"], 2)
+
+    conn.close()
+    return rows
+
+def get_reparacion_by_id(rep_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM reparaciones WHERE id = ?", (rep_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    res = dict(row)
+    res["margen_ganancia"] = round(res["precio_servicio"] - res["costo_refaccion"], 2)
+    return res
+
+def create_reparacion(datos: Dict[str, Any]) -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    folio = generar_siguiente_folio_reparacion(cursor)
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    precio = float(datos.get("precio_servicio", 0))
+    anticipo = float(datos.get("anticipo", 0))
+    saldo = round(max(0.0, precio - anticipo), 2)
+
+    cursor.execute("""
+    INSERT INTO reparaciones (
+        folio, cliente_nombre, cliente_telefono, dispositivo_modelo, color,
+        imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico,
+        condicion_recepcion, costo_refaccion, precio_servicio, anticipo,
+        saldo_pendiente, estado, fecha_ingreso, fecha_prometida,
+        tecnico_responsable, notas
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido', ?, ?, ?, ?)
+    """, (
+        folio,
+        datos["cliente_nombre"].strip(),
+        datos["cliente_telefono"].strip(),
+        datos["dispositivo_modelo"].strip(),
+        datos.get("color", "").strip() if datos.get("color") else "",
+        datos.get("imei_serie", "").strip() if datos.get("imei_serie") else "",
+        datos.get("codigo_patron", "").strip() if datos.get("codigo_patron") else None,
+        datos["falla_reportada"].strip(),
+        datos.get("diagnostico_tecnico", "").strip() if datos.get("diagnostico_tecnico") else None,
+        datos.get("condicion_recepcion", "").strip() if datos.get("condicion_recepcion") else None,
+        float(datos.get("costo_refaccion", 0)),
+        precio,
+        anticipo,
+        saldo,
+        now_str,
+        datos.get("fecha_prometida") or None,
+        datos.get("tecnico_responsable", "Samuel N."),
+        datos.get("notas", "").strip() if datos.get("notas") else None
+    ))
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return get_reparacion_by_id(new_id)
+
+def update_reparacion(rep_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM reparaciones WHERE id = ?", (rep_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        return None
+
+    ex_dict = dict(existing)
+    precio = float(datos.get("precio_servicio", ex_dict["precio_servicio"]))
+    anticipo = float(datos.get("anticipo", ex_dict["anticipo"]))
+    saldo = round(max(0.0, precio - anticipo), 2)
+    datos["saldo_pendiente"] = saldo
+
+    if datos.get("estado") == "Entregado" and not ex_dict.get("fecha_entrega"):
+        datos["fecha_entrega"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    campos = []
+    valores = []
+    for k, v in datos.items():
+        if k not in ("id", "folio", "margen_ganancia"):
+            campos.append(f"{k} = ?")
+            valores.append(v)
+
+    if campos:
+        valores.append(rep_id)
+        cursor.execute(f"UPDATE reparaciones SET {', '.join(campos)} WHERE id = ?", valores)
+        conn.commit()
+
+    conn.close()
+    return get_reparacion_by_id(rep_id)
+
+def cambiar_estado_reparacion(rep_id: int, nuevo_estado: str) -> Optional[Dict[str, Any]]:
+    estados_validos = ('Recibido', 'En Revision', 'Esperando Refaccion', 'Listo para Entrega', 'Entregado', 'Cancelado')
+    if nuevo_estado not in estados_validos:
+        raise ValueError(f"Estado inválido: {nuevo_estado}. Válidos: {', '.join(estados_validos)}")
+    
+    update_data = {"estado": nuevo_estado}
+    if nuevo_estado == "Entregado":
+        update_data["fecha_entrega"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        update_data["saldo_pendiente"] = 0.0
+
+    return update_reparacion(rep_id, update_data)
+
+def abonar_reparacion(rep_id: int, monto_abono: float) -> Optional[Dict[str, Any]]:
+    rep = get_reparacion_by_id(rep_id)
+    if not rep:
+        return None
+
+    nuevo_anticipo = round(rep["anticipo"] + monto_abono, 2)
+    nuevo_saldo = round(max(0.0, rep["precio_servicio"] - nuevo_anticipo), 2)
+    
+    return update_reparacion(rep_id, {
+        "anticipo": nuevo_anticipo,
+        "saldo_pendiente": nuevo_saldo
+    })
+
+def delete_reparacion(rep_id: int) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM reparaciones WHERE id = ?", (rep_id,))
+    conn.commit()
+    filas = cursor.rowcount
+    conn.close()
+    return filas > 0
 
