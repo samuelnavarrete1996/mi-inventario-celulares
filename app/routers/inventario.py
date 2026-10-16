@@ -1,10 +1,36 @@
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Response, status
+import os
+from fastapi import APIRouter, HTTPException, Query, Header, UploadFile, File, Response, status
 from typing import List, Optional, Dict, Any
 from app import crud
 from app.models import EquipoCreate, EquipoUpdate, EquipoResponse
 from app.excel_importer import procesar_archivo_excel_o_csv, guardar_equipos_importados, generar_plantilla_excel_bytes
 
 router = APIRouter(prefix="/api/equipos", tags=["Inventario"])
+
+def load_env_file():
+    """Carga variables desde archivo .env local si existe."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+load_env_file()
+
+def get_admin_delete_password() -> str:
+    """Obtiene la contraseña de administración desde variables de entorno."""
+    load_env_file()
+    return os.environ.get("ADMIN_DELETE_PASSWORD", "")
+
 
 @router.get("", response_model=List[EquipoResponse])
 def listar_equipos(
@@ -88,8 +114,29 @@ def actualizar_equipo(equipo_id: int, datos: EquipoUpdate):
     return actualizado
 
 @router.delete("/{equipo_id}", status_code=status.HTTP_200_OK)
-def eliminar_equipo(equipo_id: int):
-    """Elimina un equipo si aún no ha sido vendido."""
+def eliminar_equipo(
+    equipo_id: int,
+    password: Optional[str] = Query(None, description="Contraseña de autorización para eliminar"),
+    x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password")
+):
+    """
+    Elimina un equipo si aún no ha sido vendido.
+    Requiere obligatoriamente la contraseña de autorización del administrador.
+    """
+    admin_password = get_admin_delete_password()
+    if not admin_password:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="La contraseña de administrador no ha sido configurada en el servidor (variable ADMIN_DELETE_PASSWORD)."
+        )
+
+    token = password or x_admin_password
+    if not token or token != admin_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Contraseña de autorización incorrecta. No se permite eliminar el artículo."
+        )
+
     try:
         exito = crud.delete_equipo(equipo_id)
         if not exito:
@@ -97,3 +144,4 @@ def eliminar_equipo(equipo_id: int):
         return {"mensaje": "Equipo eliminado exitosamente."}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+

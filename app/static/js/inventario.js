@@ -363,23 +363,108 @@ const Inventario = {
         }).join('');
     },
 
-    async eliminarEquipo(id, modelo) {
-        if (!confirm(`¿Estás seguro de que deseas eliminar el equipo "${modelo}" del inventario?`)) {
+    equipoAEliminar: null,
+
+    eliminarEquipo(id, modelo) {
+        this.equipoAEliminar = { id, modelo };
+        const modal = document.getElementById('modal-confirmar-eliminar');
+        const txtModelo = document.getElementById('delete-modal-modelo');
+        const inputPwd = document.getElementById('delete-admin-password');
+        const errBox = document.getElementById('delete-password-error');
+
+        if (txtModelo) txtModelo.textContent = `"${modelo}"`;
+        if (inputPwd) inputPwd.value = '';
+        if (errBox) errBox.classList.add('hidden');
+        if (modal) modal.classList.remove('hidden');
+
+        if (inputPwd) {
+            setTimeout(() => inputPwd.focus(), 150);
+        }
+    },
+
+    cerrarModalEliminar() {
+        const modal = document.getElementById('modal-confirmar-eliminar');
+        if (modal) modal.classList.add('hidden');
+        this.equipoAEliminar = null;
+    },
+
+    togglePasswordVisibility() {
+        const input = document.getElementById('delete-admin-password');
+        const txt = document.getElementById('txt-toggle-pwd');
+        if (input) {
+            if (input.type === 'password') {
+                input.type = 'text';
+                if (txt) txt.textContent = '🔒';
+            } else {
+                input.type = 'password';
+                if (txt) txt.textContent = '👁️';
+            }
+        }
+    },
+
+    async ejecutarEliminacion() {
+        if (!this.equipoAEliminar) return;
+
+        const inputPwd = document.getElementById('delete-admin-password');
+        const errBox = document.getElementById('delete-password-error');
+        const btnSubmit = document.getElementById('btn-confirmar-eliminar-submit');
+        const password = inputPwd ? inputPwd.value : '';
+
+        if (!password) {
+            if (errBox) {
+                errBox.textContent = "Por favor ingresa la contraseña de autorización.";
+                errBox.classList.remove('hidden');
+            }
             return;
         }
 
+        const originalText = btnSubmit.innerHTML;
+
         try {
-            const res = await fetch(`/api/equipos/${id}`, { method: 'DELETE' });
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg> Verificando...
+            `;
+
+            const id = this.equipoAEliminar.id;
+            const res = await fetch(`/api/equipos/${id}?password=${encodeURIComponent(password)}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Admin-Password': password
+                }
+            });
+
             const data = await res.json();
-            if (res.ok) {
-                App.showToast('Equipo eliminado exitosamente', 'info');
-                await this.cargarEquipos();
-                App.updateHeaderStats();
-            } else {
+
+            if (res.status === 401) {
+                if (errBox) {
+                    errBox.innerHTML = `
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span>Contraseña de administrador incorrecta.</span>
+                    `;
+                    errBox.classList.remove('hidden');
+                }
+                inputPwd.select();
+                return;
+            }
+
+            if (!res.ok) {
                 throw new Error(data.detail || 'No se pudo eliminar el equipo.');
             }
+
+            App.showToast(`Equipo "${this.equipoAEliminar.modelo}" eliminado exitosamente`, 'info');
+            this.cerrarModalEliminar();
+            await this.cargarEquipos();
+            App.updateHeaderStats();
+
         } catch (err) {
             App.showToast(err.message, 'error');
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = originalText;
         }
     }
 };

@@ -7,6 +7,7 @@ Test suite integral para verificar todas las operaciones del backend:
 - Transacción atómica de venta y generación de recibo
 - Métricas del mes en Reportes y Dashboard
 """
+import os
 import pytest
 import httpx
 import time
@@ -281,5 +282,45 @@ async def test_flujo_devolucion_garantia_y_reemplazo():
         assert r_hist_gar.status_code == 200
         gar_list = r_hist_gar.json()
         assert any(g["imei"] == imei_original for g in gar_list)
+
+@pytest.mark.anyio
+async def test_eliminar_equipo_requiere_password():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        suffix = str(int(time.time() * 1000))[-6:]
+        imei = f"354444000{suffix}"
+        auth_pwd = os.environ.get("ADMIN_DELETE_PASSWORD")
+
+        # 1. Registrar un equipo
+        p = {
+            "modelo": "Xiaomi Redmi Note 13",
+            "capacidad_gb": 128,
+            "color": "Negro",
+            "imei": imei,
+            "grado": "B",
+            "costo_compra": 2500.0,
+            "precio_venta": 3500.0
+        }
+        res_crear = await client.post("/api/equipos", json=p)
+        assert res_crear.status_code == 201
+        eq_id = res_crear.json()["id"]
+
+        # 2. Intentar eliminar sin contraseña -> 401 Unauthorized
+        res_no_pwd = await client.delete(f"/api/equipos/{eq_id}")
+        assert res_no_pwd.status_code == 401
+
+        # 3. Intentar eliminar con contraseña errónea -> 401 Unauthorized
+        res_bad_pwd = await client.delete(f"/api/equipos/{eq_id}?password=wrongpassword")
+        assert res_bad_pwd.status_code == 401
+
+        # 4. Eliminar con contraseña correcta obtenida del entorno -> 200 OK
+        res_ok = await client.delete(f"/api/equipos/{eq_id}?password={auth_pwd}")
+        assert res_ok.status_code == 200
+        assert "eliminado exitosamente" in res_ok.json()["mensaje"]
+
+        # 5. Verificar que ya no existe
+        res_check = await client.get(f"/api/equipos/{eq_id}")
+        assert res_check.status_code == 404
+
+
 
 
