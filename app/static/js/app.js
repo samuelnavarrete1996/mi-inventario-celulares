@@ -14,7 +14,17 @@ const App = {
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/static/service-worker.js').catch(e => console.warn(e));
+                navigator.serviceWorker.register('/service-worker.js').then(reg => {
+                    reg.update();
+                }).catch(e => console.warn(e));
+
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        refreshing = true;
+                        window.location.reload();
+                    }
+                });
             });
         }
     },

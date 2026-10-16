@@ -1,16 +1,19 @@
 // service-worker.js - PWA Offline Support & Cache Management
-const CACHE_NAME = 'mi-inventario-v2';
+const CACHE_NAME = 'mi-inventario-v3';
 const STATIC_ASSETS = [
   '/',
-  '/static/css/custom.css?v=20261016_v2',
-  '/static/js/app.js?v=20261016_v2',
-  '/static/js/inventario.js?v=20261016_v2',
-  '/static/js/pos.js?v=20261016_v2',
-  '/static/js/accesorios.js?v=20261016_v2',
-  '/static/js/caja.js?v=20261016_v2',
-  '/static/js/garantias.js?v=20261016_v2',
-  '/static/js/reportes.js?v=20261016_v2',
-  '/static/manifest.json',
+  '/catalogo',
+  '/manifest.json',
+  '/static/css/custom.css?v=20261016_v3',
+  '/static/js/app.js?v=20261016_v3',
+  '/static/js/inventario.js?v=20261016_v3',
+  '/static/js/pos.js?v=20261016_v3',
+  '/static/js/accesorios.js?v=20261016_v3',
+  '/static/js/caja.js?v=20261016_v3',
+  '/static/js/garantias.js?v=20261016_v3',
+  '/static/js/reportes.js?v=20261016_v3',
+  '/static/js/reparaciones.js?v=20261016_v3',
+  '/static/js/etiquetas_scanner.js?v=20261016_v3',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
 ];
@@ -39,7 +42,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Las peticiones de API siempre van por la red para tener datos 100% frescos
+  // 1. Las peticiones de API siempre van por la red para tener datos frescos
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request).catch(() => {
@@ -52,7 +55,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Recursos estáticos: Stale-While-Revalidate (devuelve caché rápido y actualiza en segundo plano)
+  // 2. Navegación HTML: NETWORK FIRST (siempre descarga el HTML nuevo del servidor si hay internet)
+  if (event.request.mode === 'navigate' || (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'))) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cached) => cached || caches.match('/'));
+        })
+    );
+    return;
+  }
+
+  // 3. Recursos estáticos (CSS, JS, iconos): Stale-While-Revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {

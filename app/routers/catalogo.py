@@ -10,7 +10,10 @@ router = APIRouter(tags=["Catálogo Público Digital"])
 def ver_catalogo_publico():
     """Sirve la vitrina digital pública para clientes."""
     ruta_html = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "catalogo.html")
-    return FileResponse(ruta_html)
+    return FileResponse(
+        ruta_html,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+    )
 
 @router.get("/api/catalogo/equipos")
 def obtener_equipos_catalogo(

@@ -48,14 +48,21 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 def serve_index():
-    """Sirve la interfaz gráfica principal."""
+    """Sirve la interfaz gráfica principal con headers anti-caché para actualizaciones inmediatas."""
     index_path = os.path.join(STATIC_DIR, "index.html")
-    return FileResponse(index_path)
+    return FileResponse(
+        index_path,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+    )
 
 @app.get("/manifest.json")
 def serve_manifest():
     """Sirve el manifest de PWA."""
-    return FileResponse(os.path.join(STATIC_DIR, "manifest.json"), media_type="application/manifest+json")
+    return FileResponse(
+        os.path.join(STATIC_DIR, "manifest.json"),
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
 
 @app.get("/service-worker.js")
 def serve_service_worker():
@@ -63,7 +70,11 @@ def serve_service_worker():
     return FileResponse(
         os.path.join(STATIC_DIR, "service-worker.js"),
         media_type="application/javascript",
-        headers={"Service-Worker-Allowed": "/"}
+        headers={
+            "Service-Worker-Allowed": "/",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache"
+        }
     )
 
 @app.get("/health")
