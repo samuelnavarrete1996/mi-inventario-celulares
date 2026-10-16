@@ -1,7 +1,9 @@
 # Mi Inventario - Celulares Samuel Navarrete
-### Sistema Web de Control de Inventario, Punto de Venta (POS) y Reportes Financieros
+### Sistema Web de Control de Inventario, Punto de Venta (POS), Garantías y Reportes
 
-Sistema integral desarrollado para la comercialización, control de stock y punto de venta especializado en teléfonos celulares (seminuevos, reacondicionados y nuevos), con **carrito de compra multi-artículo**, soporte para **múltiples formas de pago y pagos combinados (efectivo, transferencia y tarjeta)**, cálculo en tiempo real de márgenes de ganancia, gestión de clientes, emisión de notas de venta/recibos imprimibles y dashboard financiero.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/samuelnavarrete1996/mi-inventario-celulares)
+
+Sistema integral desarrollado para la comercialización, control de stock y punto de venta especializado en teléfonos celulares (seminuevos, reacondicionados y nuevos), con **carrito de compra multi-artículo**, soporte para **múltiples formas de pago (Efectivo, Transferencia, Combinado y Equipo Garantía)**, **módulo de devoluciones y cambios por garantía**, cálculo en tiempo real de márgenes de ganancia, gestión de clientes, emisión de notas de venta/recibos imprimibles y dashboard financiero.
 
 ---
 
