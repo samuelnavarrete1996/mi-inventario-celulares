@@ -105,12 +105,13 @@
                         <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                         <span>🛡️ Garantías</span>
                     </button>
-                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                        <span>🛡️ Garantías</span>
-                    </button>
 
                     <button onclick="Caja.abrirModalCorte()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 shadow-2xs transition-all" title="Corte de caja y arqueo diario">
                         <span>💵 Corte Caja</span>
+                    </button>
+
+                    <button id="btn-instalar-pwa" onclick="App.instalarPWA()" class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-2xs transition-all" title="Instalar como aplicación en este dispositivo">
+                        <span>📲 Instalar App</span>
                     </button>
 
                     <button onclick="App.abrirModalRespaldo()" class="admin-only hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 shadow-2xs transition-all" title="Descargar o restaurar copia de seguridad">
@@ -1926,6 +1927,11 @@
                 <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.toggleAdminMode();" class="p-4 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 rounded-2xl border border-amber-200 flex flex-col items-center justify-center gap-2 text-center transition-all">
                     <span class="text-2xl">👑</span>
                     <span class="text-xs font-bold">Modo Dueño</span>
+                </button>
+
+                <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.instalarPWA();" class="col-span-2 p-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl flex items-center justify-center gap-2 shadow-sm font-bold text-xs transition-all">
+                    <span class="text-xl">📲</span>
+                    <span>Instalar como App en este Celular</span>
                 </button>
             </div>
 

@@ -11,6 +11,8 @@ const App = {
         this.registerServiceWorker();
     },
 
+    deferredPrompt: null,
+
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -26,6 +28,29 @@ const App = {
                     }
                 });
             });
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            this.deferredPrompt = e;
+        });
+    },
+
+    async instalarPWA() {
+        if (this.deferredPrompt) {
+            this.deferredPrompt.prompt();
+            const { outcome } = await this.deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                this.showToast("¡Aplicación instalada con éxito!", "success");
+            }
+            this.deferredPrompt = null;
+        } else {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                alert("📱 Para instalar en tu iPhone:\n\n1. Toca el botón 'Compartir' (el cuadro con una flecha hacia arriba en Safari).\n2. Baja y pulsa 'Agregar a pantalla de inicio' (➕).\n3. Toca 'Agregar' arriba a la derecha.");
+            } else {
+                alert("📱 Para instalar en tu celular o PC:\n\n1. Toca los tres puntos (⋮) del navegador arriba a la derecha.\n2. Selecciona 'Instalar aplicación' o 'Agregar a la pantalla principal'.\n3. ¡Listo! Se creará el acceso con el icono de tu inventario.");
+            }
         }
     },
 
