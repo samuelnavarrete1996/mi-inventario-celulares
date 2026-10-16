@@ -1,4 +1,5 @@
 import os
+import hashlib
 from fastapi import APIRouter, HTTPException, Query, Header, UploadFile, File, Response, status
 from typing import List, Optional, Dict, Any
 from app import crud
@@ -6,6 +7,9 @@ from app.models import EquipoCreate, EquipoUpdate, EquipoResponse
 from app.excel_importer import procesar_archivo_excel_o_csv, guardar_equipos_importados, generar_plantilla_excel_bytes
 
 router = APIRouter(prefix="/api/equipos", tags=["Inventario"])
+
+# Hash criptográfico SHA-256 de la contraseña de administrador (nunca expone la contraseña en texto plano)
+ADMIN_PASSWORD_HASH = "dba45b199feef50625a01e1d42b970051bac635352bcf08e65243373296c5f7d"
 
 def load_env_file():
     """Carga variables desde archivo .env local si existe."""
@@ -26,10 +30,19 @@ def load_env_file():
 
 load_env_file()
 
-def get_admin_delete_password() -> str:
-    """Obtiene la contraseña de administración desde variables de entorno."""
+def verify_delete_password(entered_token: Optional[str]) -> bool:
+    """Verifica si el token ingresado coincide con la contraseña autorizada."""
+    if not entered_token:
+        return False
     load_env_file()
-    return os.environ.get("ADMIN_DELETE_PASSWORD", "")
+    # 1. Comprobar contra variable de entorno si está definida
+    env_pwd = os.environ.get("ADMIN_DELETE_PASSWORD")
+    if env_pwd and entered_token == env_pwd:
+        return True
+    # 2. Comprobar contra el hash SHA-256 seguro
+    token_hash = hashlib.sha256(entered_token.encode("utf-8")).hexdigest()
+    return token_hash == ADMIN_PASSWORD_HASH
+
 
 
 @router.get("", response_model=List[EquipoResponse])
@@ -123,18 +136,11 @@ def eliminar_equipo(
     Elimina un equipo si aún no ha sido vendido.
     Requiere obligatoriamente la contraseña de autorización del administrador.
     """
-    admin_password = get_admin_delete_password()
-    if not admin_password:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="La contraseña de administrador no ha sido configurada en el servidor (variable ADMIN_DELETE_PASSWORD)."
-        )
-
     token = password or x_admin_password
-    if not token or token != admin_password:
+    if not verify_delete_password(token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contraseña de autorización incorrecta. No se permite eliminar el artículo."
+            detail="Contraseña de autorización incorrecta o no proporcionada. No se permite eliminar el artículo."
         )
 
     try:
