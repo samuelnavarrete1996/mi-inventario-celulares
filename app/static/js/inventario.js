@@ -372,13 +372,43 @@ const Inventario = {
         const inputPwd = document.getElementById('delete-admin-password');
         const errBox = document.getElementById('delete-password-error');
 
+        // Si el navegador tiene en caché una versión sin el modal, pedir contraseña con prompt obligatorio
+        if (!modal) {
+            const pwd = prompt(`[Seguridad] Autorización requerida.\nIngresa la contraseña de administrador para eliminar "${modelo}":`);
+            if (!pwd) return;
+            this.enviarEliminacionDirecta(id, modelo, pwd);
+            return;
+        }
+
         if (txtModelo) txtModelo.textContent = `"${modelo}"`;
         if (inputPwd) inputPwd.value = '';
         if (errBox) errBox.classList.add('hidden');
-        if (modal) modal.classList.remove('hidden');
+        modal.classList.remove('hidden');
 
         if (inputPwd) {
             setTimeout(() => inputPwd.focus(), 150);
+        }
+    },
+
+    async enviarEliminacionDirecta(id, modelo, password) {
+        try {
+            const res = await fetch(`/api/equipos/${id}?password=${encodeURIComponent(password)}`, {
+                method: 'DELETE',
+                headers: { 'X-Admin-Password': password }
+            });
+            const data = await res.json();
+            if (res.status === 401) {
+                App.showToast("Contraseña incorrecta. No se eliminó el artículo.", "error");
+                return;
+            }
+            if (!res.ok) {
+                throw new Error(data.detail || 'No se pudo eliminar el equipo.');
+            }
+            App.showToast(`Equipo "${modelo}" eliminado exitosamente`, 'info');
+            await this.cargarEquipos();
+            App.updateHeaderStats();
+        } catch (e) {
+            App.showToast(e.message, 'error');
         }
     },
 
