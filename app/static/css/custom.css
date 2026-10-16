@@ -4,6 +4,7 @@
 body {
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
 }
 
 ::-webkit-scrollbar {
@@ -29,6 +30,58 @@ body {
 /* Modo Vendedor: Ocultar información confidencial (costos, márgenes, reportes, eliminar) */
 .modo-vendedor .admin-only {
     display: none !important;
+}
+
+/* Barra inferior móvil: Soporte de área segura para iPhone (Home bar) */
+.mobile-bottom-nav {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Animaciones suaves para modales tipo Bottom-Sheet en móvil */
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0.5;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@media (max-width: 639px) {
+    .modal-sheet-mobile {
+        align-items: flex-end !important;
+        padding: 0 !important;
+    }
+    .modal-sheet-mobile > div {
+        animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+        max-height: 92vh !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-top-left-radius: 1.5rem !important;
+        border-top-right-radius: 1.5rem !important;
+        margin: 0 !important;
+    }
+}
+
+@media (min-width: 640px) {
+    .modal-sheet-mobile > div {
+        animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
 }
 
 /* Estilos de Impresión para Ticket / Recibo Térmico (58mm / 80mm) */

@@ -11,11 +11,11 @@ const App = {
     },
 
     setupNavigation() {
-        const tabBtns = document.querySelectorAll('.nav-tab-btn');
+        const tabBtns = document.querySelectorAll('.nav-tab-btn, .nav-tab-btn-mobile');
         tabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.tab;
-                this.switchTab(tab);
+                if (tab) this.switchTab(tab);
             });
         });
     },
@@ -23,14 +23,28 @@ const App = {
     switchTab(tabName) {
         this.currentTab = tabName;
 
-        // Actualizar botones de navegación
+        // Actualizar botones de navegación escritorio
         document.querySelectorAll('.nav-tab-btn').forEach(btn => {
             if (btn.dataset.tab === tabName) {
                 btn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
-                btn.classList.remove('text-slate-600', 'hover:bg-slate-100');
+                btn.classList.remove('text-slate-600', 'hover:bg-slate-200');
             } else {
                 btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
-                btn.classList.add('text-slate-600', 'hover:bg-slate-100');
+                btn.classList.add('text-slate-600', 'hover:bg-slate-200');
+            }
+        });
+
+        // Actualizar botones de navegación móvil inferior
+        document.querySelectorAll('.nav-tab-btn-mobile').forEach(btn => {
+            const isTarget = btn.dataset.tab === tabName;
+            if (isTarget) {
+                btn.classList.add('text-blue-600', 'font-bold');
+                btn.classList.remove('text-slate-400', 'font-normal');
+                btn.querySelector('.mobile-tab-indicator')?.classList.remove('opacity-0');
+            } else {
+                btn.classList.remove('text-blue-600', 'font-bold');
+                btn.classList.add('text-slate-400', 'font-normal');
+                btn.querySelector('.mobile-tab-indicator')?.classList.add('opacity-0');
             }
         });
 
@@ -55,7 +69,22 @@ const App = {
             Reportes.cargarHistorialVentas();
         }
 
+        // Si estamos en POS móvil, verificar visibilidad del carrito flotante
+        if (typeof POS !== 'undefined' && POS.actualizarBarraFlotanteMovil) {
+            POS.actualizarBarraFlotanteMovil();
+        }
+
         this.updateHeaderStats();
+    },
+
+    abrirMenuAccionesMovil() {
+        const modal = document.getElementById('modal-acciones-movil');
+        if (modal) modal.classList.remove('hidden');
+    },
+
+    cerrarMenuAccionesMovil() {
+        const modal = document.getElementById('modal-acciones-movil');
+        if (modal) modal.classList.add('hidden');
     },
 
     // --- MODO ADMIN (DUEÑO) VS MODO VENDEDOR (EMPLEADO) ---

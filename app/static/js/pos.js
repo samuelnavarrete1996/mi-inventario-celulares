@@ -5,6 +5,7 @@ const POS = {
     carrito: [], // Array de { tipo: 'equipo'|'accesorio', id, equipo|accesorio, cantidad, precio_unitario, precio_final, costo_unitario }
     metodoPago: 'Efectivo', // 'Efectivo', 'Transferencia', 'Combinado', 'Equipo Garantía'
     reciboActual: null,
+    catalogoTab: 'equipos', // 'equipos' o 'accesorios'
 
     init() {
         this.setupSearch();
@@ -22,7 +23,11 @@ const POS = {
                 clearTimeout(this.debounceTimer);
                 const query = e.target.value.trim();
                 this.debounceTimer = setTimeout(() => {
-                    this.buscarEquipos(query);
+                    if (this.catalogoTab === 'accesorios') {
+                        this.buscarAccesoriosPOS(query);
+                    } else {
+                        this.buscarEquipos(query);
+                    }
                 }, 200);
             });
 
@@ -534,6 +539,110 @@ const POS = {
         if (elTotalEfectivo) elTotalEfectivo.textContent = App.formatCurrency(total);
         if (elTotalTransf) elTotalTransf.textContent = App.formatCurrency(total);
         if (elTotalGarantia) elTotalGarantia.textContent = App.formatCurrency(total);
+
+        this.actualizarBarraFlotanteMovil();
+    },
+
+    actualizarBarraFlotanteMovil() {
+        const bar = document.getElementById('pos-floating-bar-mobile');
+        const countEl = document.getElementById('mobile-cart-count');
+        const totalEl = document.getElementById('mobile-cart-total');
+        if (!bar) return;
+
+        const totalItems = this.carrito.reduce((acc, it) => acc + (it.cantidad || 1), 0);
+        const totalDinero = this.obtenerTotalCarrito();
+
+        if (totalItems > 0 && App.currentTab === 'pos') {
+            if (countEl) countEl.textContent = totalItems;
+            if (totalEl) totalEl.textContent = App.formatCurrency(totalDinero);
+            bar.classList.remove('hidden');
+        } else {
+            bar.classList.add('hidden');
+        }
+    },
+
+    cambiarCatalogoTab(tab) {
+        this.catalogoTab = tab;
+        const btnEq = document.getElementById('pos-tab-equipos-btn');
+        const btnAcc = document.getElementById('pos-tab-accesorios-btn');
+        const containerEq = document.getElementById('pos-container-equipos');
+        const containerAcc = document.getElementById('pos-container-accesorios');
+        const inputSearch = document.getElementById('pos-search-input');
+
+        if (tab === 'equipos') {
+            if (btnEq) {
+                btnEq.className = "px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-xs transition-all";
+            }
+            if (btnAcc) {
+                btnAcc.className = "px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all";
+            }
+            if (containerEq) containerEq.classList.remove('hidden');
+            if (containerAcc) containerAcc.classList.add('hidden');
+            if (inputSearch) inputSearch.placeholder = "🔍 Escribe IMEI o modelo (ej. iPhone 14, 356789...)";
+            this.buscarEquipos(inputSearch?.value.trim() || '');
+        } else {
+            if (btnEq) {
+                btnEq.className = "px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all";
+            }
+            if (btnAcc) {
+                btnAcc.className = "px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-xs transition-all";
+            }
+            if (containerEq) containerEq.classList.add('hidden');
+            if (containerAcc) containerAcc.classList.remove('hidden');
+            if (inputSearch) inputSearch.placeholder = "🔍 Buscar accesorio, mica, funda, cargador o servicio...";
+            this.buscarAccesoriosPOS(inputSearch?.value.trim() || '');
+        }
+    },
+
+    async buscarAccesoriosPOS(query = '') {
+        const container = document.getElementById('pos-grid-accesorios');
+        const emptyState = document.getElementById('pos-accesorios-empty-state');
+        if (!container) return;
+
+        try {
+            const url = `/api/accesorios?search=${encodeURIComponent(query)}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Error cargando catálogo de accesorios");
+            const items = await res.json();
+
+            if (items.length === 0) {
+                container.innerHTML = '';
+                if (emptyState) emptyState.classList.remove('hidden');
+                return;
+            }
+            if (emptyState) emptyState.classList.add('hidden');
+
+            container.innerHTML = items.map(acc => {
+                const itemEnCarro = this.carrito.find(it => it.tipo === 'accesorio' && it.id === acc.id);
+                const stockTxt = acc.es_servicio ? 'Servicio' : `${acc.stock} disponibles`;
+
+                return `
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between group">
+                    <div>
+                        <div class="flex justify-between items-start gap-1 mb-1.5">
+                            <span class="text-[10px] uppercase font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">${acc.categoria}</span>
+                            <span class="text-xs ${acc.stock <= 3 && !acc.es_servicio ? 'text-rose-600 font-bold' : 'text-slate-500 font-medium'}">${stockTxt}</span>
+                        </div>
+                        <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors mb-0.5">${acc.nombre}</h4>
+                        ${acc.codigo_barras ? `<p class="font-mono text-[11px] text-slate-400">SKU: ${acc.codigo_barras}</p>` : ''}
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between gap-2">
+                        <div>
+                            <span class="text-[10px] text-slate-400 uppercase font-bold block">Precio</span>
+                            <span class="text-base font-extrabold text-slate-900">${App.formatCurrency(acc.precio_venta)}</span>
+                        </div>
+                        <button onclick="POS.agregarAccesorioAlCarrito(${acc.id})" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all">
+                            <span>+ Agregar</span>
+                            ${itemEnCarro ? `<span class="bg-white/25 px-1.5 py-0.2 rounded-full text-[10px]">x${itemEnCarro.cantidad}</span>` : ''}
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error(e);
+        }
     },
 
     iniciarVentaDirecta(equipoId) {
