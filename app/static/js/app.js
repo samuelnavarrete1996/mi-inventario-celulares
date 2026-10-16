@@ -2,9 +2,11 @@
 
 const App = {
     currentTab: 'inventario',
-    isAdmin: localStorage.getItem('modo_admin') !== 'false', // Por defecto Modo Admin (Dueño)
+    isAdmin: false, // Por seguridad: SIEMPRE inicia en Modo Vendedor bloqueado
 
     init() {
+        localStorage.removeItem('modo_admin');
+        this.isAdmin = false;
         this.setupNavigation();
         this.aplicarModoAdmin();
         this.updateHeaderStats();
@@ -139,32 +141,27 @@ const App = {
         if (this.isAdmin) {
             // Pasar a modo vendedor
             this.isAdmin = false;
-            localStorage.setItem('modo_admin', 'false');
             this.aplicarModoAdmin();
-            this.showToast("Modo Vendedor activado. Costos y ganancias confidenciales ocultos.", "info");
+            this.showToast("🔒 Modo Vendedor activado. Costos y ganancias confidenciales ocultos.", "info");
         } else {
             // Solicitar contraseña de administrador
-            const pwd = prompt("[Seguridad] Ingresa la contraseña de administrador para desbloquear costos y utilidades:");
+            const pwd = prompt("[Seguridad] Ingresa la contraseña de administrador para desbloquear Modo Dueño:");
             if (!pwd) return;
 
             try {
-                // Verificar contraseña intentando listar o validando
+                // Verificar contraseña intentando validar
                 const testRes = await fetch(`/api/equipos/1?password=${encodeURIComponent(pwd)}`, { method: 'DELETE' });
                 if (testRes.status === 401) {
                     this.showToast("Contraseña incorrecta. Acceso denegado.", "error");
                     return;
                 }
-                // Si respondió 404 o 200 o 400, la contraseña fue autorizada
                 this.isAdmin = true;
-                localStorage.setItem('modo_admin', 'true');
                 this.aplicarModoAdmin();
-                this.showToast("👑 Modo Administrador activado. Todos los reportes desbloqueados.", "success");
+                this.showToast("👑 Modo Dueño activado. Todos los reportes y costos desbloqueados.", "success");
             } catch (e) {
-                // Si el equipo 1 no existe o error de conexión, intentar validar con fallback
                 this.isAdmin = true;
-                localStorage.setItem('modo_admin', 'true');
                 this.aplicarModoAdmin();
-                this.showToast("👑 Modo Administrador activado.", "success");
+                this.showToast("👑 Modo Dueño activado.", "success");
             }
         }
     },
@@ -174,20 +171,26 @@ const App = {
         const btnToggle = document.getElementById('btn-toggle-modo-admin');
         const txtToggle = document.getElementById('txt-modo-admin');
         const headerGanancias = document.getElementById('box-header-ganancias');
+        const txtMovil = document.getElementById('txt-modo-admin-movil');
+        const iconMovil = document.getElementById('icon-modo-admin-movil');
 
         if (this.isAdmin) {
             body.classList.remove('modo-vendedor');
             if (txtToggle) txtToggle.textContent = '👑 Modo Dueño';
             if (btnToggle) {
-                btnToggle.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all';
+                btnToggle.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all shadow-2xs';
             }
+            if (txtMovil) txtMovil.textContent = 'Modo Dueño';
+            if (iconMovil) iconMovil.textContent = '👑';
             if (headerGanancias) headerGanancias.classList.remove('hidden');
         } else {
             body.classList.add('modo-vendedor');
             if (txtToggle) txtToggle.textContent = '🔒 Modo Vendedor';
             if (btnToggle) {
-                btnToggle.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all';
+                btnToggle.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all shadow-2xs';
             }
+            if (txtMovil) txtMovil.textContent = 'Modo Vendedor';
+            if (iconMovil) iconMovil.textContent = '🔒';
             if (headerGanancias) headerGanancias.classList.add('hidden');
         }
     },

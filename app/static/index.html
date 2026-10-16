@@ -36,7 +36,7 @@
         }
     </script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+<body class="modo-vendedor bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
 
     <!-- BARRA SUPERIOR / ENCABEZADO -->
     <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
@@ -118,8 +118,8 @@
                         <span>💾 Respaldo</span>
                     </button>
 
-                    <button id="btn-toggle-modo-admin" onclick="App.toggleAdminMode()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all shadow-2xs" title="Alternar entre Modo Dueño y Modo Vendedor">
-                        <span id="txt-modo-admin">👑 Modo Dueño</span>
+                    <button id="btn-toggle-modo-admin" onclick="App.toggleAdminMode()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all shadow-2xs" title="Alternar entre Modo Vendedor y Modo Dueño">
+                        <span id="txt-modo-admin">🔒 Modo Vendedor</span>
                     </button>
                 </div>
             </div>
@@ -1924,9 +1924,9 @@
                     <span class="text-xs font-bold">Respaldo / BD</span>
                 </button>
 
-                <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.toggleAdminMode();" class="p-4 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 rounded-2xl border border-amber-200 flex flex-col items-center justify-center gap-2 text-center transition-all">
-                    <span class="text-2xl">👑</span>
-                    <span class="text-xs font-bold">Modo Dueño</span>
+                <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.toggleAdminMode();" class="p-4 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 rounded-2xl border border-slate-200 flex flex-col items-center justify-center gap-2 text-center transition-all">
+                    <span id="icon-modo-admin-movil" class="text-2xl">🔒</span>
+                    <span id="txt-modo-admin-movil" class="text-xs font-bold">Modo Vendedor</span>
                 </button>
 
                 <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.instalarPWA();" class="col-span-2 p-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl flex items-center justify-center gap-2 shadow-sm font-bold text-xs transition-all">
