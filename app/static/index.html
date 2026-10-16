@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Inventario - Celulares Samuel Navarrete</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/custom.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <!-- BARRA SUPERIOR / ENCABEZADO -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Branding -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs uppercase tracking-wider font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">POS & Inventario</span>
+                        </div>
+                        <h1 class="text-base font-extrabold text-slate-900 tracking-tight leading-none mt-0.5">
+                            Samuel Navarrete <span class="font-normal text-slate-500">| Celulares</span>
+                        </h1>
+                    </div>
+                </div>
+
+                <!-- Resumen Rápido en Header -->
+                <div class="hidden md:flex items-center space-x-6 text-sm">
+                    <div class="flex items-center gap-2 border-r border-slate-200 pr-5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="text-slate-500">Stock Disponible:</span>
+                        <span id="header-stock-count" class="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">--</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500">Ganancias (<span id="header-mes-nombre" class="font-medium text-slate-700">Mes</span>):</span>
+                        <span id="header-ganancia-mes" class="font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
+                            $0.00
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Navegación de Pestañas Principales y Botón Garantía -->
+                <div class="flex items-center gap-2">
+                    <nav class="flex space-x-1 bg-slate-100 p-1 rounded-xl">
+                        <button data-tab="inventario" class="nav-tab-btn flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white shadow-sm transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                            <span>Inventario</span>
+                        </button>
+                        <button data-tab="pos" class="nav-tab-btn flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            <span>Punto de Venta</span>
+                        </button>
+                        <button data-tab="reportes" class="nav-tab-btn flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                            <span>Reportes y Ganancias</span>
+                        </button>
+                    </nav>
+                    <button onclick="Garantias.abrirModal()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 shadow-2xs transition-all" title="Procesar devolución o cambio de equipo por garantía">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        <span>🛡️ Garantías</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 1: MÓDULO DE INVENTARIO -->
+        <!-- ========================================== -->
+        <section id="view-inventario" class="tab-view space-y-8">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                <!-- COLUMNA IZQUIERDA: Formulario Nuevo Equipo -->
+                <div class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm sticky top-24">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5 flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </span>
+                            <h2 class="text-lg font-bold text-slate-800">Registrar Teléfono</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="Inventario.abrirModalExcel()" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-2xs transition-all" title="Cargar lote de celulares desde Excel o CSV">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <span>Subir Excel</span>
+                            </button>
+                            <a href="/api/equipos/plantilla-excel" class="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-semibold transition-all" title="Descargar plantilla de Excel para llenar">
+                                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                <span>Plantilla</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <form id="form-nuevo-equipo" class="space-y-4">
+                        <!-- Modelo -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Modelo del Teléfono *</label>
+                            <input type="text" id="input-modelo" required placeholder="Ej. iPhone 13 Pro, Galaxy S23" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                        </div>
+
+                        <!-- Capacidad y Color -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Capacidad *</label>
+                                <select id="input-capacidad" required class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                                    <option value="64">64 GB</option>
+                                    <option value="128" selected>128 GB</option>
+                                    <option value="256">256 GB</option>
+                                    <option value="512">512 GB</option>
+                                    <option value="1024">1 TB (1024 GB)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Color *</label>
+                                <input type="text" id="input-color" required placeholder="Ej. Negro, Azul" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <!-- IMEI (Único) -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">IMEI (Único 15 dígitos) *</label>
+                            <div class="relative">
+                                <input type="text" id="input-imei" required maxlength="20" placeholder="Ej. 356789123456789" class="w-full pl-3.5 pr-10 py-2.5 font-mono text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                                <span class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11a7.978 7.978 0 003.046 6.3"></path></svg>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Grado -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Grado Estético / Estado *</label>
+                            <select id="input-grado" required class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                                <option value="A">Grado A - Excelente (Como nuevo, sin detalles)</option>
+                                <option value="B">Grado B - Regular (Detalles estéticos leves)</option>
+                                <option value="C">Grado C - Maltratado (Desgaste notorio, funcional)</option>
+                            </select>
+                        </div>
+
+                        <!-- Costo de Compra y Precio de Venta -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Costo Compra ($) *</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-sm">$</span>
+                                    <input type="number" id="input-costo-compra" required min="1" step="0.50" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Precio Venta ($) *</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-sm">$</span>
+                                    <input type="number" id="input-precio-venta" required min="1" step="0.50" placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Banner de Cálculo Automático del Margen Proyectado -->
+                        <div id="box-margen-proyectado" class="hidden p-3.5 rounded-xl border transition-all">
+                            <div class="flex justify-between items-center text-xs text-slate-500 mb-1">
+                                <span class="font-semibold uppercase tracking-wider">Margen Proyectado:</span>
+                                <span id="txt-porcentaje-margen" class="font-bold">0%</span>
+                            </div>
+                            <div class="flex justify-between items-baseline">
+                                <span class="text-xs text-slate-500">Ganancia estimada:</span>
+                                <span id="txt-margen-proyectado" class="text-lg font-bold">$0.00</span>
+                            </div>
+                        </div>
+
+                        <!-- Botón Guardar -->
+                        <button type="submit" id="btn-guardar-equipo" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 px-4 rounded-xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                            <span>Guardar en Inventario</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- COLUMNA DERECHA: Tabla de Inventario Activo (Solo Disponibles) -->
+                <div class="lg:col-span-8 space-y-4">
+                    
+                    <!-- Tarjeta de Filtros y Resumen de Stock -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <!-- Búsqueda -->
+                            <div class="relative flex-1">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                </span>
+                                <input type="text" id="search-inventario" placeholder="Buscar por modelo, IMEI o color..." class="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                            </div>
+
+                            <!-- Filtros de Grado -->
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-xs text-slate-400 font-semibold uppercase mr-1">Filtrar:</span>
+                                <button data-grado="" class="grade-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white transition-all">Todos</button>
+                                <button data-grado="A" class="grade-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">Grado A</button>
+                                <button data-grado="B" class="grade-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">Grado B</button>
+                                <button data-grado="C" class="grade-filter-pill px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">Grado C</button>
+                            </div>
+                        </div>
+
+                        <!-- Barra de Resumen Rápido -->
+                        <div class="grid grid-cols-3 gap-4 pt-4 mt-4 border-t border-slate-100 text-center">
+                            <div>
+                                <span class="text-xs text-slate-400 block font-medium">Equipos Disponibles</span>
+                                <span id="stat-inv-disponibles" class="text-sm font-bold text-slate-800">--</span>
+                            </div>
+                            <div>
+                                <span class="text-xs text-slate-400 block font-medium">Capital Invertido</span>
+                                <span id="stat-inv-capital" class="text-sm font-bold text-slate-800">--</span>
+                            </div>
+                            <div>
+                                <span class="text-xs text-slate-400 block font-medium">Ganancia Proyectada</span>
+                                <span id="stat-inv-ganancia-potencial" class="text-sm font-bold text-emerald-600">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Equipos -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Inventario Activo (Solo Disponibles)
+                            </h3>
+                            <button onclick="Inventario.cargarEquipos()" class="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                Actualizar
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                                        <th class="py-3 px-4">Modelo & Capacidad</th>
+                                        <th class="py-3 px-4">Color</th>
+                                        <th class="py-3 px-4">IMEI</th>
+                                        <th class="py-3 px-4">Grado</th>
+                                        <th class="py-3 px-4">Costo</th>
+                                        <th class="py-3 px-4">Precio Venta</th>
+                                        <th class="py-3 px-4">Margen</th>
+                                        <th class="py-3 px-4 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-inventario">
+                                    <!-- Renderizado dinámico -->
+                                </tbody>
+                            </table>
+
+                            <div id="inventario-empty-state" class="hidden py-12 text-center">
+                                <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                                </div>
+                                <h4 class="font-semibold text-slate-700">No hay equipos en inventario</h4>
+                                <p class="text-xs text-slate-400 max-w-xs mx-auto mt-1">Registra nuevos teléfonos usando el formulario lateral para comenzar a comercializar.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ============================================================== -->
+        <!-- PESTAÑA 2: PUNTO DE VENTA (POS) CON CARRITO Y PAGOS COMBINADOS -->
+        <!-- ============================================================== -->
+        <section id="view-pos" class="tab-view hidden space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                <!-- COLUMNA IZQUIERDA: Catálogo de Teléfonos Disponibles (7 columnas) -->
+                <div class="lg:col-span-7 space-y-5">
+                    
+                    <!-- Buscador en Tiempo Real -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                Catálogo para Venta
+                            </span>
+                            <span class="text-xs text-slate-400">Agrega múltiples celulares al carrito</span>
+                        </div>
+
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </span>
+                            <input type="text" id="pos-search-input" placeholder="🔍 Escribe IMEI o modelo (ej. iPhone 14, 356789123456...)" class="w-full pl-12 pr-4 py-3 text-sm bg-slate-50 border border-slate-300 rounded-xl shadow-inner focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                        </div>
+                    </div>
+
+                    <!-- Grilla de Teléfonos Disponibles -->
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="font-bold text-slate-800 text-sm">Teléfonos Disponibles en Tienda</h3>
+                            <button onclick="POS.buscarEquipos('')" class="text-xs text-blue-600 hover:text-blue-700 font-semibold">Refrescar</button>
+                        </div>
+
+                        <div id="pos-grid-equipos" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Cards de teléfonos -->
+                        </div>
+
+                        <div id="pos-empty-state" class="hidden bg-white rounded-2xl border border-slate-200 p-10 text-center">
+                            <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <h4 class="font-bold text-slate-700">No hay teléfonos disponibles</h4>
+                            <p class="text-xs text-slate-400 mt-1">Prueba con otro término de búsqueda o registra equipos en Inventario.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- COLUMNA DERECHA: Carrito de Compras y Cobro (5 columnas) -->
+                <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm sticky top-24 space-y-5">
+                    
+                    <!-- Encabezado del Carrito -->
+                    <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2">
+                            <span class="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            </span>
+                            <div>
+                                <h3 class="font-bold text-slate-900 text-base leading-tight">Carrito de Compra</h3>
+                                <span id="cart-badge-count" class="text-xs font-semibold text-blue-600">0 equipos</span>
+                            </div>
+                        </div>
+                        <button type="button" onclick="POS.vaciarCarrito()" class="text-xs text-slate-400 hover:text-rose-600 font-medium transition-colors">
+                            Vaciar Carrito
+                        </button>
+                    </div>
+
+                    <!-- Estado Vacío del Carrito -->
+                    <div id="cart-empty-state" class="py-10 text-center">
+                        <div class="w-12 h-12 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-2 border border-dashed border-slate-200">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                        </div>
+                        <h4 class="font-semibold text-slate-700 text-sm">Tu carrito está vacío</h4>
+                        <p class="text-xs text-slate-400 mt-1 max-w-xs mx-auto">Haz clic en <strong>+ Agregar al Carrito</strong> en los teléfonos que tu cliente desea comprar.</p>
+                    </div>
+
+                    <!-- Contenido Activo del Carrito -->
+                    <div id="cart-active-content" class="hidden space-y-5">
+                        
+                        <!-- Lista de Teléfonos en el Carrito -->
+                        <div class="space-y-2.5 max-h-60 overflow-y-auto pr-1" id="cart-items-container">
+                            <!-- Items dinámicos -->
+                        </div>
+
+                        <!-- Formulario de Cobro -->
+                        <form id="form-checkout-pos" class="space-y-4 pt-3 border-t border-slate-100">
+                            
+                            <!-- Datos del Comprador -->
+                            <div class="space-y-2.5">
+                                <div class="flex justify-between items-center">
+                                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Datos del Cliente *</label>
+                                    <span id="badge-cliente-existente" class="hidden text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200"></span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="text-[11px] text-slate-400 block mb-0.5">Teléfono (WhatsApp)</label>
+                                        <input type="tel" id="pos-cliente-telefono" required placeholder="5512345678" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-mono">
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] text-slate-400 block mb-0.5">Nombre del Cliente</label>
+                                        <input type="text" id="pos-cliente-nombre" required placeholder="Juan Pérez" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- MÉTODOS DE PAGO Y COMBINADO -->
+                            <div class="pt-3 border-t border-slate-100 space-y-2.5">
+                                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Forma de Pago *</label>
+                                
+                                <!-- Botones de Selector de Pago -->
+                                <div class="grid grid-cols-4 gap-1.5">
+                                    <button type="button" data-metodo="Efectivo" class="payment-method-btn px-2 py-2 text-xs font-bold rounded-xl border border-blue-600 bg-blue-600 text-white shadow-xs transition-all flex flex-col items-center gap-1">
+                                        <span>💵</span>
+                                        <span>Efectivo</span>
+                                    </button>
+                                    <button type="button" data-metodo="Transferencia" class="payment-method-btn px-2 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all flex flex-col items-center gap-1">
+                                        <span>📱</span>
+                                        <span>Transf.</span>
+                                    </button>
+                                    <button type="button" data-metodo="Combinado" class="payment-method-btn px-2 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all flex flex-col items-center gap-1">
+                                        <span>🔀</span>
+                                        <span>Combinar</span>
+                                    </button>
+                                    <button type="button" data-metodo="Equipo Garantía" class="payment-method-btn px-2 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all flex flex-col items-center gap-1" title="Teléfono entregado en garantía cubre la compra">
+                                        <span>🛡️</span>
+                                        <span>Eq. Garantía</span>
+                                    </button>
+                                </div>
+
+                                <!-- Panel Específico: Pago en Efectivo -->
+                                <div id="panel-pago-efectivo" class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                                    <div class="flex justify-between items-center text-xs">
+                                        <span class="text-slate-500">Monto total en efectivo:</span>
+                                        <span id="resumen-monto-efectivo" class="font-extrabold text-slate-800">$0.00</span>
+                                    </div>
+                                    <div class="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                                        <label class="text-[11px] text-slate-500 font-medium whitespace-nowrap">¿Paga con cuánto?</label>
+                                        <div class="relative flex-1">
+                                            <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-slate-400 text-xs">$</span>
+                                            <input type="number" id="efectivo-paga-con" step="10" placeholder="Ej. 10000" class="w-full pl-5 pr-2 py-1 text-xs font-bold bg-white border border-slate-200 rounded-lg focus:outline-none">
+                                        </div>
+                                    </div>
+                                    <div id="box-cambio-efectivo" class="hidden flex justify-between items-center pt-1 border-t border-slate-200 text-xs">
+                                        <span class="text-slate-600 font-bold">Cambio a entregar:</span>
+                                        <span id="txt-cambio-efectivo" class="font-extrabold text-emerald-600 text-sm">$0.00</span>
+                                    </div>
+                                </div>
+
+                                <!-- Panel Específico: Transferencia -->
+                                <div id="panel-pago-transferencia" class="hidden bg-blue-50/60 p-3 rounded-xl border border-blue-200 space-y-1">
+                                    <div class="flex justify-between items-center text-xs">
+                                        <span class="text-blue-900 font-semibold">Total a transferir (SPEI/Bancario):</span>
+                                        <span id="resumen-monto-transferencia" class="font-extrabold text-blue-900">$0.00</span>
+                                    </div>
+                                    <p class="text-[11px] text-blue-700">Verifica el comprobante bancario antes de entregar los equipos.</p>
+                                </div>
+
+                                <!-- Panel Específico: Equipo Garantía -->
+                                <div id="panel-pago-garantia" class="hidden bg-indigo-50/70 p-3 rounded-xl border border-indigo-200 space-y-1">
+                                    <div class="flex justify-between items-center text-xs">
+                                        <span class="text-indigo-950 font-semibold">Valor cubierto por garantía:</span>
+                                        <span id="resumen-monto-garantia" class="font-extrabold text-indigo-900">$0.00</span>
+                                    </div>
+                                    <p class="text-[11px] text-indigo-700">El costo de este equipo de reemplazo queda 100% cubierto por el teléfono recibido en garantía ($0.00 a cobrar).</p>
+                                </div>
+
+                                <!-- Panel Específico: PAGO COMBINADO (Efectivo + Transferencia + Equipo Garantía) -->
+                                <div id="panel-pago-combinado" class="hidden bg-amber-50/60 p-3.5 rounded-xl border border-amber-200 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs font-bold text-amber-900 uppercase tracking-wider">Desglose de Pago Combinado</span>
+                                        <span id="badge-balance-combinado" class="text-xs font-bold">--</span>
+                                    </div>
+                                    
+                                    <div class="space-y-2 text-xs">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-slate-700 font-medium">💵 Efectivo ($):</span>
+                                            <input type="number" step="1" id="pago-monto-efectivo" placeholder="0.00" class="w-32 px-2.5 py-1 text-right font-bold bg-white border border-slate-200 rounded-lg focus:outline-none">
+                                        </div>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-slate-700 font-medium">📱 Transferencia ($):</span>
+                                            <input type="number" step="1" id="pago-monto-transferencia" placeholder="0.00" class="w-32 px-2.5 py-1 text-right font-bold bg-white border border-slate-200 rounded-lg focus:outline-none">
+                                        </div>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-slate-700 font-medium">🛡️ Eq. Garantía ($):</span>
+                                            <input type="number" step="1" id="pago-monto-garantia" placeholder="0.00" class="w-32 px-2.5 py-1 text-right font-bold bg-white border border-slate-200 rounded-lg focus:outline-none">
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-amber-200/80 flex justify-between items-center text-[11px] text-amber-900">
+                                        <span>Total Asignado: <strong id="txt-monto-asignado">$0.00</strong></span>
+                                        <span class="text-amber-700 italic">Debe igualar el total</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Resumen Financiero de la Venta -->
+                            <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5">
+                                <div class="flex justify-between items-baseline">
+                                    <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">Total a Cobrar:</span>
+                                    <span id="cart-total-cobrar" class="text-2xl font-black text-slate-900">$0.00</span>
+                                </div>
+                                <div class="flex justify-between items-center text-xs pt-1 border-t border-slate-200/60">
+                                    <span class="text-slate-500">Ganancia neta total:</span>
+                                    <div class="text-right">
+                                        <span id="cart-total-margen" class="font-bold text-emerald-600">+$0.00</span>
+                                        <span id="cart-total-margen-pct" class="text-[11px] text-emerald-600">(0%)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Botón Finalizar Venta -->
+                            <button type="submit" id="btn-finalizar-venta-carrito" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                <span>Confirmar Venta y Generar Recibo</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 3: MÓDULO DE REPORTES Y DASHBOARD -->
+        <!-- ========================================== -->
+        <section id="view-reportes" class="tab-view hidden space-y-8">
+            
+            <!-- Encabezado del Dashboard -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <span class="text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-full">Inteligencia Financiera</span>
+                    <h2 class="text-2xl font-extrabold text-slate-900 mt-1">
+                        Reporte y Ganancias: <span id="dash-mes-titulo" class="text-blue-600">Mes Actual</span>
+                    </h2>
+                    <p class="text-sm text-slate-500">Métricas acumuladas del mes en curso y rendimiento del inventario.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="Reportes.cargarDashboard(); Reportes.cargarHistorialVentas();" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-2xs flex items-center gap-2 transition-all">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Refrescar Datos
+                    </button>
+                </div>
+            </div>
+
+            <!-- TARJETAS DE KPIS PRINCIPALES -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                
+                <!-- KPI 1: Ganancias del Mes -->
+                <div class="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-6 text-white shadow-lg shadow-emerald-600/20 relative overflow-hidden">
+                    <div class="absolute -right-4 -bottom-4 opacity-15">
+                        <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.36 4.18 3.85c-.01 1.85-1.38 2.91-3.12 3.22z"/></svg>
+                    </div>
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-100 block mb-1">Total Ganancias (Mes)</span>
+                    <div id="dash-ganancias-mes" class="text-3xl font-black tracking-tight mt-1">$0.00</div>
+                    <div class="mt-4 flex items-center text-xs text-emerald-100 font-medium">
+                        <span class="bg-emerald-500/30 px-2 py-0.5 rounded-md mr-1.5">Suma de margen_ganancia</span>
+                    </div>
+                </div>
+
+                <!-- KPI 2: Total Facturado -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Ventas (Mes)</span>
+                        <span class="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        </span>
+                    </div>
+                    <div id="dash-ventas-mes" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                    <p class="text-xs text-slate-500 mt-2">Monto bruto cobrado</p>
+                </div>
+
+                <!-- KPI 3: Teléfonos Vendidos -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Teléfonos Vendidos</span>
+                        <span class="p-2 bg-purple-50 text-purple-600 rounded-xl">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        </span>
+                    </div>
+                    <div id="dash-unidades-mes" class="text-2xl font-black text-slate-900 tracking-tight">0 equipos</div>
+                    <p class="text-xs text-purple-600 font-semibold mt-2">
+                        Margen prom: <span id="dash-margen-pct">0%</span>
+                    </p>
+                </div>
+
+                <!-- KPI 4: Capital en Inventario Activo -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Inventario en Tienda</span>
+                        <span class="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                        </span>
+                    </div>
+                    <div id="dash-capital-inventario" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                    <p class="text-xs text-slate-500 mt-2">
+                        <span id="dash-stock-disponible" class="font-bold text-slate-700">0</span> disponibles actualmente
+                    </p>
+                </div>
+            </div>
+
+            <!-- Gráfico de Ventas y Ganancias -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base">Tendencia de Ventas y Ganancias Diarias</h3>
+                        <p class="text-xs text-slate-400">Comparativa de ingresos totales vs ganancia neta</p>
+                    </div>
+                </div>
+                <div class="relative h-72 w-full">
+                    <canvas id="chart-ventas-dias"></canvas>
+                </div>
+            </div>
+
+            <!-- HISTORIAL DE TODAS LAS VENTAS -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base">Historial de Ventas</h3>
+                        <p class="text-xs text-slate-400">Registro con desglose de equipos, forma de pago y margen real obtenido</p>
+                    </div>
+
+                    <!-- Filtros por Fecha -->
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <span class="text-slate-500 font-medium">Desde:</span>
+                            <input type="date" id="reporte-fecha-inicio" class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none">
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <span class="text-slate-500 font-medium">Hasta:</span>
+                            <input type="date" id="reporte-fecha-fin" class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none">
+                        </div>
+                        <button id="btn-filtrar-reportes" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-2xs transition-all">
+                            Filtrar
+                        </button>
+                        <button id="btn-limpiar-filtros-reportes" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-all" title="Restablecer fechas">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                                <th class="py-3 px-4">Folio</th>
+                                <th class="py-3 px-4">Fecha Venta</th>
+                                <th class="py-3 px-4">Cliente</th>
+                                <th class="py-3 px-4">Equipos Vendidos</th>
+                                <th class="py-3 px-4">Forma de Pago</th>
+                                <th class="py-3 px-4">Total Cobrado</th>
+                                <th class="py-3 px-4">Margen Ganancia</th>
+                                <th class="py-3 px-4 text-right">Recibo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-historial-ventas">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+
+                    <div id="ventas-empty-state" class="hidden py-10 text-center">
+                        <p class="text-slate-400 text-sm">No se encontraron ventas para el periodo seleccionado.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: NOTA DE VENTA / RECIBO LISTA PARA IMPRIMIR    -->
+    <!-- ==================================================== -->
+    <div id="modal-recibo-venta" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden relative">
+            
+            <!-- CONTENIDO DEL RECIBO (Imprimible con @media print) -->
+            <div id="receipt-modal-content" class="p-6 bg-white text-slate-900 font-sans">
+                
+                <!-- Encabezado del Recibo -->
+                <div class="text-center pb-4 border-b border-dashed border-slate-300">
+                    <div class="w-10 h-10 mx-auto rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg mb-2">
+                        SN
+                    </div>
+                    <h2 class="text-lg font-black tracking-tight uppercase">Mi Inventario - Celulares</h2>
+                    <p class="text-xs font-semibold text-slate-600">Samuel Navarrete | Compra y Venta Móvil</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Especialistas en telefonía seminueva y garantizada</p>
+
+                    <div class="mt-3 flex justify-between items-center text-xs text-slate-500 bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
+                        <span id="recibo-folio" class="font-mono font-bold text-slate-800">FOLIO #00000</span>
+                        <span id="recibo-fecha" class="text-slate-600">--</span>
+                    </div>
+                </div>
+
+                <!-- Datos del Cliente -->
+                <div class="py-3 border-b border-dashed border-slate-300 text-xs space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Cliente:</span>
+                        <span id="recibo-cliente-nombre" class="font-bold text-slate-800 text-right">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Teléfono:</span>
+                        <span id="recibo-cliente-telefono" class="font-mono text-slate-700 text-right">--</span>
+                    </div>
+                </div>
+
+                <!-- Lista de Equipos Vendidos en el Recibo -->
+                <div class="py-3 border-b border-dashed border-slate-300">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Equipos Entregados:</span>
+                    <div id="recibo-items-lista" class="space-y-1">
+                        <!-- Items renderizados dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Desglose de Forma de Pago -->
+                <div id="recibo-desglose-pago" class="py-3 border-b border-dashed border-slate-300">
+                    <!-- Detalle de pago dinámico -->
+                </div>
+
+                <!-- Total Pagado -->
+                <div class="py-3 border-b border-dashed border-slate-300 flex justify-between items-baseline">
+                    <span class="text-sm font-bold uppercase text-slate-700 tracking-wider">Total Pagado:</span>
+                    <span id="recibo-precio-total" class="text-2xl font-black text-slate-900">$0.00</span>
+                </div>
+
+                <!-- Términos de Garantía y Políticas -->
+                <div class="pt-3 text-[10px] text-slate-500 leading-relaxed text-center space-y-1">
+                    <p class="font-semibold text-slate-700 uppercase tracking-wider">Póliza de Garantía</p>
+                    <p id="recibo-garantia-texto" class="italic">--</p>
+                    <p class="text-[9px] text-slate-400">Conserva esta nota de venta para validar tu garantía.</p>
+                    <div class="pt-1 font-mono text-[9px] text-slate-400 uppercase tracking-widest">
+                        ¡Gracias por tu compra!
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTONES DE ACCIÓN (Ocultos al imprimir con @media print .no-print) -->
+            <div class="no-print p-4 bg-slate-50 border-t border-slate-200 flex gap-2">
+                <button type="button" onclick="POS.imprimirRecibo()" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    Imprimir Recibo
+                </button>
+                <button type="button" onclick="POS.cerrarRecibo()" class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs transition-all">
+                    Cerrar / Nueva Venta
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: CARGA MASIVA DESDE EXCEL (.XLSX) O CSV       -->
+    <!-- ==================================================== -->
+    <div id="modal-importar-excel" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-200">
+            
+            <button onclick="Inventario.cerrarModalExcel()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="mb-4 pb-3 border-b border-slate-100">
+                <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider">Carga Rápida de Inventario</span>
+                <h3 class="text-xl font-bold text-slate-900 mt-0.5">Importar Celulares desde Excel</h3>
+                <p class="text-xs text-slate-500 mt-1">Sube un archivo <strong>.xlsx</strong> o <strong>.csv</strong> con las columnas: <em>modelo, color, imei, grado, costo</em> (y opcionalmente <em>capacidad</em> y <em>precio_venta</em>).</p>
+            </div>
+
+            <!-- Zona de Arrastrar y Soltar (Dropzone) -->
+            <div id="dropzone-excel" class="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:border-emerald-500 hover:bg-emerald-50/30 transition-all cursor-pointer">
+                <input type="file" id="input-archivo-excel" accept=".xlsx, .xls, .csv" class="hidden">
+                <div onclick="document.getElementById('input-archivo-excel').click()">
+                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-2 border border-emerald-100">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <span class="text-sm font-bold text-slate-800 block">Haz clic para seleccionar o arrastra tu archivo Excel</span>
+                    <span class="text-xs text-slate-400 mt-0.5 block">Formatos permitidos: .XLSX o .CSV</span>
+                </div>
+            </div>
+
+            <!-- Indicador de Carga -->
+            <div id="excel-loading-status" class="hidden py-4 text-center">
+                <div class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
+                    <svg class="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Analizando y guardando teléfonos en la base de datos...</span>
+                </div>
+            </div>
+
+            <!-- Resultados de la Importación -->
+            <div id="resultado-importacion-excel" class="hidden mt-4">
+                <!-- Se llena con JS -->
+            </div>
+
+            <!-- Botones inferiores -->
+            <div class="mt-5 pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
+                <a href="/api/equipos/plantilla-excel" class="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Descargar Plantilla de Ejemplo (.xlsx)
+                </a>
+                <button type="button" onclick="Inventario.cerrarModalExcel()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-all">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: DEVOLUCIÓN Y RECLAMO POR GARANTÍA           -->
+    <!-- ==================================================== -->
+    <div id="modal-devolucion-garantia" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 relative max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+            
+            <button type="button" onclick="Garantias.cerrarModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <!-- Encabezado del Modal -->
+            <div class="pb-3 border-b border-slate-100 mb-4 flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </span>
+                    <div>
+                        <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Servicio Post-Venta</span>
+                        <h3 class="text-lg font-bold text-slate-900 leading-tight">Devolución y Reclamo por Garantía</h3>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500 mt-1">Busca el teléfono vendido por su IMEI para validar los días de garantía estipulados y tramitar su reposición o reingreso.</p>
+            </div>
+
+            <!-- Contenido scrollable -->
+            <div class="overflow-y-auto pr-1 space-y-4 flex-1">
+                
+                <!-- Buscador de IMEI para Garantía -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        IMEI del Equipo Vendido
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="text" id="garantia-buscar-imei" placeholder="Ingresa los 15 dígitos del IMEI..." class="flex-1 px-3.5 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <button type="button" id="btn-consultar-garantia-imei" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            <span>Consultar</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Spinner de Carga -->
+                <div id="garantia-loading" class="hidden py-4 text-center">
+                    <div class="inline-flex items-center gap-2 text-xs font-semibold text-indigo-600">
+                        <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Verificando historial de venta y garantía...</span>
+                    </div>
+                </div>
+
+                <!-- Detalles de la Venta y Formulario de Reclamo -->
+                <div id="garantia-detalles-venta" class="hidden space-y-4">
+                    
+                    <!-- Ficha Resumen del Equipo y Venta -->
+                    <div class="bg-indigo-50/50 rounded-xl p-3.5 border border-indigo-100 text-xs space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 id="garantia-info-modelo" class="font-extrabold text-slate-900 text-sm">--</h4>
+                                <p class="text-slate-500 font-mono text-[11px] mt-0.5">IMEI: <span id="garantia-info-imei" class="font-bold text-slate-700">--</span></p>
+                            </div>
+                            <span id="garantia-info-grado">--</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-indigo-100/80 text-[11px]">
+                            <div>
+                                <span class="text-slate-400 block">Comprador:</span>
+                                <span id="garantia-info-cliente" class="font-semibold text-slate-800">--</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block">Fecha de Compra:</span>
+                                <span id="garantia-info-fecha-venta" class="font-semibold text-slate-800">--</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block">Precio Facturado:</span>
+                                <span id="garantia-info-precio" class="font-extrabold text-slate-900">--</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block">Estatus de Cobertura:</span>
+                                <span id="garantia-badge-vigencia" class="font-bold">--</span>
+                            </div>
+                        </div>
+
+                        <div id="garantia-dias-info" class="text-[11px] text-slate-600 italic bg-white/80 p-2 rounded-lg border border-indigo-100">
+                            --
+                        </div>
+                    </div>
+
+                    <!-- Formulario de Proceso de Garantía -->
+                    <form id="form-procesar-garantia" class="space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Motivo de Garantía *</label>
+                                <select id="garantia-select-motivo" required class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none">
+                                    <option value="Falla de fábrica / componente">Falla de fábrica / componente</option>
+                                    <option value="Batería defectuosa">Batería defectuosa</option>
+                                    <option value="Pantalla o Touch">Pantalla o Touch dañado</option>
+                                    <option value="Sin señal / Señal intermitente">Sin señal / Baseband</option>
+                                    <option value="Bloqueo de cuenta / red">Bloqueo de cuenta o red</option>
+                                    <option value="Otro">Otro defecto</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Solución para el Cliente *</label>
+                                <select id="garantia-solucion" required class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none font-semibold text-indigo-700">
+                                    <option value="Reemplazo" selected>Reemplazo por otro celular (Ir a POS)</option>
+                                    <option value="Nota de Crédito">Nota de Crédito / Saldo a favor</option>
+                                    <option value="Reparación">Envío a taller / Reparación</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Descripción de la falla reportada *</label>
+                            <textarea id="garantia-falla-desc" required rows="2" placeholder="Describe detalladamente el problema que presenta el equipo..." class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Destino del Equipo Recibido *</label>
+                                <select id="garantia-estado-destino" required class="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none">
+                                    <option value="En Garantia">En Garantía (Para taller/revisión)</option>
+                                    <option value="Baja por Garantia">Baja (Desecho o refacciones)</option>
+                                    <option value="Disponible">Disponible (Reingreso a stock)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Monto Cubierto en Garantía ($) *</label>
+                                <input type="number" id="garantia-monto-cubierto" required step="0.50" min="0" class="w-full px-2.5 py-1.5 text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Notas u observaciones adicionales</label>
+                            <input type="text" id="garantia-notas" placeholder="Ej. Se recibe con estética 9/10 sin rayones nuevos..." class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none">
+                        </div>
+
+                        <div class="pt-2">
+                            <button type="submit" id="btn-confirmar-devolucion-garantia" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                <span>Confirmar Devolución por Garantía</span>
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+
+            <!-- Footer del modal -->
+            <div class="pt-3 border-t border-slate-100 flex justify-end gap-2 flex-shrink-0 text-xs">
+                <button type="button" onclick="Garantias.cerrarModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-all">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- CONTENEDOR FLOTANTE DE NOTIFICACIONES TOAST -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 max-w-sm pointer-events-none"></div>
+
+    <!-- SCRIPTS DE LA APLICACIÓN -->
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/inventario.js"></script>
+    <script src="/static/js/pos.js"></script>
+    <script src="/static/js/garantias.js"></script>
+    <script src="/static/js/reportes.js"></script>
+</body>
+</html>

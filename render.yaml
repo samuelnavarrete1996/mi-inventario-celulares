@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: mi-inventario-samuel-navarrete
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run.py
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: HOST
+        value: 0.0.0.0
+      - key: AUTO_OPEN_BROWSER
+        value: 0

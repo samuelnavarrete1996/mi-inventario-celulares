@@ -1,0 +1,248 @@
+import io
+import re
+import csv
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from typing import List, Dict, Any, Tuple
+from app import crud
+from app.models import EquipoCreate
+
+def clean_imei_val(val: Any) -> str:
+    """Convierte de forma segura cualquier formato de IMEI (incluso notación científica de Excel) a string exacto."""
+    if val is None:
+        return ""
+    if isinstance(val, float):
+        # Evitar notación científica ej. 3.56789123456781e+14 -> 356789123456781
+        val_str = f"{val:.0f}"
+    else:
+        val_str = str(val).strip()
+
+    # Si viene con notación científica en texto ej: '3.56789E+14'
+    if 'e+' in val_str.lower():
+        try:
+            val_str = f"{float(val_str):.0f}"
+        except Exception:
+            pass
+
+    return val_str.replace(" ", "").replace("-", "").replace(".0", "")
+
+def extraer_capacidad_de_modelo(modelo: str) -> int:
+    """Intenta deducir la capacidad en GB si no está en una columna separada."""
+    match = re.search(r'(\d+)\s*(?:gb|g\b|tb)', modelo.lower())
+    if match:
+        num = int(match.group(1))
+        if num == 1: # 1 TB
+            return 1024
+        return num
+    return 128
+
+def normalizar_grado(grado_val: Any) -> str:
+    g = str(grado_val or '').strip().upper()
+    if g.startswith('A') or 'EXCELENTE' in g:
+        return 'A'
+    elif g.startswith('B') or 'REGULAR' in g or 'BUENO' in g:
+        return 'B'
+    elif g.startswith('C') or 'MALTRATADO' in g or 'DETALLES' in g:
+        return 'C'
+    return 'A' # Por defecto Grado A
+
+def mapear_fila_a_equipo(row_dict: Dict[str, Any], fila_num: int) -> Tuple[Optional[EquipoCreate], Optional[str]]:
+    """Convierte un diccionario de fila de Excel a un objeto EquipoCreate validado."""
+    # Normalizar llaves
+    norm = {}
+    for k, v in row_dict.items():
+        if k is not None:
+            clean_k = str(k).strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+            norm[clean_k] = v
+
+    # Buscar Modelo
+    modelo = norm.get('modelo') or norm.get('nombre') or norm.get('equipo') or norm.get('telefono') or norm.get('dispositivo')
+    if not modelo or not str(modelo).strip():
+        return None, f"Fila {fila_num}: Falta el 'Modelo' del teléfono."
+
+    modelo_str = str(modelo).strip()
+
+    # Buscar Color
+    color = norm.get('color') or norm.get('tono') or 'Negro'
+    color_str = str(color).strip()
+
+    # Buscar IMEI
+    imei_raw = norm.get('imei') or norm.get('serie') or norm.get('serial') or norm.get('numeroserie') or norm.get('sn')
+    imei_str = clean_imei_val(imei_raw)
+    if not imei_str or len(imei_str) < 8:
+        return None, f"Fila {fila_num}: IMEI inválido o ausente ({imei_raw})."
+
+    # Buscar Grado
+    grado_raw = norm.get('grado') or norm.get('condicion') or norm.get('calidad') or norm.get('estado')
+    grado_str = normalizar_grado(grado_raw)
+
+    # Buscar Costo
+    costo_raw = norm.get('costo') or norm.get('costocompra') or norm.get('preciocompra') or norm.get('compra')
+    try:
+        costo_float = float(str(costo_raw).replace("$", "").replace(",", "").strip())
+        if costo_float <= 0:
+            raise ValueError()
+    except Exception:
+        return None, f"Fila {fila_num}: Costo de compra inválido ({costo_raw}). Debe ser un número mayor a 0."
+
+    # Buscar Capacidad (opcional, si falta se deduce de modelo o 128)
+    cap_raw = norm.get('capacidad') or norm.get('capacidadgb') or norm.get('gb') or norm.get('almacenamiento')
+    if cap_raw:
+        try:
+            cap_int = int(re.sub(r'[^\d]', '', str(cap_raw)))
+            if cap_int == 1:
+                cap_int = 1024
+        except Exception:
+            cap_int = extraer_capacidad_de_modelo(modelo_str)
+    else:
+        cap_int = extraer_capacidad_de_modelo(modelo_str)
+
+    # Buscar Precio Venta (opcional, si falta se sugiere costo + 30% de margen)
+    precio_raw = norm.get('precioventa') or norm.get('precio') or norm.get('venta') or norm.get('pvp')
+    if precio_raw:
+        try:
+            precio_float = float(str(precio_raw).replace("$", "").replace(",", "").strip())
+        except Exception:
+            precio_float = round(costo_float * 1.30, 2)
+    else:
+        precio_float = round(costo_float * 1.30, 2)
+
+    try:
+        equipo = EquipoCreate(
+            modelo=modelo_str,
+            capacidad_gb=cap_int,
+            color=color_str,
+            imei=imei_str,
+            grado=grado_str,
+            costo_compra=costo_float,
+            precio_venta=precio_float
+        )
+        return equipo, None
+    except Exception as e:
+        return None, f"Fila {fila_num}: Error de validación: {str(e)}"
+
+def procesar_archivo_excel_o_csv(contenido_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """Lee un archivo Excel (.xlsx) o CSV en memoria y retorna los registros válidos y errores."""
+    filename_lower = filename.lower()
+    filas_dict = []
+
+    if filename_lower.endswith('.csv'):
+        # Intentar decodificar como utf-8 o latin-1
+        texto = None
+        for enc in ('utf-8-sig', 'utf-8', 'latin-1', 'cp1252'):
+            try:
+                texto = contenido_bytes.decode(enc)
+                break
+            except Exception:
+                continue
+
+        if not texto:
+            raise ValueError("No se pudo leer la codificación del archivo CSV.")
+
+        reader = csv.DictReader(io.StringIO(texto))
+        for row in reader:
+            filas_dict.append(row)
+
+    elif filename_lower.endswith(('.xlsx', '.xlsm')):
+        wb = openpyxl.load_workbook(io.BytesIO(contenido_bytes), data_only=True)
+        sheet = wb.active
+
+        headers = []
+        for col_idx in range(1, sheet.max_column + 1):
+            val = sheet.cell(row=1, column=col_idx).value
+            headers.append(str(val).strip() if val is not None else f"col_{col_idx}")
+
+        for row_idx in range(2, sheet.max_row + 1):
+            row_data = {}
+            has_data = False
+            for col_idx, h in enumerate(headers, start=1):
+                val = sheet.cell(row=row_idx, column=col_idx).value
+                if val is not None and str(val).strip() != "":
+                    has_data = True
+                row_data[h] = val
+            if has_data:
+                filas_dict.append(row_data)
+    else:
+        raise ValueError("Formato no compatible. Por favor sube un archivo Excel (.xlsx) o CSV (.csv).")
+
+    if not filas_dict:
+        raise ValueError("El archivo está vacío o no contiene filas de datos debajo del encabezado.")
+
+    equipos_validos: List[EquipoCreate] = []
+    errores: List[str] = []
+    imeis_vistos = set()
+
+    for idx, r in enumerate(filas_dict, start=2):
+        eq, err = mapear_fila_a_equipo(r, idx)
+        if err:
+            errores.append(err)
+            continue
+
+        # Verificar si el IMEI está repetido dentro del mismo archivo
+        if eq.imei in imeis_vistos:
+            errores.append(f"Fila {idx}: El IMEI {eq.imei} está duplicado dentro de este mismo archivo.")
+            continue
+
+        # Verificar si ya existe en la base de datos
+        existente = crud.get_equipo_by_imei(eq.imei)
+        if existente:
+            errores.append(f"Fila {idx}: El IMEI {eq.imei} ya existe registrado en el inventario ({existente['modelo']}).")
+            continue
+
+        imeis_vistos.add(eq.imei)
+        equipos_validos.append(eq)
+
+    return {
+        "total_filas": len(filas_dict),
+        "validos": equipos_validos,
+        "errores": errores
+    }
+
+def guardar_equipos_importados(equipos: List[EquipoCreate]) -> List[Dict[str, Any]]:
+    """Inserta en lote los equipos validados."""
+    guardados = []
+    for eq in equipos:
+        nuevo = crud.create_equipo(eq)
+        guardados.append(nuevo)
+    return guardados
+
+def generar_plantilla_excel_bytes() -> bytes:
+    """Genera un archivo Excel (.xlsx) profesional con estilos y datos de ejemplo para descargar."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Inventario Celulares"
+
+    # Encabezados
+    headers = ["modelo", "capacidad_gb", "color", "imei", "grado", "costo_compra", "precio_venta"]
+    ws.append(headers)
+
+    # Filas de ejemplo
+    ejemplos = [
+        ["iPhone 14", 128, "Negro Medianoche", "356789123456790", "A", 9500.0, 13000.0],
+        ["Samsung Galaxy S23", 256, "Verde", "356789123456791", "A", 9000.0, 12500.0],
+        ["Xiaomi Redmi Note 12", 128, "Azul", "356789123456792", "B", 2800.0, 3900.0],
+        ["iPhone 11", 64, "Blanco", "356789123456793", "C", 3500.0, 4800.0],
+    ]
+
+    for row in ejemplos:
+        ws.append(row)
+
+    # Estilos
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid") # Azul
+    alignment_center = Alignment(horizontal="center", vertical="center")
+
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = alignment_center
+
+    # Ajustar ancho de columnas
+    anchos = [26, 16, 20, 22, 12, 16, 16]
+    for col_idx, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = ancho
+
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
