@@ -17,14 +17,21 @@ const Inventario = {
         const inputCosto = document.getElementById('input-costo-compra');
         const inputPrecio = document.getElementById('input-precio-venta');
 
-        // Cálculo automático en tiempo real del margen proyectado
+        // Cálculo automático en tiempo real del margen proyectado (Solo visible para Modo Dueño)
         const calcularMargen = () => {
+            const boxMargen = document.getElementById('box-margen-proyectado');
+            if (!boxMargen) return;
+
+            if (!App.isAdmin) {
+                boxMargen.classList.add('hidden');
+                return;
+            }
+
             const costo = parseFloat(inputCosto.value) || 0;
             const precio = parseFloat(inputPrecio.value) || 0;
             const margen = precio - costo;
             const porcentaje = costo > 0 ? ((margen / costo) * 100).toFixed(1) : 0;
 
-            const boxMargen = document.getElementById('box-margen-proyectado');
             const txtMargen = document.getElementById('txt-margen-proyectado');
             const txtPorcentaje = document.getElementById('txt-porcentaje-margen');
 
@@ -34,13 +41,13 @@ const Inventario = {
                 txtPorcentaje.textContent = `${porcentaje}%`;
 
                 if (margen > 0) {
-                    boxMargen.className = 'mt-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 transition-all';
+                    boxMargen.className = 'admin-only mt-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 transition-all';
                     txtMargen.className = 'font-bold text-emerald-700 text-lg';
                 } else if (margen === 0) {
-                    boxMargen.className = 'mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 transition-all';
+                    boxMargen.className = 'admin-only mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 transition-all';
                     txtMargen.className = 'font-bold text-slate-700 text-lg';
                 } else {
-                    boxMargen.className = 'mt-3 p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-900 transition-all';
+                    boxMargen.className = 'admin-only mt-3 p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-900 transition-all';
                     txtMargen.className = 'font-bold text-rose-700 text-lg';
                 }
             } else {

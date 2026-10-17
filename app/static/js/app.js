@@ -192,6 +192,8 @@ const App = {
             if (txtMovil) txtMovil.textContent = 'Modo Vendedor';
             if (iconMovil) iconMovil.textContent = '🔒';
             if (headerGanancias) headerGanancias.classList.add('hidden');
+            const boxMargen = document.getElementById('box-margen-proyectado');
+            if (boxMargen) boxMargen.classList.add('hidden');
         }
     },
 

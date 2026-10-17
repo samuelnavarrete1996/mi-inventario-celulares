@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/custom.css?v=20261016_v3">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20261017_v4">
     <script>
         tailwind.config = {
             theme: {
@@ -233,7 +233,7 @@
                         </div>
 
                         <!-- Banner de Cálculo Automático del Margen Proyectado -->
-                        <div id="box-margen-proyectado" class="hidden p-3.5 rounded-xl border transition-all">
+                        <div id="box-margen-proyectado" class="admin-only hidden p-3.5 rounded-xl border transition-all">
                             <div class="flex justify-between items-center text-xs text-slate-500 mb-1">
                                 <span class="font-semibold uppercase tracking-wider">Margen Proyectado:</span>
                                 <span id="txt-porcentaje-margen" class="font-bold">0%</span>
@@ -280,16 +280,16 @@
                         </div>
 
                         <!-- Barra de Resumen Rápido -->
-                        <div class="grid grid-cols-3 gap-4 pt-4 mt-4 border-t border-slate-100 text-center">
-                            <div>
+                        <div class="flex items-center justify-around gap-4 pt-4 mt-4 border-t border-slate-100 text-center">
+                            <div class="flex-1">
                                 <span class="text-xs text-slate-400 block font-medium">Equipos Disponibles</span>
                                 <span id="stat-inv-disponibles" class="text-sm font-bold text-slate-800">--</span>
                             </div>
-                            <div>
+                            <div class="flex-1 admin-only">
                                 <span class="text-xs text-slate-400 block font-medium">Capital Invertido</span>
                                 <span id="stat-inv-capital" class="text-sm font-bold text-slate-800">--</span>
                             </div>
-                            <div>
+                            <div class="flex-1 admin-only">
                                 <span class="text-xs text-slate-400 block font-medium">Ganancia Proyectada</span>
                                 <span id="stat-inv-ganancia-potencial" class="text-sm font-bold text-emerald-600">--</span>
                             </div>
@@ -317,9 +317,9 @@
                                         <th class="py-3 px-4">Color</th>
                                         <th class="py-3 px-4">IMEI</th>
                                         <th class="py-3 px-4">Grado</th>
-                                        <th class="py-3 px-4">Costo</th>
+                                        <th class="py-3 px-4 admin-only">Costo</th>
                                         <th class="py-3 px-4">Precio Venta</th>
-                                        <th class="py-3 px-4">Margen</th>
+                                        <th class="py-3 px-4 admin-only">Margen</th>
                                         <th class="py-3 px-4 text-right">Acciones</th>
                                     </tr>
                                 </thead>
@@ -571,7 +571,7 @@
                                     <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">Total a Cobrar:</span>
                                     <span id="cart-total-cobrar" class="text-2xl font-black text-slate-900">$0.00</span>
                                 </div>
-                                <div class="flex justify-between items-center text-xs pt-1 border-t border-slate-200/60">
+                                <div class="admin-only flex justify-between items-center text-xs pt-1 border-t border-slate-200/60">
                                     <span class="text-slate-500">Ganancia neta total:</span>
                                     <div class="text-right">
                                         <span id="cart-total-margen" class="font-bold text-emerald-600">+$0.00</span>
@@ -1942,14 +1942,14 @@
     </div>
 
     <!-- SCRIPTS DE LA APLICACIÓN (con cache-busting) -->
-    <script src="/static/js/app.js?v=20261016_v3"></script>
-    <script src="/static/js/inventario.js?v=20261016_v3"></script>
-    <script src="/static/js/pos.js?v=20261016_v3"></script>
-    <script src="/static/js/accesorios.js?v=20261016_v3"></script>
-    <script src="/static/js/caja.js?v=20261016_v3"></script>
-    <script src="/static/js/garantias.js?v=20261016_v3"></script>
-    <script src="/static/js/reportes.js?v=20261016_v3"></script>
-    <script src="/static/js/reparaciones.js?v=20261016_v3"></script>
-    <script src="/static/js/etiquetas_scanner.js?v=20261016_v3"></script>
+    <script src="/static/js/app.js?v=20261017_v4"></script>
+    <script src="/static/js/inventario.js?v=20261017_v4"></script>
+    <script src="/static/js/pos.js?v=20261017_v4"></script>
+    <script src="/static/js/accesorios.js?v=20261017_v4"></script>
+    <script src="/static/js/caja.js?v=20261017_v4"></script>
+    <script src="/static/js/garantias.js?v=20261017_v4"></script>
+    <script src="/static/js/reportes.js?v=20261017_v4"></script>
+    <script src="/static/js/reparaciones.js?v=20261017_v4"></script>
+    <script src="/static/js/etiquetas_scanner.js?v=20261017_v4"></script>
 </body>
 </html>
