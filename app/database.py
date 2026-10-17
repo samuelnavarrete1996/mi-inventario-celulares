@@ -2,10 +2,34 @@ import sqlite3
 import os
 from datetime import datetime
 
+# Cargar variables de entorno desde .env si existe
+_env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(_env_file):
+    try:
+        with open(_env_file, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k.strip(), _v.strip().strip("'").strip('"'))
+    except Exception:
+        pass
+
 DATABASE_FILE = os.environ.get("DATABASE_PATH") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "inventario.db")
 
+TURSO_URL = os.environ.get("TURSO_DATABASE_URL") or os.environ.get("TURSO_URL") or os.environ.get("DATABASE_URL")
+TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN") or os.environ.get("TURSO_TOKEN") or os.environ.get("DATABASE_AUTH_TOKEN")
+
+def is_turso_enabled() -> bool:
+    """Retorna True si las credenciales de Turso Cloud están configuradas."""
+    return bool(TURSO_URL and TURSO_TOKEN and ("turso.io" in TURSO_URL or "libsql:" in TURSO_URL))
+
 def get_db_connection():
-    """Retorna una conexión a SQLite configurada con Row factory y claves foráneas activas."""
+    """Retorna una conexión a Turso Cloud si está configurada, o a SQLite local."""
+    if is_turso_enabled():
+        from app.turso_client import TursoConnection
+        return TursoConnection(TURSO_URL, TURSO_TOKEN)
+
     conn = sqlite3.connect(DATABASE_FILE)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
@@ -35,7 +59,7 @@ def init_db():
     # Migración de constraint en equipos si la tabla fue creada antes con solo Disponible/Vendido
     try:
         cursor.execute("UPDATE equipos SET estado = 'En Garantia' WHERE id = -9999;")
-    except sqlite3.IntegrityError:
+    except (sqlite3.IntegrityError, Exception):
         # Migrar tabla equipos para permitir 'En Garantia' y 'Baja por Garantia'
         cursor.execute("PRAGMA foreign_keys = OFF;")
         cursor.execute("""
