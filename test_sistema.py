@@ -17,6 +17,13 @@ from app.database import init_db, seed_demo_data_if_empty
 init_db()
 seed_demo_data_if_empty()
 
+ADMIN_PASSWORD = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+
+async def login_as_admin(client: httpx.AsyncClient):
+    res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
+    assert res.status_code == 200
+    return res
+
 @pytest.mark.anyio
 async def test_startup_and_health():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -39,6 +46,7 @@ async def test_listar_inventario():
 @pytest.mark.anyio
 async def test_venta_carrito_pago_combinado():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         suffix = str(int(time.time() * 1000))[-6:]
         imei1 = f"359999000{suffix}1"
         imei2 = f"359999000{suffix}2"
@@ -143,6 +151,7 @@ async def test_pago_combinado_desbalanceado_falla():
 @pytest.mark.anyio
 async def test_dashboard_reportes():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         res = await client.get("/api/reportes/dashboard")
         assert res.status_code == 200
         dash = res.json()
@@ -153,6 +162,7 @@ async def test_dashboard_reportes():
 @pytest.mark.anyio
 async def test_historial_ventas():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         res = await client.get("/api/reportes/ventas")
         assert res.status_code == 200
         ventas = res.json()

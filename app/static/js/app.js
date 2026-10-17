@@ -2,15 +2,37 @@
 
 const App = {
     currentTab: 'inventario',
-    isAdmin: false, // Por seguridad: SIEMPRE inicia en Modo Vendedor bloqueado
+    isAdmin: false, // Por seguridad: el backend determina el rol mediante cookie HttpOnly
+    currentUser: null,
 
-    init() {
-        localStorage.removeItem('modo_admin');
-        this.isAdmin = false;
+    async init() {
         this.setupNavigation();
-        this.aplicarModoAdmin();
+        await this.verificarSesion();
         this.updateHeaderStats();
         this.registerServiceWorker();
+    },
+
+    async verificarSesion() {
+        try {
+            const res = await fetch('/api/auth/me');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.authenticated && data.user && data.user.rol === 'dueno') {
+                    this.isAdmin = true;
+                    this.currentUser = data.user;
+                } else {
+                    this.isAdmin = false;
+                    this.currentUser = (data.authenticated && data.user) ? data.user : null;
+                }
+            } else {
+                this.isAdmin = false;
+                this.currentUser = null;
+            }
+        } catch (e) {
+            this.isAdmin = false;
+            this.currentUser = null;
+        }
+        this.aplicarModoAdmin();
     },
 
     deferredPrompt: null,
@@ -67,6 +89,10 @@ const App = {
     },
 
     switchTab(tabName) {
+        if (tabName === 'reportes' && !this.isAdmin) {
+            this.showToast("El módulo de Reportes requiere permisos de Dueño.", "warning");
+            return;
+        }
         this.currentTab = tabName;
 
         // Actualizar botones de navegación escritorio
@@ -140,28 +166,78 @@ const App = {
     async toggleAdminMode() {
         if (this.isAdmin) {
             // Pasar a modo vendedor
+            try {
+                // Iniciar sesión como vendedor con PIN rápido (1234)
+                await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: '1234' })
+                });
+            } catch (e) {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            }
+
             this.isAdmin = false;
+            this.currentUser = { rol: 'vendedor', nombre: 'Vendedor' };
             this.aplicarModoAdmin();
+
+            if (this.currentTab === 'reportes') {
+                this.switchTab('inventario');
+            }
+
+            // Recargar datos para que el backend entregue respuestas sanitizadas sin costos
+            if (typeof Inventario !== 'undefined' && Inventario.cargarEquipos) {
+                Inventario.cargarEquipos();
+            }
+            if (typeof Accesorios !== 'undefined' && Accesorios.cargar) {
+                Accesorios.cargar();
+            }
+            this.updateHeaderStats();
             this.showToast("🔒 Modo Vendedor activado. Costos y ganancias confidenciales ocultos.", "info");
         } else {
-            // Solicitar contraseña de administrador
-            const pwd = prompt("[Seguridad] Ingresa la contraseña de administrador para desbloquear Modo Dueño:");
+            // Solicitar contraseña o PIN de Dueño
+            const pwd = prompt("[Seguridad] Ingresa la contraseña de administrador o PIN de Dueño:");
             if (!pwd) return;
 
             try {
-                // Verificar contraseña intentando validar
-                const testRes = await fetch(`/api/equipos/1?password=${encodeURIComponent(pwd)}`, { method: 'DELETE' });
-                if (testRes.status === 401) {
-                    this.showToast("Contraseña incorrecta. Acceso denegado.", "error");
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pwd, username: 'admin' })
+                });
+
+                if (res.status === 429) {
+                    const errData = await res.json().catch(() => ({}));
+                    this.showToast(errData.detail || "Demasiados intentos fallidos. Bloqueado temporalmente.", "error");
                     return;
                 }
-                this.isAdmin = true;
-                this.aplicarModoAdmin();
-                this.showToast("👑 Modo Dueño activado. Todos los reportes y costos desbloqueados.", "success");
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    this.showToast(errData.detail || "Contraseña o PIN incorrecto. Acceso denegado.", "error");
+                    return;
+                }
+
+                const data = await res.json();
+                if (data.user && data.user.rol === 'dueno') {
+                    this.isAdmin = true;
+                    this.currentUser = data.user;
+                    this.aplicarModoAdmin();
+
+                    // Recargar datos para que el backend entregue costos y ganancias reales
+                    if (typeof Inventario !== 'undefined' && Inventario.cargarEquipos) {
+                        Inventario.cargarEquipos();
+                    }
+                    if (typeof Accesorios !== 'undefined' && Accesorios.cargar) {
+                        Accesorios.cargar();
+                    }
+                    this.updateHeaderStats();
+                    this.showToast(`👑 Bienvenido, ${data.user.nombre}. Modo Dueño activado.`, "success");
+                } else {
+                    this.showToast("El usuario autenticado no cuenta con rol de Dueño.", "warning");
+                }
             } catch (e) {
-                this.isAdmin = true;
-                this.aplicarModoAdmin();
-                this.showToast("👑 Modo Dueño activado.", "success");
+                this.showToast("Error de conexión al autenticar: " + e.message, "error");
             }
         }
     },
@@ -207,7 +283,11 @@ const App = {
                 const mesEl = document.getElementById('header-mes-nombre');
 
                 if (stockEl) stockEl.textContent = data.equipos_disponibles;
-                if (gananciaEl) gananciaEl.textContent = this.formatCurrency(data.total_ganancias_mes);
+                if (gananciaEl) {
+                    gananciaEl.textContent = data.total_ganancias_mes !== null && data.total_ganancias_mes !== undefined
+                        ? this.formatCurrency(data.total_ganancias_mes)
+                        : '••••••';
+                }
                 if (mesEl) mesEl.textContent = data.mes_actual_nombre;
             }
         } catch (err) {

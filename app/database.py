@@ -284,6 +284,20 @@ def init_db():
     );
     """)
 
+    # 9. Tabla Usuarios (Autenticación y Control de Acceso por Roles RBAC)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        username TEXT UNIQUE NOT NULL,
+        pin_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        rol TEXT NOT NULL CHECK(rol IN ('dueno', 'vendedor')),
+        activo INTEGER NOT NULL DEFAULT 1,
+        fecha_creacion TEXT NOT NULL
+    );
+    """)
+
     # Índices
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_equipos_imei ON equipos(imei);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_equipos_estado ON equipos(estado);")
@@ -300,6 +314,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_folio ON reparaciones(folio);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_estado ON reparaciones(estado);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_telefono ON reparaciones(cliente_telefono);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username);")
 
     conn.commit()
     conn.close()
@@ -388,6 +403,24 @@ def seed_demo_data_if_empty():
         INSERT INTO reparaciones (folio, cliente_nombre, cliente_telefono, dispositivo_modelo, color, imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico, condicion_recepcion, costo_refaccion, precio_servicio, anticipo, saldo_pendiente, estado, fecha_ingreso, fecha_prometida, fecha_entrega, tecnico_responsable, notas)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """, demo_rep)
+        conn.commit()
+
+    # Sembrar usuarios si la tabla está vacía
+    cursor.execute("SELECT COUNT(*) as count FROM usuarios;")
+    if cursor.fetchone()["count"] == 0:
+        from app.security import hash_secret
+        admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+        admin_hash, admin_salt = hash_secret(admin_pwd)
+        vendedor_hash, vendedor_salt = hash_secret("1234")
+
+        usuarios_init = [
+            ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, "dueno", 1, now),
+            ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, "vendedor", 1, now)
+        ]
+        cursor.executemany("""
+        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """, usuarios_init)
         conn.commit()
 
     conn.close()

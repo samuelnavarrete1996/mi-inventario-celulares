@@ -1,3 +1,4 @@
+import os
 import pytest
 import time
 from httpx import AsyncClient, ASGITransport
@@ -196,6 +197,10 @@ async def test_antiguedad_stock_calculada():
 @pytest.mark.anyio
 async def test_backup_export_json_y_db():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+        login_res = await ac.post("/api/auth/login", json={"username": "admin", "password": admin_pwd})
+        assert login_res.status_code == 200
+
         # JSON export
         res_json = await ac.get("/api/backup/exportar-json")
         assert res_json.status_code == 200

@@ -300,17 +300,17 @@ const Inventario = {
 
     actualizarResumenInventario() {
         const totalItems = this.equipos.length;
-        const totalCosto = this.equipos.reduce((acc, curr) => acc + curr.costo_compra, 0);
-        const totalVenta = this.equipos.reduce((acc, curr) => acc + curr.precio_venta, 0);
-        const gananciaPotencial = totalVenta - totalCosto;
+        const totalCosto = this.equipos.reduce((acc, curr) => acc + (curr.costo_compra || 0), 0);
+        const totalVenta = this.equipos.reduce((acc, curr) => acc + (curr.precio_venta || 0), 0);
+        const gananciaPotencial = totalCosto > 0 ? (totalVenta - totalCosto) : 0;
 
         const countEl = document.getElementById('stat-inv-disponibles');
         const costoEl = document.getElementById('stat-inv-capital');
         const gananciaEl = document.getElementById('stat-inv-ganancia-potencial');
 
         if (countEl) countEl.textContent = `${totalItems} equipos`;
-        if (costoEl) costoEl.textContent = App.formatCurrency(totalCosto);
-        if (gananciaEl) gananciaEl.textContent = App.formatCurrency(gananciaPotencial);
+        if (costoEl) costoEl.textContent = (App.isAdmin && totalCosto > 0) ? App.formatCurrency(totalCosto) : '••••••';
+        if (gananciaEl) gananciaEl.textContent = (App.isAdmin && totalCosto > 0) ? App.formatCurrency(gananciaPotencial) : '••••••';
     },
 
     renderTabla(lista) {
@@ -327,8 +327,9 @@ const Inventario = {
         if (emptyState) emptyState.classList.add('hidden');
 
         tableBody.innerHTML = lista.map(equipo => {
-            const margen = equipo.margen_proyectado || (equipo.precio_venta - equipo.costo_compra);
-            const pct = equipo.porcentaje_margen || ((margen / equipo.costo_compra) * 100).toFixed(1);
+            const tieneCosto = equipo.costo_compra !== null && equipo.costo_compra !== undefined;
+            const margen = tieneCosto ? (equipo.margen_proyectado ?? (equipo.precio_venta - equipo.costo_compra)) : null;
+            const pct = (tieneCosto && equipo.costo_compra > 0 && margen !== null) ? (equipo.porcentaje_margen ?? ((margen / equipo.costo_compra) * 100).toFixed(1)) : 0;
             const agingBadge = App.getAgingBadge(equipo.dias_en_stock || 0, equipo.estado_antiguedad || 'Fresco');
 
             return `
@@ -360,16 +361,18 @@ const Inventario = {
                     ${App.getGradeBadge(equipo.grado)}
                 </td>
                 <td class="py-3 px-4 text-slate-600 admin-only">
-                    ${App.formatCurrency(equipo.costo_compra)}
+                    ${tieneCosto ? App.formatCurrency(equipo.costo_compra) : '-'}
                 </td>
                 <td class="py-3 px-4 font-bold text-slate-800">
                     ${App.formatCurrency(equipo.precio_venta)}
                 </td>
                 <td class="py-3 px-4 admin-only">
-                    <span class="text-emerald-700 font-semibold text-sm">
-                        +${App.formatCurrency(margen)}
-                    </span>
-                    <span class="text-xs text-emerald-600 block">(${pct}%)</span>
+                    ${margen !== null ? `
+                        <span class="text-emerald-700 font-semibold text-sm">
+                            +${App.formatCurrency(margen)}
+                        </span>
+                        <span class="text-xs text-emerald-600 block">(${pct}%)</span>
+                    ` : '<span class="text-slate-400 text-xs">-</span>'}
                 </td>
                 <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
                     <button onclick="POS.iniciarVentaDirecta(${equipo.id})" class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-all" title="Vender este equipo en POS">

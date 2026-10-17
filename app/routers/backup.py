@@ -1,12 +1,13 @@
 import os
 import shutil
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, UploadFile, File, status, Response
+from fastapi import APIRouter, HTTPException, UploadFile, File, status, Response, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from app.database import DATABASE_FILE, init_db
 from app import crud
+from app.security import require_role
 
-router = APIRouter(prefix="/api/backup", tags=["Respaldos"])
+router = APIRouter(prefix="/api/backup", tags=["Respaldos"], dependencies=[Depends(require_role("dueno"))])
 
 @router.get("/descargar-db")
 def descargar_base_de_datos():

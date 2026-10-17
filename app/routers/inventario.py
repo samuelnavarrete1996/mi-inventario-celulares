@@ -1,10 +1,11 @@
 import os
 import hashlib
-from fastapi import APIRouter, HTTPException, Query, Header, UploadFile, File, Response, status
+from fastapi import APIRouter, HTTPException, Query, Header, UploadFile, File, Response, status, Request
 from typing import List, Optional, Dict, Any
 from app import crud
 from app.models import EquipoCreate, EquipoUpdate, EquipoResponse
 from app.excel_importer import procesar_archivo_excel_o_csv, guardar_equipos_importados, generar_plantilla_excel_bytes
+from app.security import get_current_user_optional, is_user_dueno
 
 router = APIRouter(prefix="/api/equipos", tags=["Inventario"])
 
@@ -47,12 +48,20 @@ def verify_delete_password(entered_token: Optional[str]) -> bool:
 
 @router.get("", response_model=List[EquipoResponse])
 def listar_equipos(
+    request: Request,
     solo_disponibles: bool = Query(True, description="Mostrar solo equipos con estado 'Disponible'"),
     search: Optional[str] = Query(None, description="Búsqueda por modelo, IMEI o color"),
     grado: Optional[str] = Query(None, description="Filtrar por grado: A, B o C")
 ):
-    """Obtiene la lista de equipos en inventario según filtros."""
-    return crud.get_equipos(solo_disponibles=solo_disponibles, search=search, grado=grado)
+    """Obtiene la lista de equipos en inventario según filtros. Oculta costos confidenciales si no es dueño."""
+    equipos = crud.get_equipos(solo_disponibles=solo_disponibles, search=search, grado=grado)
+    user = get_current_user_optional(request)
+    if not is_user_dueno(user):
+        for eq in equipos:
+            eq["costo_compra"] = None
+            eq["margen_proyectado"] = None
+            eq["porcentaje_margen"] = None
+    return equipos
 
 @router.post("", response_model=EquipoResponse, status_code=status.HTTP_201_CREATED)
 def registrar_equipo(equipo: EquipoCreate):
@@ -111,11 +120,16 @@ async def importar_equipos_excel(file: UploadFile = File(...)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al procesar archivo: {str(e)}")
 
 @router.get("/{equipo_id}", response_model=EquipoResponse)
-def obtener_equipo(equipo_id: int):
-    """Obtiene los detalles de un equipo por su ID."""
+def obtener_equipo(equipo_id: int, request: Request):
+    """Obtiene los detalles de un equipo por su ID. Oculta costos confidenciales si no es dueño."""
     equipo = crud.get_equipo_by_id(equipo_id)
     if not equipo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipo no encontrado.")
+    user = get_current_user_optional(request)
+    if not is_user_dueno(user):
+        equipo["costo_compra"] = None
+        equipo["margen_proyectado"] = None
+        equipo["porcentaje_margen"] = None
     return equipo
 
 @router.put("/{equipo_id}", response_model=EquipoResponse)
@@ -129,15 +143,17 @@ def actualizar_equipo(equipo_id: int, datos: EquipoUpdate):
 @router.delete("/{equipo_id}", status_code=status.HTTP_200_OK)
 def eliminar_equipo(
     equipo_id: int,
+    request: Request,
     password: Optional[str] = Query(None, description="Contraseña de autorización para eliminar"),
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password")
 ):
     """
     Elimina un equipo si aún no ha sido vendido.
-    Requiere obligatoriamente la contraseña de autorización del administrador.
+    Requiere obligatoriamente sesión activa de Dueño o contraseña de autorización del administrador.
     """
+    user = get_current_user_optional(request)
     token = password or x_admin_password
-    if not verify_delete_password(token):
+    if not (is_user_dueno(user) or verify_delete_password(token)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Contraseña de autorización incorrecta o no proporcionada. No se permite eliminar el artículo."

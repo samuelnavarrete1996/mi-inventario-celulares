@@ -40,7 +40,7 @@ class EquipoResponse(BaseModel):
     color: str
     imei: str
     grado: str
-    costo_compra: float
+    costo_compra: Optional[float] = None
     precio_venta: float
     estado: str
     fecha_registro: str
@@ -84,7 +84,7 @@ class AccesorioResponse(BaseModel):
     nombre: str
     categoria: str
     codigo_barras: Optional[str] = None
-    costo_compra: float
+    costo_compra: Optional[float] = None
     precio_venta: float
     stock: int
     es_servicio: int
@@ -161,8 +161,8 @@ class VentaItemResponse(BaseModel):
     nombre_item: Optional[str] = None
     cantidad: int = 1
     precio_final: float
-    costo_compra: float
-    margen_ganancia: float
+    costo_compra: Optional[float] = None
+    margen_ganancia: Optional[float] = None
     modelo: Optional[str] = None
     capacidad_gb: Optional[int] = None
     color: Optional[str] = None
@@ -173,7 +173,7 @@ class VentaDetalleResponse(BaseModel):
     id: int
     cliente_id: int
     precio_final: float
-    margen_ganancia: float
+    margen_ganancia: Optional[float] = None
     fecha_venta: str
     metodo_pago: str
     monto_efectivo: float

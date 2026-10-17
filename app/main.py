@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.database import init_db, seed_demo_data_if_empty
-from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup, reparaciones, catalogo
+from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup, reparaciones, catalogo, auth
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
@@ -29,6 +29,7 @@ def on_startup():
     seed_demo_data_if_empty()
 
 # Registro de routers de API
+app.include_router(auth.router)
 app.include_router(inventario.router)
 app.include_router(pos.router)
 app.include_router(clientes.router)

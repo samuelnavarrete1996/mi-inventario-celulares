@@ -1,24 +1,36 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Request
 from typing import List, Optional
 from app import crud
 from app.models import AccesorioCreate, AccesorioUpdate, AccesorioResponse
+from app.security import get_current_user_optional, is_user_dueno
 
 router = APIRouter(prefix="/api/accesorios", tags=["Accesorios y Servicios"])
 
 @router.get("", response_model=List[AccesorioResponse])
 def listar_accesorios(
+    request: Request,
     categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
     solo_con_stock: bool = Query(False, description="Mostrar solo items con stock disponible o servicios"),
     search: Optional[str] = Query(None, description="Búsqueda por nombre")
 ):
-    """Obtiene el catálogo de accesorios y servicios/reparaciones."""
-    return crud.get_accesorios(categoria=categoria, solo_con_stock=solo_con_stock, search=search)
+    """Obtiene el catálogo de accesorios y servicios/reparaciones. Oculta costos confidenciales si no es dueño."""
+    items = crud.get_accesorios(categoria=categoria, solo_con_stock=solo_con_stock, search=search)
+    user = get_current_user_optional(request)
+    if not is_user_dueno(user):
+        for it in items:
+            it["costo_compra"] = None
+            it["margen_unitario"] = None
+    return items
 
 @router.get("/{acc_id}", response_model=AccesorioResponse)
-def obtener_accesorio(acc_id: int):
+def obtener_accesorio(acc_id: int, request: Request):
     acc = crud.get_accesorio_by_id(acc_id)
     if not acc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
+    user = get_current_user_optional(request)
+    if not is_user_dueno(user):
+        acc["costo_compra"] = None
+        acc["margen_unitario"] = None
     return acc
 
 @router.post("", response_model=AccesorioResponse, status_code=status.HTTP_201_CREATED)
