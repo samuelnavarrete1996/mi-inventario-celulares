@@ -69,13 +69,6 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
                     candidato = u_dict
             usuario_encontrado = candidato
 
-            # Soporte de PIN numérico 1234 para mostrador (compatibilidad y teclados táctiles)
-            if not usuario_encontrado and pin_limpio == "1234":
-                cursor.execute("SELECT * FROM usuarios WHERE username = 'vendedor' AND activo = 1;")
-                row_vend = cursor.fetchone()
-                if row_vend:
-                    usuario_encontrado = dict(row_vend)
-
             if not usuario_encontrado:
                 admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
                 match = (

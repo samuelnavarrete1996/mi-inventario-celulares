@@ -331,7 +331,7 @@ async def test_eliminar_equipo_requiere_password():
         eq_id = res_crear.json()["id"]
 
         # Cambiamos a sesión de vendedor para probar la protección por contraseña
-        res_vendedor = await client.post("/api/auth/login", json={"pin": "1234"})
+        res_vendedor = await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
         assert res_vendedor.status_code == 200
 
         # 2. Vendedor intenta eliminar sin contraseña -> 403 Forbidden

@@ -43,22 +43,12 @@ async def test_login_vendedor_con_contrasena_inicio():
 
 
 @pytest.mark.anyio
-async def test_login_vendedor_con_pin():
-    """El vendedor puede autenticarse de manera ultrarrápida usando su PIN de 4 dígitos."""
+async def test_pin_1234_queda_bloqueado_y_rechazado():
+    """Verifica que el PIN anterior 1234 ya NO es permitido bajo ninguna circunstancia."""
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         res = await client.post("/api/auth/login", json={"pin": "1234"})
-        assert res.status_code == 200
-        data = res.json()
-        assert data["success"] is True
-        assert data["user"]["rol"] == "vendedor"
-        assert "sid" in client.cookies
-
-        # Verificar /api/auth/me
-        res_me = await client.get("/api/auth/me")
-        assert res_me.status_code == 200
-        me = res_me.json()
-        assert me["authenticated"] is True
-        assert me["user"]["rol"] == "vendedor"
+        assert res.status_code == 401
+        assert "sid" not in client.cookies
 
 
 @pytest.mark.anyio
@@ -102,7 +92,7 @@ async def test_anti_fuga_f12_equipos_vendedor():
     """
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Login como vendedor
-        await client.post("/api/auth/login", json={"pin": "1234"})
+        await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
 
         # Consultar inventario
         res = await client.get("/api/equipos?solo_disponibles=true")
@@ -143,7 +133,7 @@ async def test_vendedor_bloqueado_reportes_ventas():
     """Un vendedor que intente acceder a /api/reportes/ventas es bloqueado con HTTP 403."""
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Login como vendedor
-        await client.post("/api/auth/login", json={"pin": "1234"})
+        await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
 
         res = await client.get("/api/reportes/ventas")
         assert res.status_code == 403
@@ -169,7 +159,7 @@ async def test_dashboard_sanitizado_para_vendedor():
     pero oculta totalmente ganancias, capital y ventas diarias.
     """
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/auth/login", json={"pin": "1234"})
+        await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
 
         res = await client.get("/api/reportes/dashboard")
         assert res.status_code == 200
@@ -195,7 +185,7 @@ async def test_backups_restringidos_solo_dueno():
         assert res_anon.status_code == 401
 
         # 2. Vendedor: HTTP 403
-        await client.post("/api/auth/login", json={"pin": "1234"})
+        await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
         res_vendedor = await client.get("/api/backup/exportar-json")
         assert res_vendedor.status_code == 403
 
@@ -210,7 +200,7 @@ async def test_backups_restringidos_solo_dueno():
 async def test_logout_cierra_sesion():
     """El logout elimina la cookie y restablece el estado a no autenticado."""
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/auth/login", json={"pin": "1234"})
+        await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
         assert (await client.get("/api/auth/me")).json()["authenticated"] is True
 
         res_logout = await client.post("/api/auth/logout")

@@ -490,8 +490,8 @@ const App = {
 
     async toggleAdminMode() {
         if (this.isAdmin) {
-            // Pasar a modo vendedor solicitando PIN
-            const pin = prompt("Ingresa el PIN de Vendedor (ej. 1234) o presiona Cancelar para bloquear la pantalla:");
+            // Pasar a modo vendedor solicitando la contraseña de inicio
+            const pin = prompt("Ingresa la contraseña de inicio (piso6bodega606.) o presiona Cancelar para bloquear la pantalla:");
             if (!pin) {
                 this.bloquearPuntoDeVenta("Sesión cerrada.");
                 return;
@@ -506,7 +506,7 @@ const App = {
 
                 if (!res.ok) {
                     const errData = await res.json().catch(() => ({}));
-                    this.showToast(errData.detail || "PIN incorrecto. Modo Vendedor no activado.", "error");
+                    this.showToast(errData.detail || "Contraseña incorrecta. Modo Vendedor no activado.", "error");
                     return;
                 }
 
