@@ -8,21 +8,31 @@ Test suite integral para verificar todas las operaciones del backend:
 - Métricas del mes en Reportes y Dashboard
 """
 import os
+if "ADMIN_DELETE_PASSWORD" not in os.environ:
+    os.environ["ADMIN_DELETE_PASSWORD"] = "erYHE7yse"
+
 import pytest
 import httpx
 import time
 from app.main import app
 from app.database import init_db, seed_demo_data_if_empty
+from app.security import reset_all_rate_limits
 
 init_db()
 seed_demo_data_if_empty()
 
-ADMIN_PASSWORD = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+ADMIN_PASSWORD = os.environ["ADMIN_DELETE_PASSWORD"]
 
 async def login_as_admin(client: httpx.AsyncClient):
     res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
     assert res.status_code == 200
     return res
+
+@pytest.fixture(autouse=True)
+def cleanup_rl():
+    reset_all_rate_limits()
+    yield
+    reset_all_rate_limits()
 
 @pytest.mark.anyio
 async def test_startup_and_health():
@@ -34,6 +44,7 @@ async def test_startup_and_health():
 @pytest.mark.anyio
 async def test_listar_inventario():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         res = await client.get("/api/equipos?solo_disponibles=true")
         assert res.status_code == 200
         data = res.json()
@@ -119,6 +130,7 @@ async def test_venta_carrito_pago_combinado():
 @pytest.mark.anyio
 async def test_pago_combinado_desbalanceado_falla():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         suffix = str(int(time.time() * 1000))[-6:]
         imei = f"358888000{suffix}"
         
@@ -175,6 +187,7 @@ async def test_historial_ventas():
 @pytest.mark.anyio
 async def test_descargar_plantilla_excel():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         res = await client.get("/api/equipos/plantilla-excel")
         assert res.status_code == 200
         assert len(res.content) > 1000
@@ -186,6 +199,7 @@ async def test_importar_excel():
     excel_bytes = generar_plantilla_excel_bytes()
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         files = {
             "file": ("inventario_test.xlsx", excel_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         }
@@ -198,6 +212,7 @@ async def test_importar_excel():
 @pytest.mark.anyio
 async def test_flujo_devolucion_garantia_y_reemplazo():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         suffix = str(int(time.time() * 1000))[-6:]
         imei_original = f"357777000{suffix}1"
         imei_reemplazo = f"357777000{suffix}2"
@@ -296,11 +311,12 @@ async def test_flujo_devolucion_garantia_y_reemplazo():
 @pytest.mark.anyio
 async def test_eliminar_equipo_requiere_password():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_admin(client)
         suffix = str(int(time.time() * 1000))[-6:]
         imei = f"354444000{suffix}"
         auth_pwd = os.environ.get("ADMIN_DELETE_PASSWORD")
 
-        # 1. Registrar un equipo
+        # 1. Registrar un equipo con sesión de dueño
         p = {
             "modelo": "Xiaomi Redmi Note 13",
             "capacidad_gb": 128,
@@ -314,16 +330,20 @@ async def test_eliminar_equipo_requiere_password():
         assert res_crear.status_code == 201
         eq_id = res_crear.json()["id"]
 
-        # 2. Intentar eliminar sin contraseña -> 401 Unauthorized
+        # Cambiamos a sesión de vendedor para probar la protección por contraseña
+        res_vendedor = await client.post("/api/auth/login", json={"pin": "1234"})
+        assert res_vendedor.status_code == 200
+
+        # 2. Vendedor intenta eliminar sin contraseña -> 403 Forbidden
         res_no_pwd = await client.delete(f"/api/equipos/{eq_id}")
-        assert res_no_pwd.status_code == 401
+        assert res_no_pwd.status_code == 403
 
-        # 3. Intentar eliminar con contraseña errónea -> 401 Unauthorized
+        # 3. Vendedor intenta eliminar con contraseña errónea -> 403 Forbidden
         res_bad_pwd = await client.delete(f"/api/equipos/{eq_id}?password=wrongpassword")
-        assert res_bad_pwd.status_code == 401
+        assert res_bad_pwd.status_code == 403
 
-        # 4. Eliminar con contraseña correcta obtenida del entorno -> 200 OK
-        res_ok = await client.delete(f"/api/equipos/{eq_id}?password={auth_pwd}")
+        # 4. Eliminar con contraseña correcta enviada en cabecera X-Admin-Password -> 200 OK
+        res_ok = await client.delete(f"/api/equipos/{eq_id}", headers={"X-Admin-Password": auth_pwd})
         assert res_ok.status_code == 200
         assert "eliminado exitosamente" in res_ok.json()["mensaje"]
 

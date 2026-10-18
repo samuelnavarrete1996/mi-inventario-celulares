@@ -1,47 +1,40 @@
-from fastapi import APIRouter, HTTPException, Query, status, Request
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from typing import List, Optional
 from app import crud
 from app.models import VentaCreate, VentaDetalleResponse, EquipoResponse
-from app.security import get_current_user_optional, is_user_dueno
+from app.security import get_current_user, sanitizar_datos_sensibles
 
 router = APIRouter(prefix="/api/pos", tags=["Punto de Venta"])
 
-def sanitizar_venta_para_vendedor(venta_dict: dict) -> dict:
-    """Oculta costos de compra y márgenes de ganancia para usuarios que no sean Dueño."""
-    venta_dict["costo_compra"] = None
-    venta_dict["margen_ganancia"] = None
-    if "items" in venta_dict and isinstance(venta_dict["items"], list):
-        for it in venta_dict["items"]:
-            if isinstance(it, dict):
-                it["costo_compra"] = None
-                it["margen_ganancia"] = None
-    return venta_dict
-
 @router.get("/buscar", response_model=List[EquipoResponse])
 def buscar_equipos_disponibles(
-    request: Request,
-    q: Optional[str] = Query(None, description="Búsqueda en tiempo real por IMEI o Modelo")
+    q: Optional[str] = Query(None, description="Búsqueda en tiempo real por IMEI o Modelo"),
+    user: dict = Depends(get_current_user)
 ):
     """
     Buscador en tiempo real para el POS:
-    Retorna únicamente equipos con estado 'Disponible' que coincidan con el IMEI o Modelo.
-    Oculta el costo de compra y margen si el usuario no es Dueño.
+    Retorna únicamente equipos con estado 'Disponible'. Oculta costos si no es Dueño.
+    Requiere sesión activa.
     """
     equipos = crud.get_equipos(solo_disponibles=True, search=q)
-    user = get_current_user_optional(request)
-    if not is_user_dueno(user):
-        for eq in equipos:
-            eq["costo_compra"] = None
-            eq["margen_proyectado"] = None
-            eq["porcentaje_margen"] = None
-    return equipos
+    return sanitizar_datos_sensibles(equipos, user)
 
 @router.post("/vender", response_model=VentaDetalleResponse, status_code=status.HTTP_201_CREATED)
-def realizar_venta(venta: VentaCreate, request: Request):
+def realizar_venta(
+    venta: VentaCreate,
+    user: dict = Depends(get_current_user)
+):
     """
-    Procesa la venta en el POS con soporte para múltiples equipos (carrito)
-    y tipos de pago (Efectivo, Transferencia, Tarjeta o Combinado).
+    Procesa la venta en el POS validando montos no negativos y recalculando totales en BD.
+    Exige usuario autenticado y oculta ganancias si es vendedor.
     """
+    if not venta.items:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El carrito de venta no puede estar vacío.")
+
+    for monto in (venta.monto_efectivo, venta.monto_transferencia, venta.monto_tarjeta, venta.monto_garantia):
+        if monto is not None and monto < 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Los montos de pago no pueden ser negativos.")
+
     try:
         resultado = crud.registrar_venta_carrito(
             items=venta.items,
@@ -54,22 +47,19 @@ def realizar_venta(venta: VentaCreate, request: Request):
             monto_garantia=venta.monto_garantia,
             notas=venta.notas
         )
-        user = get_current_user_optional(request)
-        if not is_user_dueno(user):
-            sanitizar_venta_para_vendedor(resultado)
-        return resultado
+        return sanitizar_datos_sensibles(resultado, user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error procesando la venta: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno procesando la venta.")
 
 @router.get("/recibo/{venta_id}", response_model=VentaDetalleResponse)
-def obtener_recibo(venta_id: int, request: Request):
-    """Obtiene los datos completos de una venta para generar o reimprimir el recibo."""
+def obtener_recibo(
+    venta_id: int,
+    user: dict = Depends(get_current_user)
+):
+    """Obtiene los datos de una venta para generar el recibo, exigiendo sesión activa y ocultando márgenes."""
     recibo = crud.get_venta_detalle(venta_id)
     if not recibo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venta no encontrada.")
-    user = get_current_user_optional(request)
-    if not is_user_dueno(user):
-        sanitizar_venta_para_vendedor(recibo)
-    return recibo
+    return sanitizar_datos_sensibles(recibo, user)

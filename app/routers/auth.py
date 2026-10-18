@@ -3,8 +3,9 @@ app/routers/auth.py - Endpoints de Autenticación, Login por PIN/Contraseña, y 
 """
 
 import os
-from fastapi import APIRouter, HTTPException, Request, Response, status, Depends
-from pydantic import BaseModel, Field
+import hmac
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Dict, Any
 from app.database import get_db_connection
 from app.security import (
@@ -15,13 +16,13 @@ from app.security import (
     verify_secret,
     create_access_token,
     get_current_user_optional,
-    get_current_user,
     COOKIE_NAME
 )
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     username: Optional[str] = None
     password: Optional[str] = None
     pin: Optional[str] = None
@@ -40,49 +41,55 @@ class AuthStateResponse(BaseModel):
 def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str, Any]:
     """
     Inicia sesión verificando credenciales o PIN rápido.
-    Protegido con rate limiting contra ataques de fuerza bruta.
-    Establece una cookie HttpOnly segura con el JWT firmado.
+    Protegido con rate limiting persistente contra ataques de fuerza bruta.
+    Establece una cookie HttpOnly + SameSite=Strict con el JWT firmado.
     """
     client_ip = get_client_ip(request)
     check_login_rate_limit(client_ip)
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
     usuario_encontrado = None
 
-    # Caso A: Login con PIN rápido (ideal para mostrador)
-    if datos.pin:
-        pin_limpio = datos.pin.strip()
-        cursor.execute("SELECT * FROM usuarios WHERE activo = 1;")
-        todos_usuarios = cursor.fetchall()
-        for u in todos_usuarios:
-            u_dict = dict(u)
-            if verify_secret(pin_limpio, u_dict["pin_hash"], u_dict["salt"]):
-                usuario_encontrado = u_dict
-                break
+    try:
+        # Caso A: Login con PIN rápido (evalúa todos los activos sin cortocircuito para evitar timing side-channel)
+        if datos.pin:
+            pin_limpio = datos.pin.strip()
+            cursor.execute("SELECT * FROM usuarios WHERE activo = 1;")
+            todos_usuarios = cursor.fetchall()
+            candidato = None
+            for u in todos_usuarios:
+                u_dict = dict(u)
+                if verify_secret(pin_limpio, u_dict["pin_hash"], u_dict["salt"]):
+                    candidato = u_dict
+            usuario_encontrado = candidato
 
-    # Caso B: Login tradicional con Usuario y Contraseña
-    elif datos.username and datos.password:
-        user_limpio = datos.username.strip().lower()
-        pwd_limpio = datos.password.strip()
+        # Caso B: Login tradicional con Usuario y Contraseña
+        elif datos.username and datos.password:
+            user_limpio = datos.username.strip().lower()
+            pwd_limpio = datos.password.strip()
 
-        cursor.execute("SELECT * FROM usuarios WHERE LOWER(username) = ? AND activo = 1;", (user_limpio,))
-        row = cursor.fetchone()
-        if row:
-            u_dict = dict(row)
-            if verify_secret(pwd_limpio, u_dict["pin_hash"], u_dict["salt"]):
-                usuario_encontrado = u_dict
-        
-        # Compatibilidad hacia atrás con la contraseña maestra de admin
-        admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
-        if not usuario_encontrado and user_limpio == "admin" and pwd_limpio == admin_master:
-            cursor.execute("SELECT * FROM usuarios WHERE username = 'admin';",)
-            row_admin = cursor.fetchone()
-            if row_admin:
-                usuario_encontrado = dict(row_admin)
+            cursor.execute("SELECT * FROM usuarios WHERE LOWER(username) = ? AND activo = 1;", (user_limpio,))
+            row = cursor.fetchone()
+            if row:
+                u_dict = dict(row)
+                if verify_secret(pwd_limpio, u_dict["pin_hash"], u_dict["salt"]):
+                    usuario_encontrado = u_dict
 
-    conn.close()
+            # Fallback seguro SOLO si ADMIN_DELETE_PASSWORD está explícitamente definido en variables de entorno
+            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD")
+            if (
+                not usuario_encontrado
+                and admin_master
+                and user_limpio == "admin"
+                and hmac.compare_digest(pwd_limpio.encode("utf-8"), admin_master.encode("utf-8"))
+            ):
+                cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND activo = 1;")
+                row_admin = cursor.fetchone()
+                if row_admin:
+                    usuario_encontrado = dict(row_admin)
+    finally:
+        conn.close()
 
     if not usuario_encontrado:
         record_failed_login_attempt(client_ip)
@@ -91,10 +98,8 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
             detail="Credenciales o PIN incorrectos. Acceso denegado."
         )
 
-    # Login exitoso: limpiar intentos fallidos
     reset_login_attempts(client_ip)
 
-    # Generar Token JWT
     token = create_access_token(
         user_id=usuario_encontrado["id"],
         username=usuario_encontrado["username"],
@@ -102,15 +107,14 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
         nombre=usuario_encontrado["nombre"]
     )
 
-    # Establecer Cookie HttpOnly (Invisible para JavaScript para mitigar XSS)
-    # max_age = 14 horas
     is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         max_age=14 * 3600,
+        path="/",
         httponly=True,
-        samesite="lax",
+        samesite="strict",
         secure=is_https
     )
 
@@ -123,23 +127,26 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
 
     return {
         "success": True,
-        "token": token,
         "user": user_info,
         "mensaje": f"Bienvenido, {usuario_encontrado['nombre']}."
     }
 
 @router.post("/logout")
-def logout(response: Response) -> Dict[str, Any]:
-    """Cierra la sesión actual eliminando la cookie HttpOnly."""
-    response.delete_cookie(key=COOKIE_NAME)
+def logout(request: Request, response: Response) -> Dict[str, Any]:
+    """Cierra la sesión actual eliminando la cookie HttpOnly con los mismos atributos de creación."""
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="strict",
+        secure=is_https
+    )
     return {"success": True, "mensaje": "Sesión cerrada exitosamente."}
 
 @router.get("/me", response_model=AuthStateResponse)
 def get_auth_state(request: Request) -> Dict[str, Any]:
-    """
-    Retorna el estado de autenticación actual del usuario.
-    Permite al frontend saber si la sesión es de Dueño o Vendedor.
-    """
+    """Retorna el estado de autenticación actual del usuario."""
     user = get_current_user_optional(request)
     if user:
         return {"authenticated": True, "user": user}

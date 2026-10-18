@@ -14,19 +14,26 @@ const App = {
 
     async verificarSesion() {
         try {
-            const res = await fetch('/api/auth/me');
-            if (res.ok) {
-                const data = await res.json();
-                if (data.authenticated && data.user && data.user.rol === 'dueno') {
-                    this.isAdmin = true;
-                    this.currentUser = data.user;
-                } else {
-                    this.isAdmin = false;
-                    this.currentUser = (data.authenticated && data.user) ? data.user : null;
+            let res = await fetch('/api/auth/me');
+            let data = res.ok ? await res.json() : null;
+            if (!data || !data.authenticated) {
+                // Iniciar sesión rápida por defecto en modo Vendedor (PIN de mostrador 1234)
+                const loginRes = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: '1234' })
+                });
+                if (loginRes.ok) {
+                    res = await fetch('/api/auth/me');
+                    data = await res.json();
                 }
+            }
+            if (data && data.authenticated && data.user && data.user.rol === 'dueno') {
+                this.isAdmin = true;
+                this.currentUser = data.user;
             } else {
                 this.isAdmin = false;
-                this.currentUser = null;
+                this.currentUser = (data && data.user) ? data.user : { rol: 'vendedor', nombre: 'Vendedor' };
             }
         } catch (e) {
             this.isAdmin = false;

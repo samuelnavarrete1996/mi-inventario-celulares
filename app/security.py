@@ -1,7 +1,7 @@
 """
 app/security.py - Módulo de Autenticación, Hashing, JWT y Control de Acceso por Roles (RBAC).
-Implementa sesiones seguras mediante cookies HttpOnly, rate-limiting contra fuerza bruta,
-y dependencias de autorización para FastAPI.
+Implementa sesiones seguras mediante cookies HttpOnly, rate-limiting persistente multi-worker
+contra fuerza bruta y dependencias de autorización para FastAPI.
 """
 
 import os
@@ -9,56 +9,145 @@ import time
 import hmac
 import hashlib
 import secrets
-from typing import Optional, Dict, List, Tuple
+import sqlite3
+import tempfile
+from typing import Optional, Dict, Any, Tuple
 import jwt
 from fastapi import Request, HTTPException, status, Depends
 
+def _load_dotenv_if_present() -> None:
+    """Carga variables desde .env local antes de inicializar secretos."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+_load_dotenv_if_present()
+
 # Clave secreta para firma de JWT (mínimo 32 bytes para HS256 según RFC 7518)
-_raw_secret = os.environ.get("JWT_SECRET") or os.environ.get("ADMIN_DELETE_PASSWORD") or "inventario-samuel-secret-key-2026-auth-prod"
+_raw_secret = os.environ.get("JWT_SECRET") or os.environ.get("ADMIN_DELETE_PASSWORD")
+if not _raw_secret:
+    # Si no se definió JWT_SECRET ni ADMIN_DELETE_PASSWORD, genera una clave efímera segura por instancia
+    _raw_secret = secrets.token_hex(32)
+
 JWT_SECRET = hashlib.sha256(_raw_secret.encode("utf-8")).hexdigest() if len(_raw_secret) < 32 else _raw_secret
 JWT_ALGORITHM = "HS256"
 COOKIE_NAME = "sid"
 
-# Rate Limiting en memoria para protección contra ataques de fuerza bruta
-# Estructura: { ip: [timestamp_fallo, ...] }
-_FAILED_LOGIN_ATTEMPTS: Dict[str, List[float]] = {}
-MAX_FAILED_ATTEMPTS = 5
+# Rate Limiting persistente en SQLite local (compartido entre múltiples workers de Uvicorn)
+MAX_FAILED_ATTEMPTS_IP = 5
+MAX_FAILED_ATTEMPTS_GLOBAL = 15
 LOCKOUT_SECONDS = 15 * 60  # 15 minutos
+_RATE_LIMIT_DB_PATH = os.path.join(tempfile.gettempdir(), "pos_rate_limit.sqlite3")
+
+def _get_rl_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(_RATE_LIMIT_DB_PATH, timeout=5.0)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS login_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip TEXT NOT NULL,
+            ts REAL NOT NULL
+        );
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_ts ON login_attempts(ip, ts);")
+    return conn
 
 def get_client_ip(request: Request) -> str:
-    """Extrae la IP real del cliente considerando encabezados de proxy (como Render o Cloudflare)."""
+    """
+    Extrae la IP real del cliente de forma segura detrás de Render / Cloudflare.
+    Evita IP Spoofing ignorando valores inyectados al inicio de X-Forwarded-For.
+    """
+    # 1. Encabezados verificados por el edge de Cloudflare/Render
+    for header in ("true-client-ip", "cf-connecting-ip"):
+        val = request.headers.get(header)
+        if val:
+            return val.strip()
+
+    # 2. En X-Forwarded-For, el último IP fue añadido por el proxy reverso confiable de Render
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        ips = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
+        if ips:
+            return ips[-1]
+
     return request.client.host if request.client else "127.0.0.1"
 
-def check_login_rate_limit(ip: str):
-    """Verifica si la IP está temporalmente bloqueada por exceso de intentos fallidos."""
+def check_login_rate_limit(ip: str) -> None:
+    """Verifica bloqueo por IP y límite global anti-spoofing en ventana deslizante."""
     now = time.time()
-    attempts = _FAILED_LOGIN_ATTEMPTS.get(ip, [])
-    # Filtrar solo los intentos dentro de la ventana de bloqueo
-    valid_attempts = [t for t in attempts if now - t < LOCKOUT_SECONDS]
-    _FAILED_LOGIN_ATTEMPTS[ip] = valid_attempts
+    cutoff = now - LOCKOUT_SECONDS
+    conn = _get_rl_conn()
+    try:
+        with conn:
+            conn.execute("DELETE FROM login_attempts WHERE ts < ?;", (cutoff,))
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*), MIN(ts) FROM login_attempts WHERE ip = ?;", (ip,))
+            row_ip = cur.fetchone()
+            ip_count = row_ip[0] if row_ip else 0
+            oldest_ip_ts = row_ip[1] if row_ip else None
 
-    if len(valid_attempts) >= MAX_FAILED_ATTEMPTS:
-        tiempo_restante = int(LOCKOUT_SECONDS - (now - valid_attempts[0]))
-        minutos = max(1, tiempo_restante // 60)
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Demasiados intentos fallidos. Acceso bloqueado temporalmente por {minutos} minutos."
-        )
+            if ip_count >= MAX_FAILED_ATTEMPTS_IP and oldest_ip_ts:
+                tiempo_restante = int(LOCKOUT_SECONDS - (now - oldest_ip_ts))
+                minutos = max(1, tiempo_restante // 60)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Demasiados intentos fallidos desde esta conexión. Bloqueado por {minutos} min."
+                )
 
-def record_failed_login_attempt(ip: str):
-    """Registra un fallo de autenticación para la IP dada."""
-    now = time.time()
-    if ip not in _FAILED_LOGIN_ATTEMPTS:
-        _FAILED_LOGIN_ATTEMPTS[ip] = []
-    _FAILED_LOGIN_ATTEMPTS[ip].append(now)
+            cur.execute("SELECT COUNT(*), MIN(ts) FROM login_attempts;")
+            row_global = cur.fetchone()
+            global_count = row_global[0] if row_global else 0
+            oldest_global_ts = row_global[1] if row_global else None
 
-def reset_login_attempts(ip: str):
-    """Limpia los intentos fallidos al iniciar sesión con éxito."""
-    if ip in _FAILED_LOGIN_ATTEMPTS:
-        del _FAILED_LOGIN_ATTEMPTS[ip]
+            if global_count >= MAX_FAILED_ATTEMPTS_GLOBAL and oldest_global_ts:
+                tiempo_restante = int(LOCKOUT_SECONDS - (now - oldest_global_ts))
+                minutos = max(1, tiempo_restante // 60)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Sistema protegido por actividad inusual. Intenta de nuevo en {minutos} min."
+                )
+    finally:
+        conn.close()
+
+def record_failed_login_attempt(ip: str) -> None:
+    """Registra un fallo de autenticación de forma persistente entre workers."""
+    conn = _get_rl_conn()
+    try:
+        with conn:
+            conn.execute("INSERT INTO login_attempts (ip, ts) VALUES (?, ?);", (ip, time.time()))
+    finally:
+        conn.close()
+
+def reset_login_attempts(ip: str) -> None:
+    """Limpia los intentos fallidos de la IP al iniciar sesión con éxito."""
+    conn = _get_rl_conn()
+    try:
+        with conn:
+            conn.execute("DELETE FROM login_attempts WHERE ip = ?;", (ip,))
+    finally:
+        conn.close()
+
+def reset_all_rate_limits() -> None:
+    """Limpia todos los intentos fallidos (usado en tests y mantenimiento)."""
+    conn = _get_rl_conn()
+    try:
+        with conn:
+            conn.execute("DELETE FROM login_attempts;")
+    finally:
+        conn.close()
 
 
 # --- Hashing seguro de Contraseñas y PINs con PBKDF2-HMAC-SHA256 ---
@@ -91,28 +180,70 @@ def verify_secret(secret: str, hash_hex: str, salt_hex: str) -> bool:
 # --- Manejo de Tokens JWT ---
 
 def create_access_token(user_id: int, username: str, rol: str, nombre: str, ttl_hours: int = 14) -> str:
-    """Crea un token JWT firmado con expiración."""
-    exp = int(time.time()) + (ttl_hours * 3600)
+    """Crea un token JWT firmado con expiración e identificador único (jti)."""
+    now = int(time.time())
     payload = {
         "sub": str(user_id),
         "username": username,
         "rol": rol,
         "nombre": nombre,
-        "exp": exp,
-        "iat": int(time.time())
+        "exp": now + (ttl_hours * 3600),
+        "iat": now,
+        "jti": secrets.token_hex(8)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def decode_access_token(token: str) -> Optional[dict]:
     """Decodifica y valida la firma y expiración de un token JWT."""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
+        return jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["sub", "rol", "exp", "iat"]}
+        )
     except (jwt.PyJWTError, Exception):
         return None
 
 
-# --- Dependencias de Seguridad para FastAPI ---
+# --- Dependencias de Seguridad y Sanitización RBAC para FastAPI ---
+
+CAMPOS_FINANCIEROS_SENSIBLES = {
+    "costo_compra",
+    "margen_proyectado",
+    "porcentaje_margen",
+    "margen_ganancia",
+    "margen_unitario",
+    "costo_refaccion",
+    "costo_pieza",
+    "utilidad_neta",
+    "utilidad_reparacion",
+    "costo_reemplazo",
+}
+
+def sanitizar_datos_sensibles(data: Any, user: Optional[dict]) -> Any:
+    """
+    Limpia recursivamente cualquier campo de costo o margen en diccionarios o listas
+    si el usuario autenticado no tiene el rol 'dueno'.
+    """
+    if is_user_dueno(user):
+        return data
+
+    if isinstance(data, list):
+        return [sanitizar_datos_sensibles(item, user) for item in data]
+
+    if isinstance(data, dict):
+        limpio = {}
+        for k, v in data.items():
+            if k in CAMPOS_FINANCIEROS_SENSIBLES:
+                limpio[k] = None
+            elif isinstance(v, (dict, list)):
+                limpio[k] = sanitizar_datos_sensibles(v, user)
+            else:
+                limpio[k] = v
+        return limpio
+
+    return data
 
 def get_current_user_optional(request: Request) -> Optional[dict]:
     """
@@ -121,7 +252,6 @@ def get_current_user_optional(request: Request) -> Optional[dict]:
     """
     token = request.cookies.get(COOKIE_NAME)
     if not token:
-        # Intentar desde encabezado Bearer (soporte para llamadas API externas)
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()

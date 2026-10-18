@@ -1,16 +1,32 @@
+import os
+if "ADMIN_DELETE_PASSWORD" not in os.environ:
+    os.environ["ADMIN_DELETE_PASSWORD"] = "erYHE7yse"
+
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.database import init_db
+from app.security import reset_all_rate_limits
+
+ADMIN_PASSWORD = os.environ["ADMIN_DELETE_PASSWORD"]
+
+async def login_as_admin(client: AsyncClient):
+    res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
+    assert res.status_code == 200
+    return res
 
 @pytest.fixture(autouse=True)
 def ensure_db():
     init_db()
+    reset_all_rate_limits()
+    yield
+    reset_all_rate_limits()
 
 @pytest.mark.anyio
 async def test_reparaciones_flujo_completo():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await login_as_admin(client)
         # 1. Crear nueva orden de reparación
         payload = {
             "cliente_nombre": "Roberto Gómez",

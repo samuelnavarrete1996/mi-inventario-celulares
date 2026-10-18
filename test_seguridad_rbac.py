@@ -15,7 +15,7 @@ import pytest
 import httpx
 from app.main import app
 from app.database import init_db, seed_demo_data_if_empty
-from app.security import _FAILED_LOGIN_ATTEMPTS
+from app.security import reset_all_rate_limits
 
 init_db()
 seed_demo_data_if_empty()
@@ -25,9 +25,9 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
 @pytest.fixture(autouse=True)
 def reset_rate_limits():
     """Limpia los contadores de intentos fallidos antes de cada test."""
-    _FAILED_LOGIN_ATTEMPTS.clear()
+    reset_all_rate_limits()
     yield
-    _FAILED_LOGIN_ATTEMPTS.clear()
+    reset_all_rate_limits()
 
 
 @pytest.mark.anyio
@@ -78,7 +78,7 @@ async def test_rate_limiting_fuerza_bruta():
         # El 6to intento debe ser rechazado inmediatamente con HTTP 429 Too Many Requests
         res_bloqueado = await client.post("/api/auth/login", json={"pin": "1234"})
         assert res_bloqueado.status_code == 429
-        assert "bloqueado temporalmente" in res_bloqueado.json()["detail"].lower()
+        assert "bloqueado" in res_bloqueado.json()["detail"].lower()
 
 
 @pytest.mark.anyio

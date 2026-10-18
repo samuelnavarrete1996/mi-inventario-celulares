@@ -1,17 +1,32 @@
 import os
+if "ADMIN_DELETE_PASSWORD" not in os.environ:
+    os.environ["ADMIN_DELETE_PASSWORD"] = "erYHE7yse"
+
 import pytest
 import time
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.database import init_db
+from app.security import reset_all_rate_limits
+
+ADMIN_PASSWORD = os.environ["ADMIN_DELETE_PASSWORD"]
+
+async def login_as_admin(client: AsyncClient):
+    res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
+    assert res.status_code == 200
+    return res
 
 @pytest.fixture(autouse=True)
 def setup_database():
     init_db()
+    reset_all_rate_limits()
+    yield
+    reset_all_rate_limits()
 
 @pytest.mark.anyio
 async def test_accesorios_crud():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        await login_as_admin(ac)
         suffix = str(int(time.time() * 1000))[-5:]
         # 1. Listar catálogo inicial
         res = await ac.get("/api/accesorios")
@@ -60,6 +75,7 @@ async def test_accesorios_crud():
 @pytest.mark.anyio
 async def test_venta_combinada_equipo_y_accesorio():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        await login_as_admin(ac)
         suffix = str(int(time.time() * 1000))[-6:]
         imei = f"88123456{suffix}"
 
@@ -129,6 +145,7 @@ async def test_venta_combinada_equipo_y_accesorio():
 @pytest.mark.anyio
 async def test_corte_de_caja_arqueo():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        await login_as_admin(ac)
         # 1. Obtener balance actual sugerido
         res_balance = await ac.get("/api/caja/resumen-actual")
         assert res_balance.status_code == 200
@@ -160,6 +177,7 @@ async def test_corte_de_caja_arqueo():
 @pytest.mark.anyio
 async def test_historial_imei_timeline():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        await login_as_admin(ac)
         suffix = str(int(time.time() * 1000))[-6:]
         imei_test = f"77665544{suffix}"
         res_eq = await ac.post("/api/equipos", json={
@@ -185,6 +203,7 @@ async def test_historial_imei_timeline():
 @pytest.mark.anyio
 async def test_antiguedad_stock_calculada():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        await login_as_admin(ac)
         res = await ac.get("/api/equipos")
         assert res.status_code == 200
         equipos = res.json()

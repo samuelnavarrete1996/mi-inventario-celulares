@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 
 class EquipoCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     modelo: str = Field(..., min_length=1, description="Modelo del teléfono, ej. iPhone 13")
     capacidad_gb: int = Field(..., gt=0, description="Capacidad en Gigabytes, ej. 128")
     color: str = Field(..., min_length=1, description="Color del teléfono, ej. Negro Medianoche")
@@ -25,6 +26,7 @@ class EquipoCreate(BaseModel):
         return v
 
 class EquipoUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     modelo: Optional[str] = None
     capacidad_gb: Optional[int] = None
     color: Optional[str] = None
@@ -94,6 +96,7 @@ class AccesorioResponse(BaseModel):
 # --- MODELOS DE CARRITO Y VENTAS ---
 
 class ItemCarrito(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     tipo_item: str = Field("equipo", description="'equipo' o 'accesorio'")
     equipo_id: Optional[int] = Field(None, description="ID del equipo celular (si aplica)")
     accesorio_id: Optional[int] = Field(None, description="ID del accesorio/servicio (si aplica)")
@@ -102,6 +105,7 @@ class ItemCarrito(BaseModel):
     precio_final: float = Field(..., ge=0, description="Precio acordado para esta línea")
 
 class VentaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     cliente_nombre: str = Field(..., min_length=2, description="Nombre del comprador")
     cliente_telefono: str = Field(..., min_length=7, description="Teléfono del comprador")
     metodo_pago: str = Field("Efectivo", description="Método de pago: Efectivo, Transferencia, Combinado, Equipo Garantía")
@@ -342,7 +346,7 @@ class ReparacionResponse(BaseModel):
     falla_reportada: str
     diagnostico_tecnico: Optional[str] = None
     condicion_recepcion: Optional[str] = None
-    costo_refaccion: float
+    costo_refaccion: Optional[float] = None
     precio_servicio: float
     anticipo: float
     saldo_pendiente: float
