@@ -4,9 +4,14 @@ const App = {
     currentTab: 'inventario',
     isAdmin: false, // Por seguridad: el backend determina el rol mediante cookie HttpOnly
     currentUser: null,
+    lockscreenPin: '',
+    inactivityTimer: null,
+    inactivityTimeoutMs: 15 * 60 * 1000, // Bloqueo automático tras 15 minutos sin interacción
 
     async init() {
         this.setupNavigation();
+        this.setupLockscreenListeners();
+        this.iniciarTemporizadorInactividad();
         await this.verificarSesion();
         this.updateHeaderStats();
         this.registerServiceWorker();
@@ -14,32 +19,263 @@ const App = {
 
     async verificarSesion() {
         try {
-            let res = await fetch('/api/auth/me');
-            let data = res.ok ? await res.json() : null;
-            if (!data || !data.authenticated) {
-                // Iniciar sesión rápida por defecto en modo Vendedor (PIN de mostrador 1234)
-                const loginRes = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pin: '1234' })
-                });
-                if (loginRes.ok) {
-                    res = await fetch('/api/auth/me');
-                    data = await res.json();
-                }
-            }
-            if (data && data.authenticated && data.user && data.user.rol === 'dueno') {
-                this.isAdmin = true;
+            const res = await fetch('/api/auth/me');
+            const data = res.ok ? await res.json() : null;
+            if (data && data.authenticated && data.user) {
                 this.currentUser = data.user;
+                this.isAdmin = (data.user.rol === 'dueno');
+                this.ocultarLockscreen();
             } else {
+                this.currentUser = null;
                 this.isAdmin = false;
-                this.currentUser = (data && data.user) ? data.user : { rol: 'vendedor', nombre: 'Vendedor' };
+                this.mostrarLockscreen();
             }
         } catch (e) {
-            this.isAdmin = false;
             this.currentUser = null;
+            this.isAdmin = false;
+            this.mostrarLockscreen();
         }
         this.aplicarModoAdmin();
+    },
+
+    setupLockscreenListeners() {
+        // Soporte para entrada directa desde teclado físico o lector numérico
+        window.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('modal-lockscreen');
+            if (!modal || modal.classList.contains('hidden')) return;
+
+            // Si está en la vista de contraseña de dueño, permitir escribir normal
+            const pwdView = document.getElementById('lockscreen-password-view');
+            if (pwdView && !pwdView.classList.contains('hidden')) {
+                if (e.key === 'Enter') {
+                    this.desbloquearConPassword();
+                }
+                return;
+            }
+
+            if (/^[0-9]$/.test(e.key)) {
+                e.preventDefault();
+                this.lockscreenPresionarDigito(e.key);
+            } else if (e.key === 'Backspace') {
+                e.preventDefault();
+                this.lockscreenBorrarDigito();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.lockscreenLimpiarPin();
+            }
+        });
+    },
+
+    iniciarTemporizadorInactividad() {
+        const reiniciarReloj = () => {
+            if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
+            if (this.currentUser) {
+                this.inactivityTimer = setTimeout(() => {
+                    this.bloquearPuntoDeVenta("Terminal bloqueada por inactividad.");
+                }, this.inactivityTimeoutMs);
+            }
+        };
+
+        ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+            window.addEventListener(evt, reiniciarReloj, { passive: true });
+        });
+        reiniciarReloj();
+    },
+
+    mostrarLockscreen(mensajeError = null) {
+        const modal = document.getElementById('modal-lockscreen');
+        if (modal) {
+            modal.classList.remove('hidden');
+            this.lockscreenLimpiarPin();
+            this.toggleLockscreenVista('pin');
+            const errBox = document.getElementById('lockscreen-error');
+            if (errBox) {
+                if (mensajeError) {
+                    errBox.textContent = mensajeError;
+                    errBox.classList.remove('hidden');
+                } else {
+                    errBox.classList.add('hidden');
+                }
+            }
+        }
+    },
+
+    ocultarLockscreen() {
+        const modal = document.getElementById('modal-lockscreen');
+        if (modal) {
+            modal.classList.add('hidden');
+            this.lockscreenLimpiarPin();
+            const errBox = document.getElementById('lockscreen-error');
+            if (errBox) errBox.classList.add('hidden');
+        }
+    },
+
+    toggleLockscreenVista(vista) {
+        const pinView = document.getElementById('lockscreen-pin-view');
+        const pwdView = document.getElementById('lockscreen-password-view');
+        const errBox = document.getElementById('lockscreen-error');
+        if (errBox) errBox.classList.add('hidden');
+
+        if (vista === 'password') {
+            if (pinView) pinView.classList.add('hidden');
+            if (pwdView) {
+                pwdView.classList.remove('hidden');
+                const pwdInput = document.getElementById('lockscreen-password');
+                if (pwdInput) setTimeout(() => pwdInput.focus(), 100);
+            }
+        } else {
+            if (pwdView) pwdView.classList.add('hidden');
+            if (pinView) pinView.classList.remove('hidden');
+            this.lockscreenLimpiarPin();
+        }
+    },
+
+    lockscreenPresionarDigito(digito) {
+        if (this.lockscreenPin.length >= 4) return;
+        this.lockscreenPin += digito;
+        this.actualizarPinDots();
+
+        if (this.lockscreenPin.length === 4) {
+            setTimeout(() => this.desbloquearConPin(this.lockscreenPin), 100);
+        }
+    },
+
+    lockscreenBorrarDigito() {
+        if (this.lockscreenPin.length > 0) {
+            this.lockscreenPin = this.lockscreenPin.slice(0, -1);
+            this.actualizarPinDots();
+        }
+    },
+
+    lockscreenLimpiarPin() {
+        this.lockscreenPin = '';
+        this.actualizarPinDots();
+    },
+
+    actualizarPinDots() {
+        const dots = document.querySelectorAll('#lockscreen-pin-dots .pin-dot');
+        dots.forEach((dot, idx) => {
+            if (idx < this.lockscreenPin.length) {
+                dot.className = 'w-4 h-4 rounded-full bg-blue-600 border-2 border-blue-600 scale-110 transition-all pin-dot shadow-sm';
+            } else {
+                dot.className = 'w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all pin-dot';
+            }
+        });
+    },
+
+    async desbloquearConPin(pin) {
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: pin })
+            });
+
+            if (res.status === 429) {
+                const data = await res.json().catch(() => ({}));
+                this.mostrarErrorLockscreen(data.detail || "Demasiados intentos fallidos. Bloqueado temporalmente.");
+                return;
+            }
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                this.mostrarErrorLockscreen(data.detail || "PIN incorrecto. Intenta de nuevo.");
+                return;
+            }
+
+            const data = await res.json();
+            this.currentUser = data.user;
+            this.isAdmin = (data.user && data.user.rol === 'dueno');
+            this.ocultarLockscreen();
+            this.aplicarModoAdmin();
+            this.recargarDatosTrasDesbloqueo();
+            this.iniciarTemporizadorInactividad();
+            this.showToast(`🔓 Bienvenido, ${data.user.nombre}.`, "success");
+        } catch (e) {
+            this.mostrarErrorLockscreen("Error de conexión al verificar PIN.");
+        }
+    },
+
+    async desbloquearConPassword() {
+        const userEl = document.getElementById('lockscreen-username');
+        const pwdEl = document.getElementById('lockscreen-password');
+        const username = userEl ? userEl.value.trim() : 'admin';
+        const password = pwdEl ? pwdEl.value.trim() : '';
+
+        if (!password) {
+            this.mostrarErrorLockscreen("Por favor ingresa la contraseña.");
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, password: password })
+            });
+
+            if (res.status === 429) {
+                const data = await res.json().catch(() => ({}));
+                this.mostrarErrorLockscreen(data.detail || "Demasiados intentos. Bloqueado temporalmente.");
+                return;
+            }
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                this.mostrarErrorLockscreen(data.detail || "Usuario o contraseña incorrectos.");
+                return;
+            }
+
+            const data = await res.json();
+            this.currentUser = data.user;
+            this.isAdmin = (data.user && data.user.rol === 'dueno');
+            this.ocultarLockscreen();
+            this.aplicarModoAdmin();
+            this.recargarDatosTrasDesbloqueo();
+            this.iniciarTemporizadorInactividad();
+            this.showToast(`👑 Bienvenido, ${data.user.nombre}. Modo Dueño activado.`, "success");
+        } catch (e) {
+            this.mostrarErrorLockscreen("Error de conexión al verificar credenciales.");
+        }
+    },
+
+    mostrarErrorLockscreen(msg) {
+        const errBox = document.getElementById('lockscreen-error');
+        if (errBox) {
+            errBox.textContent = msg;
+            errBox.classList.remove('hidden');
+        }
+        const container = document.getElementById('lockscreen-pin-dots');
+        if (container) {
+            container.classList.add('animate-pulse');
+            setTimeout(() => container.classList.remove('animate-pulse'), 500);
+        }
+        this.lockscreenLimpiarPin();
+    },
+
+    recargarDatosTrasDesbloqueo() {
+        if (typeof Inventario !== 'undefined' && Inventario.cargarEquipos) {
+            Inventario.cargarEquipos();
+        }
+        if (typeof Accesorios !== 'undefined' && Accesorios.cargar) {
+            Accesorios.cargar();
+        }
+        if (typeof Reparaciones !== 'undefined' && Reparaciones.cargar) {
+            Reparaciones.cargar();
+        }
+        this.updateHeaderStats();
+    },
+
+    async bloquearPuntoDeVenta(mensaje = "Punto de Venta bloqueado.") {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) {}
+
+        this.currentUser = null;
+        this.isAdmin = false;
+        this.aplicarModoAdmin();
+        this.mostrarLockscreen();
+        this.showToast(`🔒 ${mensaje}`, "info");
     },
 
     deferredPrompt: null,
@@ -172,45 +408,54 @@ const App = {
 
     async toggleAdminMode() {
         if (this.isAdmin) {
-            // Pasar a modo vendedor
+            // Pasar a modo vendedor solicitando PIN
+            const pin = prompt("Ingresa el PIN de Vendedor (ej. 1234) o presiona Cancelar para bloquear la pantalla:");
+            if (!pin) {
+                this.bloquearPuntoDeVenta("Sesión cerrada.");
+                return;
+            }
+
             try {
-                // Iniciar sesión como vendedor con PIN rápido (1234)
-                await fetch('/api/auth/login', {
+                const res = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pin: '1234' })
+                    body: JSON.stringify({ pin: pin.trim() })
                 });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    this.showToast(errData.detail || "PIN incorrecto. Modo Vendedor no activado.", "error");
+                    return;
+                }
+
+                const data = await res.json();
+                this.isAdmin = (data.user && data.user.rol === 'dueno');
+                this.currentUser = data.user;
+                this.aplicarModoAdmin();
+
+                if (this.currentTab === 'reportes') {
+                    this.switchTab('inventario');
+                }
+
+                this.recargarDatosTrasDesbloqueo();
+                this.showToast("🔒 Modo Vendedor activado. Costos y utilidades confidenciales protegidos.", "info");
             } catch (e) {
-                await fetch('/api/auth/logout', { method: 'POST' });
+                this.showToast("Error de conexión al cambiar modo.", "error");
             }
-
-            this.isAdmin = false;
-            this.currentUser = { rol: 'vendedor', nombre: 'Vendedor' };
-            this.aplicarModoAdmin();
-
-            if (this.currentTab === 'reportes') {
-                this.switchTab('inventario');
-            }
-
-            // Recargar datos para que el backend entregue respuestas sanitizadas sin costos
-            if (typeof Inventario !== 'undefined' && Inventario.cargarEquipos) {
-                Inventario.cargarEquipos();
-            }
-            if (typeof Accesorios !== 'undefined' && Accesorios.cargar) {
-                Accesorios.cargar();
-            }
-            this.updateHeaderStats();
-            this.showToast("🔒 Modo Vendedor activado. Costos y ganancias confidenciales ocultos.", "info");
         } else {
             // Solicitar contraseña o PIN de Dueño
             const pwd = prompt("[Seguridad] Ingresa la contraseña de administrador o PIN de Dueño:");
             if (!pwd) return;
 
             try {
+                const payload = /^\d{4}$/.test(pwd.trim())
+                    ? { pin: pwd.trim() }
+                    : { password: pwd.trim(), username: 'admin' };
+
                 const res = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: pwd, username: 'admin' })
+                    body: JSON.stringify(payload)
                 });
 
                 if (res.status === 429) {
@@ -230,18 +475,10 @@ const App = {
                     this.isAdmin = true;
                     this.currentUser = data.user;
                     this.aplicarModoAdmin();
-
-                    // Recargar datos para que el backend entregue costos y ganancias reales
-                    if (typeof Inventario !== 'undefined' && Inventario.cargarEquipos) {
-                        Inventario.cargarEquipos();
-                    }
-                    if (typeof Accesorios !== 'undefined' && Accesorios.cargar) {
-                        Accesorios.cargar();
-                    }
-                    this.updateHeaderStats();
+                    this.recargarDatosTrasDesbloqueo();
                     this.showToast(`👑 Bienvenido, ${data.user.nombre}. Modo Dueño activado.`, "success");
                 } else {
-                    this.showToast("El usuario autenticado no cuenta con rol de Dueño.", "warning");
+                    this.showToast("El PIN ingresado corresponde a Vendedor, no a Dueño.", "warning");
                 }
             } catch (e) {
                 this.showToast("Error de conexión al autenticar: " + e.message, "error");
