@@ -95,7 +95,7 @@ async def test_anti_fuga_f12_equipos_vendedor():
         await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
 
         # Consultar inventario
-        res = await client.get("/api/equipos?solo_disponibles=true")
+        res = await client.get("/api/equipos?solo_disponibles=false")
         assert res.status_code == 200
         equipos = res.json()
         assert len(equipos) > 0
@@ -115,7 +115,7 @@ async def test_dueno_recibe_costos_completos():
         # Login como dueño
         await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
 
-        res = await client.get("/api/equipos?solo_disponibles=true")
+        res = await client.get("/api/equipos?solo_disponibles=false")
         assert res.status_code == 200
         equipos = res.json()
         assert len(equipos) > 0

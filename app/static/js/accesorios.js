@@ -58,9 +58,11 @@ const Accesorios = {
         tbody.innerHTML = this.items.map(acc => {
             const stockBadge = acc.es_servicio 
                 ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">Servicio</span>`
-                : (acc.stock <= 5 
-                    ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700">Bajo (${acc.stock})</span>`
-                    : `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">${acc.stock} pzas</span>`);
+                : (acc.stock <= 0
+                    ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500 border border-slate-200">0 pzas</span>`
+                    : (acc.stock <= 5 
+                        ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Bajo (${acc.stock})</span>`
+                        : `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">${acc.stock} pzas</span>`));
 
             const pMay = acc.precio_mayoreo || acc.precio_venta || 0;
             const p20 = acc.precio_20_pzs || pMay;
@@ -108,6 +110,10 @@ const Accesorios = {
     abrirModalNuevo() {
         document.getElementById('form-accesorio').reset();
         document.getElementById('input-acc-id').value = '';
+        if (document.getElementById('input-acc-stock')) document.getElementById('input-acc-stock').value = '0';
+        if (document.getElementById('input-acc-costo')) document.getElementById('input-acc-costo').value = '0.00';
+        if (document.getElementById('input-acc-20-pzs')) document.getElementById('input-acc-20-pzs').value = '';
+        if (document.getElementById('input-acc-caja')) document.getElementById('input-acc-caja').value = '';
         document.getElementById('modal-accesorio-titulo').textContent = 'Nuevo Accesorio / Servicio';
         document.getElementById('modal-accesorio').classList.remove('hidden');
     },
@@ -124,7 +130,13 @@ const Accesorios = {
         document.getElementById('input-acc-nombre').value = item.nombre;
         document.getElementById('input-acc-categoria').value = item.categoria;
         document.getElementById('input-acc-costo').value = item.costo_compra;
-        document.getElementById('input-acc-precio').value = item.precio_venta;
+        document.getElementById('input-acc-precio').value = item.precio_mayoreo || item.precio_venta;
+        if (document.getElementById('input-acc-20-pzs')) {
+            document.getElementById('input-acc-20-pzs').value = item.precio_20_pzs || item.precio_mayoreo || item.precio_venta;
+        }
+        if (document.getElementById('input-acc-caja')) {
+            document.getElementById('input-acc-caja').value = item.precio_caja || item.costo_compra;
+        }
         document.getElementById('input-acc-stock').value = item.stock;
         document.getElementById('input-acc-servicio').checked = Boolean(item.es_servicio);
 
@@ -136,17 +148,36 @@ const Accesorios = {
         const id = document.getElementById('input-acc-id').value;
         const nombre = document.getElementById('input-acc-nombre').value.trim();
         const categoria = document.getElementById('input-acc-categoria').value;
-        const costo_compra = parseFloat(document.getElementById('input-acc-costo').value) || 0;
-        const precio_venta = parseFloat(document.getElementById('input-acc-precio').value) || 0;
+        const precio_mayoreo = parseFloat(document.getElementById('input-acc-precio').value) || 0;
+        const precio_20_pzs = parseFloat(document.getElementById('input-acc-20-pzs')?.value) || precio_mayoreo;
+        const precio_caja = parseFloat(document.getElementById('input-acc-caja')?.value) || 0;
+        let costo_compra = parseFloat(document.getElementById('input-acc-costo').value) || 0;
+        
+        // El costo más bajo por modelo
+        if (!costo_compra && precio_caja > 0) costo_compra = precio_caja;
+        if (!costo_compra && precio_mayoreo > 0) costo_compra = precio_mayoreo;
+
+        // El precio al que venderemos es precio mayoreo
+        const precio_venta = precio_mayoreo;
         const stock = parseInt(document.getElementById('input-acc-stock').value, 10) || 0;
         const es_servicio = document.getElementById('input-acc-servicio').checked;
 
         if (!nombre || precio_venta <= 0) {
-            App.showToast("Ingresa un nombre y precio de venta válidos", "error");
+            App.showToast("Ingresa un nombre y precio de mayoreo válidos", "error");
             return;
         }
 
-        const data = { nombre, categoria, costo_compra, precio_venta, stock, es_servicio };
+        const data = { 
+            nombre, 
+            categoria, 
+            costo_compra, 
+            precio_venta, 
+            precio_mayoreo, 
+            precio_20_pzs, 
+            precio_caja: precio_caja || costo_compra,
+            stock, 
+            es_servicio 
+        };
 
         try {
             let res;

@@ -1411,30 +1411,44 @@
                     <div>
                         <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Categoría *</label>
                         <select id="input-acc-categoria" required class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:outline-none">
-                            <option value="Fundas">Fundas</option>
-                            <option value="Micas y Micas 9D">Micas y Micas 9D</option>
                             <option value="Cargadores">Cargadores</option>
                             <option value="Cables">Cables</option>
                             <option value="Audio">Audio</option>
+                            <option value="Baterías">Baterías</option>
+                            <option value="Vasos y Termos">Vasos y Termos</option>
+                            <option value="Smartwatches">Smartwatches</option>
+                            <option value="Memorias">Memorias</option>
+                            <option value="Micas">Micas</option>
+                            <option value="Soportes">Soportes</option>
+                            <option value="Fundas">Fundas</option>
                             <option value="Reparaciones">Reparaciones / Servicio</option>
                             <option value="Otros">Otros</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Stock Inicial *</label>
-                        <input type="number" id="input-acc-stock" required min="0" value="10" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Stock Físico *</label>
+                        <input type="number" id="input-acc-stock" required min="0" value="0" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-3 gap-2">
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Costo de Compra ($)</label>
-                        <input type="number" id="input-acc-costo" step="0.50" min="0" value="0.00" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-bold">
+                        <label class="block text-[11px] font-bold text-blue-700 uppercase tracking-wider mb-1">Mayoreo (1+) *</label>
+                        <input type="number" id="input-acc-precio" required step="0.50" min="0" placeholder="0.00" class="w-full px-2.5 py-2 text-xs bg-blue-50/50 border border-blue-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-bold text-blue-700">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Precio al Público ($) *</label>
-                        <input type="number" id="input-acc-precio" required step="0.50" min="0" placeholder="0.00" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-bold text-blue-600">
+                        <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">+20 Piezas</label>
+                        <input type="number" id="input-acc-20-pzs" step="0.50" min="0" placeholder="0.00" class="w-full px-2.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-bold">
                     </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1">Por Caja</label>
+                        <input type="number" id="input-acc-caja" step="0.50" min="0" placeholder="0.00" class="w-full px-2.5 py-2 text-xs bg-emerald-50/50 border border-emerald-200 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:bg-white focus:outline-none font-bold text-emerald-700">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Costo de Compra (Costo más bajo / Caja) ($)</label>
+                    <input type="number" id="input-acc-costo" step="0.50" min="0" value="0.00" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-500 focus:bg-white focus:outline-none font-bold text-slate-700">
                 </div>
 
                 <div class="flex items-center gap-2 pt-1">
