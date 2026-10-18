@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#2563eb">
-    <title>Catálogo Oficial | Samuel Navarrete Celulares</title>
+    <title>Catálogo Oficial | Samuel Navarrete Celulares & Mayoreo</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter -->
@@ -16,13 +16,17 @@
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
+        /* Animación suave para drawer */
+        .drawer-transition {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
 
     <!-- BARRA SUPERIOR PÚBLICA -->
     <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-        <div class="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-3">
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 flex-shrink-0 font-black text-lg">
                     SN
@@ -32,15 +36,23 @@
                         Samuel Navarrete
                     </h1>
                     <p class="text-xs text-blue-600 font-semibold mt-0.5">
-                        📱 Catálogo de Celulares & Accesorios
+                        📱 Catálogo de Celulares & Accesorios Mayoreo
                     </p>
                 </div>
             </div>
 
             <div class="flex items-center gap-2">
-                <a href="#contacto" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-all">
-                    <span>💬 Contactar por WhatsApp</span>
+                <!-- Botón Ver Carrito Header -->
+                <button onclick="Catalogo.abrirCarrito()" class="relative inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer">
+                    <span class="text-sm">🛒</span>
+                    <span class="hidden sm:inline">Carrito</span>
+                    <span id="badge-cart-count" class="px-1.5 py-0.2 bg-white text-blue-700 rounded-full text-[10px] font-black">0</span>
+                </button>
+
+                <a href="#contacto" class="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-all">
+                    <span>💬 Contacto</span>
                 </a>
+
                 <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span id="badge-disponibles-count">0 disponibles</span>
@@ -50,22 +62,22 @@
     </header>
 
     <!-- HERO BANNER -->
-    <div class="bg-gradient-to-b from-blue-600 to-indigo-700 text-white px-4 py-8 sm:py-12 text-center relative overflow-hidden">
-        <div class="max-w-2xl mx-auto relative z-10 space-y-3">
+    <div class="bg-gradient-to-b from-blue-600 to-indigo-700 text-white px-4 py-8 sm:py-10 text-center relative overflow-hidden">
+        <div class="max-w-2xl mx-auto relative z-10 space-y-2.5">
             <span class="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-blue-100">
-                Garantía y Calidad 100% Verificada
+                Garantía y Precios Mayoristas
             </span>
             <h2 class="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-                Encuentra tu próximo celular garantizado
+                Celulares Garantizados & Accesorios por Mayoreo
             </h2>
             <p class="text-xs sm:text-sm text-blue-100 max-w-lg mx-auto">
-                Equipos nuevos y semi nuevos en excelente estado. Todos probados con póliza de garantía directa.
+                Arma tu pedido agregando productos al carrito. Al comprar <span class="font-bold underline decoration-amber-400 text-amber-200">+20 piezas</span> de un modelo se aplica automáticamente el precio especial.
             </p>
         </div>
     </div>
 
     <!-- CONTENEDOR PRINCIPAL -->
-    <main class="max-w-6xl mx-auto px-4 py-6 sm:py-8 flex-1 w-full space-y-6 pb-24 sm:pb-12">
+    <main class="max-w-6xl mx-auto px-4 py-6 sm:py-8 flex-1 w-full space-y-6 pb-28 sm:pb-12">
         
         <!-- BARRA DE BÚSQUEDA Y FILTROS -->
         <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
@@ -73,13 +85,16 @@
                 <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </span>
-                <input type="text" id="catalogo-search" oninput="Catalogo.filtrar()" placeholder="🔍 Buscar por modelo, marca o color (ej. iPhone 13, Galaxy, Xiaomi...)" class="w-full pl-11 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
+                <input type="text" id="catalogo-search" oninput="Catalogo.filtrar()" placeholder="🔍 Buscar por modelo, categoría o código (ej. Cargador 25W, Cable Tipo C, iPhone...)" class="w-full pl-11 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all">
             </div>
 
-            <!-- Chips de Filtro por Marca / Categoría -->
+            <!-- Chips de Filtro por Marca / Categoría Principal -->
             <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-                <button onclick="Catalogo.setMarca('', this)" class="chip-filter px-3.5 py-1.5 rounded-xl font-bold bg-blue-600 text-white shadow-xs whitespace-nowrap transition-all">
-                    Todos
+                <button onclick="Catalogo.setSeccion('accesorios', this)" class="chip-filter px-3.5 py-1.5 rounded-xl font-bold bg-blue-600 text-white shadow-xs whitespace-nowrap transition-all">
+                    🎧 Accesorios & Mayoreo (MK / 1Hora)
+                </button>
+                <button onclick="Catalogo.setMarca('', this)" class="chip-filter px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">
+                    📱 Todos los Teléfonos
                 </button>
                 <button onclick="Catalogo.setMarca('iPhone', this)" class="chip-filter px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">
                     🍏 iPhone
@@ -93,13 +108,10 @@
                 <button onclick="Catalogo.setMarca('Motorola', this)" class="chip-filter px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">
                     🔷 Motorola
                 </button>
-                <button onclick="Catalogo.setSeccion('accesorios', this)" class="chip-filter px-3.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">
-                    🎧 Accesorios & Micas
-                </button>
             </div>
 
             <!-- Sub-filtros para Categorías de Accesorios -->
-            <div id="subfiltros-accesorios" class="hidden flex items-center gap-1.5 overflow-x-auto pt-2.5 border-t border-slate-100 pb-1 scrollbar-none text-xs">
+            <div id="subfiltros-accesorios" class="flex items-center gap-1.5 overflow-x-auto pt-2.5 border-t border-slate-100 pb-1 scrollbar-none text-xs">
                 <button onclick="Catalogo.setCategoriaAcc('', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-blue-600 text-white whitespace-nowrap transition-all">Todos</button>
                 <button onclick="Catalogo.setCategoriaAcc('Cargadores', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">⚡ Cargadores</button>
                 <button onclick="Catalogo.setCategoriaAcc('Cables', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">🔌 Cables</button>
@@ -108,25 +120,26 @@
                 <button onclick="Catalogo.setCategoriaAcc('Vasos y Termos', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">🥤 Termos</button>
                 <button onclick="Catalogo.setCategoriaAcc('Smartwatches', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">⌚ Smartwatches</button>
                 <button onclick="Catalogo.setCategoriaAcc('Memorias', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">💾 Memorias</button>
-                <button onclick="Catalogo.setCategoriaAcc('Micas y Micas 9D', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">🛡️ Micas</button>
+                <button onclick="Catalogo.setCategoriaAcc('Micas', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">🛡️ Micas</button>
                 <button onclick="Catalogo.setCategoriaAcc('Soportes', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">🧲 Soportes</button>
+                <button onclick="Catalogo.setCategoriaAcc('Fundas', this)" class="chip-subacc px-3 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition-all">📱 Fundas</button>
             </div>
         </div>
 
         <!-- GRILLA DE PRODUCTOS -->
         <div>
             <div class="flex justify-between items-center mb-4">
-                <h3 id="catalogo-titulo-seccion" class="font-extrabold text-slate-900 text-lg">Teléfonos Disponibles para Entrega Inmediata</h3>
+                <h3 id="catalogo-titulo-seccion" class="font-extrabold text-slate-900 text-lg">Accesorios y Telefonía de Mayoreo</h3>
                 <span id="catalogo-items-count" class="text-xs text-slate-500 font-medium">--</span>
             </div>
 
             <!-- Contenedor de Celulares -->
-            <div id="grid-catalogo-equipos" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div id="grid-catalogo-equipos" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- Se llena con JS -->
             </div>
 
             <!-- Contenedor de Accesorios -->
-            <div id="grid-catalogo-accesorios" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div id="grid-catalogo-accesorios" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <!-- Se llena con JS -->
             </div>
 
@@ -135,8 +148,8 @@
                 <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 </div>
-                <h4 class="font-bold text-slate-800 text-base">No se encontraron productos</h4>
-                <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Prueba con otra búsqueda o comunícate directamente por WhatsApp si buscas un modelo especial.</p>
+                <h4 class="font-bold text-slate-800 text-base">No se encontraron productos en esta sección</h4>
+                <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Prueba con otra búsqueda o categoría, o contáctanos directamente por WhatsApp si buscas algún modelo especial.</p>
             </div>
         </div>
 
@@ -148,17 +161,17 @@
                 </div>
                 <div>
                     <h4 class="font-bold text-slate-900 text-sm">Garantía por Escrito</h4>
-                    <p class="text-xs text-slate-500 mt-0.5">Póliza y comprobante digital en cada compra para tu tranquilidad.</p>
+                    <p class="text-xs text-slate-500 mt-0.5">30 días de garantía directa en equipos y respaldo en accesorios.</p>
                 </div>
             </div>
 
             <div class="flex items-center gap-3.5">
                 <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl flex-shrink-0">
-                    ✅
+                    📦
                 </div>
                 <div>
-                    <h4 class="font-bold text-slate-900 text-sm">100% Funcional</h4>
-                    <p class="text-xs text-slate-500 mt-0.5">IMEI limpio, cámaras, batería, señal y bocinas revisadas a detalle.</p>
+                    <h4 class="font-bold text-slate-900 text-sm">Mayoreo y Descuento por Volumen</h4>
+                    <p class="text-xs text-slate-500 mt-0.5">Precios desde 1 pieza, con tarifa preferencial a partir de 20 pzs y caja cerrada.</p>
                 </div>
             </div>
 
@@ -167,42 +180,151 @@
                     ⚡
                 </div>
                 <div>
-                    <h4 class="font-bold text-slate-900 text-sm">Entrega Personal</h4>
-                    <p class="text-xs text-slate-500 mt-0.5">Pruébalo con calma antes de pagar en efectivo o transferencia.</p>
+                    <h4 class="font-bold text-slate-900 text-sm">Entrega Inmediata</h4>
+                    <p class="text-xs text-slate-500 mt-0.5">Entregas personales en bodega y envíos seguros a coordinar por WhatsApp.</p>
                 </div>
             </div>
         </div>
 
     </main>
 
-    <!-- BARRA FLOTANTE MÓVIL DE CONTACTO DIRECTO -->
-    <div class="fixed bottom-3 left-3 right-3 z-40 sm:hidden">
-        <a id="btn-whatsapp-flotante" href="https://wa.me/?text=Hola%20Samuel,%20estoy%20viendo%20tu%20catálogo%20en%20línea" target="_blank" class="w-full bg-emerald-600 active:bg-emerald-700 text-white font-bold py-3 px-4 rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 text-sm transition-all">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
-            <span>Preguntar por WhatsApp</span>
-        </a>
+    <!-- BARRA FLOTANTE MÓVIL (CARRITO / CONTACTO) -->
+    <div id="barra-flotante-carrito" class="fixed bottom-3 left-3 right-3 z-40">
+        <!-- Estado con Carrito Lleno -->
+        <div id="flotante-con-carrito" class="hidden">
+            <button onclick="Catalogo.abrirCarrito()" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black py-3.5 px-4 rounded-2xl shadow-xl shadow-blue-600/30 flex items-center justify-between text-sm transition-all border border-blue-500">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">🛒</span>
+                    <span id="flotante-piezas-txt" class="font-extrabold">0 piezas</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="flotante-total-txt" class="text-base font-black">$0.00</span>
+                    <span class="bg-white/20 px-2.5 py-1 rounded-xl text-xs font-bold">Ver Pedido ➔</span>
+                </div>
+            </button>
+        </div>
+
+        <!-- Estado Carrito Vacío: Contacto Directo WhatsApp -->
+        <div id="flotante-sin-carrito">
+            <a href="https://wa.me/?text=Hola%20Samuel,%20estoy%20viendo%20tu%20catálogo%20en%20línea" target="_blank" class="w-full bg-emerald-600 active:bg-emerald-700 text-white font-bold py-3 px-4 rounded-2xl shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 text-sm transition-all sm:hidden">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                <span>Preguntar por WhatsApp</span>
+            </a>
+        </div>
     </div>
 
-    <!-- SCRIPT DEL CATÁLOGO PÚBLICO -->
+    <!-- ==================================================== -->
+    <!-- SLIDE-OVER DRAWER DEL CARRITO DE COMPRAS MAYORISTA   -->
+    <!-- ==================================================== -->
+    <div id="drawer-carrito" class="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs transition-opacity duration-300 hidden">
+        <!-- Backdrop para cerrar -->
+        <div class="absolute inset-0" onclick="Catalogo.cerrarCarrito()"></div>
+
+        <!-- Panel lateral -->
+        <div class="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between z-10 drawer-transition">
+            <!-- Header del Carrito -->
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center text-lg font-black shadow-sm">
+                        🛒
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-slate-900 text-base leading-tight">Tu Pedido Mayorista</h3>
+                        <p class="text-[11px] text-slate-500 font-medium" id="cart-drawer-subtitle">0 productos agregados</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="Catalogo.vaciarCarrito()" class="text-xs text-rose-500 hover:text-rose-700 font-bold px-2 py-1 rounded-lg hover:bg-rose-50 transition-all cursor-pointer" title="Vaciar todo">
+                        Vaciar
+                    </button>
+                    <button onclick="Catalogo.cerrarCarrito()" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-all cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lista de Artículos -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-3" id="cart-drawer-items">
+                <!-- Se inyecta dinámicamente con JS -->
+            </div>
+
+            <!-- Footer con Desglose y Checkout por WhatsApp -->
+            <div class="p-4 border-t border-slate-100 bg-slate-50/90 space-y-3">
+                <!-- Desglose de Totales -->
+                <div class="bg-white rounded-xl p-3 border border-slate-200/90 space-y-1.5 text-xs shadow-2xs">
+                    <div class="flex justify-between text-slate-600">
+                        <span>Total de piezas:</span>
+                        <span id="cart-total-piezas" class="font-extrabold text-slate-900">0</span>
+                    </div>
+                    <div class="flex justify-between text-slate-600">
+                        <span>Subtotal base:</span>
+                        <span id="cart-subtotal" class="font-bold text-slate-700">$0.00</span>
+                    </div>
+                    <div id="cart-fila-ahorro" class="flex justify-between text-emerald-600 font-bold hidden bg-emerald-50/70 px-2 py-1 rounded-lg border border-emerald-100">
+                        <span>🎉 Ahorro Mayorista (+20 pzs):</span>
+                        <span id="cart-ahorro">-$0.00</span>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 flex justify-between items-baseline">
+                        <span class="text-sm font-black text-slate-900">Total a Pagar:</span>
+                        <span id="cart-total-final" class="text-2xl font-black text-blue-700 leading-none">$0.00</span>
+                    </div>
+                </div>
+
+                <!-- Datos del Cliente (Opcionales para personalizar mensaje) -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Tu Nombre (opcional)</label>
+                        <input type="text" id="cart-cliente-nombre" placeholder="Ej. Carlos Ruiz" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-0.5">Ciudad o Entrega</label>
+                        <input type="text" id="cart-cliente-ciudad" placeholder="Ej. Local / Encomienda" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Botón de Compra por WhatsApp -->
+                <button onclick="Catalogo.enviarPedidoWhatsApp()" class="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                    <span>Comprar por WhatsApp</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT DEL CATÁLOGO PÚBLICO & CARRITO MAYORISTA -->
     <script>
         const Catalogo = {
             equipos: [],
             accesorios: [],
+            carrito: [],
             marcaSeleccionada: '',
-            seccionActiva: 'equipos',
+            categoriaAccSeleccionada: '',
+            seccionActiva: 'accesorios',
+            _toastTimeout: null,
 
             async init() {
-                await this.cargarEquipos();
+                this.cargarCarritoDeStorage();
                 await this.cargarAccesorios();
+                await this.cargarEquipos();
+                this.actualizarBadges();
+
+                // Cerrar con Escape
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') this.cerrarCarrito();
+                });
             },
 
+            // --- CARGA DE DATOS ---
             async cargarEquipos() {
                 try {
                     const res = await fetch('/api/catalogo/equipos');
-                    if (!res.ok) throw new Error('Error al cargar catálogo');
+                    if (!res.ok) throw new Error('Error al cargar catálogo de celulares');
                     this.equipos = await res.json();
-                    document.getElementById('badge-disponibles-count').textContent = `${this.equipos.length} disponibles`;
-                    this.renderEquipos(this.equipos);
+                    const elBadge = document.getElementById('badge-disponibles-count');
+                    if (elBadge) elBadge.textContent = `${this.equipos.length} disponibles`;
+                    if (this.seccionActiva === 'equipos') {
+                        this.renderEquipos(this.equipos);
+                    }
                 } catch (e) {
                     console.error(e);
                 }
@@ -213,12 +335,16 @@
                     const res = await fetch('/api/catalogo/accesorios');
                     if (res.ok) {
                         this.accesorios = await res.json();
+                        if (this.seccionActiva === 'accesorios') {
+                            this.renderAccesorios(this.accesorios);
+                        }
                     }
                 } catch (e) {
                     console.error(e);
                 }
             },
 
+            // --- RENDERIZADO DE PRODUCTOS ---
             renderEquipos(lista) {
                 const grid = document.getElementById('grid-catalogo-equipos');
                 const empty = document.getElementById('catalogo-empty');
@@ -262,16 +388,20 @@
                             </div>
                         </div>
 
-                        <div class="pt-4 border-t border-slate-100 mt-4 flex items-end justify-between gap-3">
+                        <div class="pt-4 border-t border-slate-100 mt-4 flex items-end justify-between gap-2">
                             <div>
                                 <span class="text-[10px] text-slate-400 uppercase font-extrabold block">Precio de Contado</span>
-                                <span class="text-2xl font-black text-slate-900 leading-none">$${eq.precio_venta.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
+                                <span class="text-xl font-black text-slate-900 leading-none">$${eq.precio_venta.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
                             </div>
 
-                            <a href="${urlWA}" target="_blank" class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition-all flex-shrink-0">
-                                <span>Me interesa</span>
-                                <span>💬</span>
-                            </a>
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="Catalogo.agregarAlCarrito('equipo', ${eq.id})" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-xs transition-all cursor-pointer">
+                                    <span>🛒 + Carrito</span>
+                                </button>
+                                <a href="${urlWA}" target="_blank" class="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all" title="Preguntar por WhatsApp">
+                                    <span>💬</span>
+                                </a>
+                            </div>
                         </div>
                     </div>
                     `;
@@ -297,16 +427,17 @@
                     const p20 = acc.precio_20_pzs || pMay;
                     const pCaja = acc.precio_caja || acc.precio_20_pzs || pMay;
 
-                    const mensajeWA = encodeURIComponent(`¡Hola Samuel! Me interesa el producto *${acc.nombre}* de tu catálogo mayorista.\n• Mayoreo: $${pMay.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n• +20 Pzs: $${p20.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n• Por Caja: $${pCaja.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n¿Tienes disponible?`);
-                    const urlWA = `https://wa.me/?text=${mensajeWA}`;
-
                     const imgHtml = acc.imagen_url 
-                        ? `<div class="w-full h-44 bg-slate-50/80 rounded-xl overflow-hidden mb-3 flex items-center justify-center p-2.5 border border-slate-100 group-hover:border-blue-200 transition-colors">
+                        ? `<div class="w-full h-40 bg-slate-50/80 rounded-xl overflow-hidden mb-2.5 flex items-center justify-center p-2.5 border border-slate-100 group-hover:border-blue-200 transition-colors">
                                <img src="${acc.imagen_url}" alt="${acc.nombre}" class="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200" loading="lazy" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">
                            </div>`
-                        : `<div class="w-full h-44 bg-blue-50/50 rounded-xl mb-3 flex items-center justify-center text-4xl border border-blue-100/50">
+                        : `<div class="w-full h-40 bg-blue-50/50 rounded-xl mb-2.5 flex items-center justify-center text-4xl border border-blue-100/50">
                                ${acc.es_servicio ? '🔧' : '🔌'}
                            </div>`;
+
+                    // Verificar si ya está en carrito
+                    const itemEnCarro = this.carrito.find(it => it.tipo === 'accesorio' && it.id === acc.id);
+                    const cantEnCarro = itemEnCarro ? itemEnCarro.cantidad : 0;
 
                     return `
                     <div class="bg-white rounded-2xl border border-slate-200/90 hover:border-blue-400 p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
@@ -314,18 +445,19 @@
                             ${imgHtml}
                             <div class="flex items-center justify-between gap-1 mb-1">
                                 <span class="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">${acc.categoria}</span>
+                                ${cantEnCarro > 0 ? `<span class="text-[11px] font-black text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">En carro: ${cantEnCarro}</span>` : ''}
                             </div>
-                            <h4 class="font-bold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors">${acc.nombre}</h4>
+                            <h4 class="font-bold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">${acc.nombre}</h4>
                         </div>
 
                         <!-- 3 Niveles de Precio Mayorista -->
-                        <div class="pt-3 mt-3 border-t border-slate-100">
-                            <div class="bg-slate-50 rounded-xl p-2.5 mb-3 border border-slate-100 grid grid-cols-3 gap-1 text-center">
+                        <div class="pt-2.5 mt-2.5 border-t border-slate-100 space-y-2">
+                            <div class="bg-slate-50 rounded-xl p-2 border border-slate-100 grid grid-cols-3 gap-1 text-center">
                                 <div>
                                     <span class="text-[9px] uppercase font-extrabold text-slate-400 block tracking-tight">Mayoreo</span>
                                     <span class="text-xs font-black text-slate-900 leading-tight block mt-0.5">$${pMay.toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
                                 </div>
-                                <div class="border-x border-slate-200/80">
+                                <div class="border-x border-slate-200/80 bg-blue-50/60 rounded-md">
                                     <span class="text-[9px] uppercase font-extrabold text-blue-600 block tracking-tight">+20 Pzs</span>
                                     <span class="text-xs font-black text-blue-700 leading-tight block mt-0.5">$${p20.toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
                                 </div>
@@ -335,18 +467,435 @@
                                 </div>
                             </div>
 
-                            <a href="${urlWA}" target="_blank" class="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs shadow-emerald-600/20">
-                                <span>Pedir por WhatsApp</span>
-                                <span>💬</span>
-                            </a>
+                            <!-- Botones de Agregar al Carrito -->
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <button onclick="Catalogo.agregarAlCarrito('accesorio', ${acc.id}, 1)" class="w-full py-2 px-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer" title="Agregar 1 pieza a precio mayoreo">
+                                    <span>🛒 +1 Mayoreo</span>
+                                </button>
+                                <button onclick="Catalogo.agregarAlCarrito('accesorio', ${acc.id}, 20)" class="w-full py-2 px-1.5 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 active:from-blue-900 active:to-indigo-900 text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer" title="Agregar 20 piezas con precio especial">
+                                    <span>📦 +20 Pzs</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     `;
                 }).join('');
             },
 
-            categoriaAccSeleccionada: '',
+            // --- GESTIÓN DEL CARRITO ---
+            cargarCarritoDeStorage() {
+                try {
+                    const raw = localStorage.getItem('sn_catalogo_carrito');
+                    if (raw) {
+                        this.carrito = JSON.parse(raw);
+                    }
+                } catch (e) {
+                    this.carrito = [];
+                }
+            },
 
+            guardarCarritoEnStorage() {
+                try {
+                    localStorage.setItem('sn_catalogo_carrito', JSON.stringify(this.carrito));
+                } catch (e) {}
+                this.actualizarBadges();
+            },
+
+            agregarAlCarrito(tipo, id, cantidadASumar = 1) {
+                let itemExistente = this.carrito.find(it => it.tipo === tipo && it.id === id);
+
+                if (tipo === 'equipo') {
+                    const eq = this.equipos.find(e => e.id === id);
+                    if (!eq) return;
+
+                    if (itemExistente) {
+                        this.mostrarToast(`"${eq.modelo}" ya está en tu carrito`, '⚠️');
+                        this.abrirCarrito();
+                        return;
+                    }
+
+                    this.carrito.push({
+                        tipo: 'equipo',
+                        id: eq.id,
+                        modelo: eq.modelo,
+                        capacidad_gb: eq.capacidad_gb,
+                        color: eq.color,
+                        grado: eq.grado,
+                        precio_venta: eq.precio_venta,
+                        cantidad: 1,
+                        imagen_url: null
+                    });
+                    this.mostrarToast(`Agregado al carrito: ${eq.modelo}`, '🛒');
+                } else {
+                    const acc = this.accesorios.find(a => a.id === id);
+                    if (!acc) return;
+
+                    const pMay = acc.precio_mayoreo || acc.precio_venta || 0;
+                    const p20 = acc.precio_20_pzs || pMay;
+                    const pCaja = acc.precio_caja || p20;
+
+                    if (itemExistente) {
+                        itemExistente.cantidad += cantidadASumar;
+                    } else {
+                        this.carrito.push({
+                            tipo: 'accesorio',
+                            id: acc.id,
+                            nombre: acc.nombre,
+                            categoria: acc.categoria,
+                            imagen_url: acc.imagen_url,
+                            precio_mayoreo: pMay,
+                            precio_20_pzs: p20,
+                            precio_caja: pCaja,
+                            cantidad: cantidadASumar
+                        });
+                    }
+
+                    const cantFinal = itemExistente ? itemExistente.cantidad : cantidadASumar;
+                    if (cantFinal >= 20) {
+                        this.mostrarToast(`¡${acc.nombre} alcanzó ${cantFinal} pzs! Precio especial de +20 pzs aplicado ($${p20})`, '🎉');
+                    } else {
+                        this.mostrarToast(`Agregado al carrito: ${acc.nombre} (${cantFinal} pzs)`, '🛒');
+                    }
+                }
+
+                this.guardarCarritoEnStorage();
+                this.renderCarrito();
+                this.filtrar(); // Para refrescar contador en tarjeta
+            },
+
+            cambiarCantidad(tipo, id, delta) {
+                const item = this.carrito.find(it => it.tipo === tipo && it.id === id);
+                if (!item) return;
+
+                const nueva = (item.cantidad || 1) + delta;
+                if (nueva <= 0) {
+                    this.eliminarDelCarrito(tipo, id);
+                    return;
+                }
+
+                item.cantidad = nueva;
+                this.guardarCarritoEnStorage();
+                this.renderCarrito();
+                this.filtrar();
+            },
+
+            fijarCantidad(tipo, id, valorStr) {
+                const item = this.carrito.find(it => it.tipo === tipo && it.id === id);
+                if (!item) return;
+
+                let val = parseInt(valorStr, 10);
+                if (isNaN(val) || val <= 0) val = 1;
+
+                item.cantidad = val;
+                this.guardarCarritoEnStorage();
+                this.renderCarrito();
+                this.filtrar();
+            },
+
+            eliminarDelCarrito(tipo, id) {
+                this.carrito = this.carrito.filter(it => !(it.tipo === tipo && it.id === id));
+                this.guardarCarritoEnStorage();
+                this.renderCarrito();
+                this.filtrar();
+            },
+
+            vaciarCarrito() {
+                if (this.carrito.length === 0) return;
+                if (confirm("¿Deseas vaciar todos los productos del carrito?")) {
+                    this.carrito = [];
+                    this.guardarCarritoEnStorage();
+                    this.renderCarrito();
+                    this.filtrar();
+                    this.mostrarToast("Carrito vaciado", "🗑️");
+                }
+            },
+
+            // --- LÓGICA DE PRECIOS DINÁMICOS (+20 PZS) ---
+            calcularItem(item) {
+                if (item.tipo === 'equipo') {
+                    const pUnit = item.precio_venta || 0;
+                    return {
+                        precioUnitario: pUnit,
+                        subtotal: pUnit * (item.cantidad || 1),
+                        nivelTexto: 'Precio Contado',
+                        aplica20: false,
+                        ahorro: 0
+                    };
+                } else {
+                    const cant = item.cantidad || 1;
+                    const pMay = item.precio_mayoreo || item.precio_venta || 0;
+                    const p20 = (item.precio_20_pzs && item.precio_20_pzs > 0) ? item.precio_20_pzs : pMay;
+
+                    let precioUnitario = pMay;
+                    let nivelTexto = 'Mayoreo (1+)';
+                    let aplica20 = false;
+                    let ahorro = 0;
+
+                    // Si compra 20 o más piezas del mismo modelo, cambia automáticamente al precio de 20 pzs
+                    if (cant >= 20) {
+                        precioUnitario = p20;
+                        nivelTexto = '+20 Pzs (Precio Especial)';
+                        aplica20 = (p20 < pMay);
+                        ahorro = Math.max(0, (pMay - p20) * cant);
+                    }
+
+                    const subtotal = cant * precioUnitario;
+                    return {
+                        precioUnitario: precioUnitario,
+                        subtotal: subtotal,
+                        nivelTexto: nivelTexto,
+                        aplica20: aplica20,
+                        ahorro: ahorro,
+                        pMay: pMay,
+                        p20: p20,
+                        faltanPara20: Math.max(0, 20 - cant)
+                    };
+                }
+            },
+
+            calcularTotales() {
+                let totalPiezas = 0;
+                let subtotalBase = 0;
+                let ahorroTotal = 0;
+                let totalFinal = 0;
+
+                this.carrito.forEach(item => {
+                    const calc = this.calcularItem(item);
+                    totalPiezas += (item.cantidad || 1);
+                    subtotalBase += (item.tipo === 'equipo' ? calc.subtotal : ((item.precio_mayoreo || calc.precioUnitario) * item.cantidad));
+                    ahorroTotal += calc.ahorro;
+                    totalFinal += calc.subtotal;
+                });
+
+                return { totalPiezas, subtotalBase, ahorroTotal, totalFinal };
+            },
+
+            // --- RENDERIZADO DEL DRAWER DEL CARRITO ---
+            renderCarrito() {
+                const container = document.getElementById('cart-drawer-items');
+                const subtitle = document.getElementById('cart-drawer-subtitle');
+                if (!container) return;
+
+                const { totalPiezas, subtotalBase, ahorroTotal, totalFinal } = this.calcularTotales();
+
+                subtitle.textContent = `${this.carrito.length} modelos (${totalPiezas} piezas en total)`;
+
+                if (this.carrito.length === 0) {
+                    container.innerHTML = `
+                    <div class="py-16 text-center space-y-3">
+                        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-3xl mx-auto text-slate-400">
+                            🛒
+                        </div>
+                        <h4 class="font-bold text-slate-700 text-sm">Tu carrito está vacío</h4>
+                        <p class="text-xs text-slate-400 max-w-xs mx-auto">Explora nuestro catálogo y agrega los celulares y accesorios que deseas ordenar.</p>
+                        <button onclick="Catalogo.cerrarCarrito()" class="mt-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold rounded-xl text-xs transition-all cursor-pointer">
+                            Ver Productos
+                        </button>
+                    </div>
+                    `;
+                } else {
+                    container.innerHTML = this.carrito.map(item => {
+                        const calc = this.calcularItem(item);
+
+                        const imgHtml = item.imagen_url
+                            ? `<img src="${item.imagen_url}" class="w-14 h-14 object-contain rounded-xl border border-slate-100 bg-white p-1 flex-shrink-0" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
+                            : `<div class="w-14 h-14 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl flex-shrink-0">
+                                   ${item.tipo === 'equipo' ? '📱' : '🔌'}
+                               </div>`;
+
+                        const nombreItem = item.tipo === 'equipo' 
+                            ? `${item.modelo} (${item.capacidad_gb}GB - ${item.color})`
+                            : item.nombre;
+
+                        // Mensaje o badge de la regla de 20 piezas
+                        let infoPrecioHtml = '';
+                        if (item.tipo === 'accesorio') {
+                            if (calc.aplica20) {
+                                infoPrecioHtml = `
+                                <div class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-black">
+                                    <span>🎉 Precio +20 Pzs aplicado: $${calc.precioUnitario.toFixed(2)} c/u</span>
+                                    <span class="text-slate-400 line-through">($${calc.pMay.toFixed(2)})</span>
+                                </div>`;
+                            } else if (calc.faltanPara20 > 0 && calc.p20 < calc.pMay) {
+                                infoPrecioHtml = `
+                                <div class="flex items-center justify-between text-[10px] text-slate-500 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                                    <span>Mayoreo: $${calc.precioUnitario.toFixed(2)} c/u (Faltan ${calc.faltanPara20} para $${calc.p20.toFixed(2)})</span>
+                                    <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 20)" class="text-blue-600 hover:text-blue-800 font-black ml-1.5 underline cursor-pointer">
+                                        +20 Pzs
+                                    </button>
+                                </div>`;
+                            } else {
+                                infoPrecioHtml = `<span class="text-[11px] text-slate-500 font-medium">Mayoreo: $${calc.precioUnitario.toFixed(2)} c/u</span>`;
+                            }
+                        } else {
+                            infoPrecioHtml = `<span class="text-[11px] text-slate-500 font-medium">Grado ${item.grado} • $${calc.precioUnitario.toFixed(2)}</span>`;
+                        }
+
+                        return `
+                        <div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs space-y-2.5">
+                            <div class="flex items-start gap-3">
+                                ${imgHtml}
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.2 rounded-full border border-blue-100">
+                                            ${item.categoria || 'Celular'}
+                                        </span>
+                                        <button onclick="Catalogo.eliminarDelCarrito('${item.tipo}', ${item.id})" class="text-slate-400 hover:text-rose-600 p-0.5 transition-colors cursor-pointer" title="Eliminar">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
+                                    </div>
+                                    <h4 class="font-bold text-slate-900 text-xs leading-snug mt-1">${nombreItem}</h4>
+                                    <div class="mt-1">${infoPrecioHtml}</div>
+                                </div>
+                            </div>
+
+                            <!-- Controles de Cantidad y Subtotal -->
+                            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                                <div class="flex items-center gap-1">
+                                    ${item.tipo === 'accesorio' ? `
+                                    <div class="inline-flex items-center border border-slate-200 rounded-xl bg-slate-50 overflow-hidden">
+                                        <button onclick="Catalogo.cambiarCantidad('${item.tipo}', ${item.id}, -1)" class="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 font-bold text-sm cursor-pointer">-</button>
+                                        <input type="number" min="1" value="${item.cantidad}" onchange="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, this.value)" class="w-12 h-7 text-center text-xs font-black bg-white border-x border-slate-200 focus:outline-none">
+                                        <button onclick="Catalogo.cambiarCantidad('${item.tipo}', ${item.id}, 1)" class="w-7 h-7 flex items-center justify-center text-slate-600 hover:bg-slate-200 active:bg-slate-300 font-bold text-sm cursor-pointer">+</button>
+                                    </div>
+                                    ` : `
+                                    <span class="text-xs font-bold text-slate-500">1 Unidad única</span>
+                                    `}
+                                </div>
+
+                                <div class="text-right">
+                                    <span class="text-[10px] text-slate-400 block uppercase font-bold">Subtotal</span>
+                                    <span class="text-sm font-black text-slate-900 leading-none">$${calc.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}</span>
+                                </div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('');
+                }
+
+                // Actualizar bloque de totales
+                document.getElementById('cart-total-piezas').textContent = `${totalPiezas} piezas`;
+                document.getElementById('cart-subtotal').textContent = `$${subtotalBase.toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+                
+                const filaAhorro = document.getElementById('cart-fila-ahorro');
+                if (ahorroTotal > 0) {
+                    filaAhorro.classList.remove('hidden');
+                    document.getElementById('cart-ahorro').textContent = `-$${ahorroTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+                } else {
+                    filaAhorro.classList.add('hidden');
+                }
+
+                document.getElementById('cart-total-final').textContent = `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+            },
+
+            // --- APERTURA Y CIERRE DEL DRAWER ---
+            abrirCarrito() {
+                this.renderCarrito();
+                const drawer = document.getElementById('drawer-carrito');
+                drawer.classList.remove('hidden');
+            },
+
+            cerrarCarrito() {
+                const drawer = document.getElementById('drawer-carrito');
+                drawer.classList.add('hidden');
+            },
+
+            actualizarBadges() {
+                const { totalPiezas, totalFinal } = this.calcularTotales();
+                
+                // Badge del header
+                const badgeHeader = document.getElementById('badge-cart-count');
+                if (badgeHeader) badgeHeader.textContent = totalPiezas;
+
+                // Barra flotante móvil
+                const flotanteCon = document.getElementById('flotante-con-carrito');
+                const flotanteSin = document.getElementById('flotante-sin-carrito');
+                const piezasTxt = document.getElementById('flotante-piezas-txt');
+                const totalTxt = document.getElementById('flotante-total-txt');
+
+                if (totalPiezas > 0) {
+                    if (flotanteCon) flotanteCon.classList.remove('hidden');
+                    if (flotanteSin) flotanteSin.classList.add('hidden');
+                    if (piezasTxt) piezasTxt.textContent = `${totalPiezas} ${totalPiezas === 1 ? 'pieza' : 'piezas'}`;
+                    if (totalTxt) totalTxt.textContent = `$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+                } else {
+                    if (flotanteCon) flotanteCon.classList.add('hidden');
+                    if (flotanteSin) flotanteSin.classList.remove('hidden');
+                }
+            },
+
+            mostrarToast(mensaje, icono = '🛒') {
+                let toast = document.getElementById('catalogo-toast');
+                if (!toast) {
+                    toast = document.createElement('div');
+                    toast.id = 'catalogo-toast';
+                    toast.className = 'fixed top-16 right-4 z-50 bg-slate-900/95 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-bold transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-none border border-slate-700 max-w-sm';
+                    document.body.appendChild(toast);
+                }
+                toast.innerHTML = `<span class="text-base">${icono}</span><span class="leading-tight">${mensaje}</span>`;
+                toast.classList.remove('opacity-0', 'translate-y-2', 'pointer-events-none');
+                clearTimeout(this._toastTimeout);
+                this._toastTimeout = setTimeout(() => {
+                    toast.classList.add('opacity-0', 'translate-y-2', 'pointer-events-none');
+                }, 2600);
+            },
+
+            // --- CHECKOUT Y ENVÍO POR WHATSAPP ---
+            enviarPedidoWhatsApp() {
+                if (this.carrito.length === 0) {
+                    alert("Tu carrito está vacío. Agrega los productos que deseas pedir.");
+                    return;
+                }
+
+                const { totalPiezas, subtotalBase, ahorroTotal, totalFinal } = this.calcularTotales();
+                const clienteNombre = document.getElementById('cart-cliente-nombre')?.value.trim() || '';
+                const clienteCiudad = document.getElementById('cart-cliente-ciudad')?.value.trim() || '';
+
+                let texto = `*¡Hola Samuel! 👋 Quiero realizar el siguiente pedido mayorista desde tu catálogo web:*\n\n`;
+                texto += `🛒 *RESUMEN DEL PEDIDO:*\n`;
+                texto += `─────────────────────────\n`;
+
+                this.carrito.forEach((item, idx) => {
+                    const calc = this.calcularItem(item);
+                    const numero = `${idx + 1}️⃣`;
+                    
+                    if (item.tipo === 'equipo') {
+                        texto += `${numero} *${item.modelo}*\n`;
+                        texto += `   • Capacidad: ${item.capacidad_gb}GB | Color: ${item.color} | Grado ${item.grado}\n`;
+                        texto += `   • Cantidad: 1 unidad\n`;
+                        texto += `   • Precio: $${calc.precioUnitario.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
+                    } else {
+                        const tagDescuento = calc.aplica20 ? ` (✨ Precio +20 Pzs aplicado)` : ` (Mayoreo 1+)`;
+                        texto += `${numero} *${item.nombre}*\n`;
+                        texto += `   • Categoría: ${item.categoria}\n`;
+                        texto += `   • Cantidad: *${item.cantidad} piezas*${tagDescuento}\n`;
+                        texto += `   • Precio unitario: $${calc.precioUnitario.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
+                        texto += `   • Subtotal: *$${calc.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}*\n`;
+                    }
+                    texto += `\n`;
+                });
+
+                texto += `─────────────────────────\n`;
+                texto += `📦 *Total de piezas:* ${totalPiezas}\n`;
+                if (ahorroTotal > 0) {
+                    texto += `🎉 *Ahorro por volumen (+20 pzs):* -$${ahorroTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
+                }
+                texto += `💰 *TOTAL DE LA CUENTA:* *$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2})} MXN*\n\n`;
+
+                if (clienteNombre) {
+                    texto += `👤 *Cliente:* ${clienteNombre}\n`;
+                }
+                if (clienteCiudad) {
+                    texto += `📍 *Ciudad / Entrega:* ${clienteCiudad}\n`;
+                }
+
+                texto += `\n¿Me confirmas disponibilidad y los datos para pago y entrega? ¡Muchas gracias!`;
+
+                const urlWA = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+                window.open(urlWA, '_blank');
+            },
+
+            // --- FILTRADO Y VISTAS ---
             setMarca(marca, btn) {
                 this.seccionActiva = 'equipos';
                 this.marcaSeleccionada = marca;
