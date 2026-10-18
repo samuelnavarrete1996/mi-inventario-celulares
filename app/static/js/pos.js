@@ -954,7 +954,7 @@ const POS = {
 
         const garantiaEl = document.getElementById('recibo-garantia-texto');
         if (garantiaEl) {
-            garantiaEl.textContent = "Garantía válida únicamente con este comprobante original o número registrado. Aplica en placa base y componentes lógicos de fábrica (no cubre humedad, sobrecargas eléctricas, golpes o intervenciones ajenas).";
+            garantiaEl.textContent = "Garantía de 30 días válida únicamente con este comprobante original o número registrado. Aplica en placa base y componentes lógicos de fábrica (no cubre humedad, sobrecargas eléctricas, golpes o intervenciones ajenas).";
         }
 
         const modal = document.getElementById('modal-recibo-venta');
@@ -1015,8 +1015,8 @@ Muchas gracias por tu compra en *Mi Inventario Celulares*. Aquí tienes tu compr
 🛒 *DETALLE DE ARTÍCULOS:*
 ${itemsTexto}
 
-🛡️ *PÓLIZA DE GARANTÍA:*
-Válida presentando este comprobante o tu número registrado. Aplica directamente en placa base y funcionamiento de fábrica. No aplica en daños por humedad, golpes o intervención ajena.
+🛡️ *PÓLIZA DE GARANTÍA (30 DÍAS):*
+Garantía de 30 días válida presentando este comprobante o tu número registrado. Aplica directamente en placa base y funcionamiento de fábrica. No aplica en daños por humedad, golpes o intervención ajena.
 
 ¡Estamos a tus órdenes para lo que necesites! 🚀`;
 
