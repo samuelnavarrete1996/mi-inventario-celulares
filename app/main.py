@@ -22,6 +22,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Middleware anti-caché para archivos estáticos y Single Page Application
+@app.middleware("http")
+async def add_anti_cache_headers(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.endswith((".html", ".js", ".css", ".json")) or path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # Inicializar Base de Datos en el arranque
 @app.on_event("startup")
 def on_startup():

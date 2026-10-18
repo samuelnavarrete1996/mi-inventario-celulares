@@ -1,19 +1,19 @@
 // service-worker.js - PWA Offline Support & Cache Management
-const CACHE_NAME = 'mi-inventario-v6';
+const CACHE_NAME = 'mi-inventario-v8';
 const STATIC_ASSETS = [
   '/',
   '/catalogo',
   '/manifest.json',
-  '/static/css/custom.css?v=20261017_v6',
-  '/static/js/app.js?v=20261017_v6',
-  '/static/js/inventario.js?v=20261017_v6',
-  '/static/js/pos.js?v=20261017_v6',
-  '/static/js/accesorios.js?v=20261017_v6',
-  '/static/js/caja.js?v=20261017_v6',
-  '/static/js/garantias.js?v=20261017_v6',
-  '/static/js/reportes.js?v=20261017_v6',
-  '/static/js/reparaciones.js?v=20261017_v6',
-  '/static/js/etiquetas_scanner.js?v=20261017_v6',
+  '/static/css/custom.css?v=20261017_v8',
+  '/static/js/app.js?v=20261017_v8',
+  '/static/js/inventario.js?v=20261017_v8',
+  '/static/js/pos.js?v=20261017_v8',
+  '/static/js/accesorios.js?v=20261017_v8',
+  '/static/js/caja.js?v=20261017_v8',
+  '/static/js/garantias.js?v=20261017_v8',
+  '/static/js/reportes.js?v=20261017_v8',
+  '/static/js/reparaciones.js?v=20261017_v8',
+  '/static/js/etiquetas_scanner.js?v=20261017_v8',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
 ];
@@ -33,7 +33,10 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => {
+          console.log('Eliminando caché antiguo:', key);
+          return caches.delete(key);
+        })
       );
     }).then(() => self.clients.claim())
   );
@@ -73,20 +76,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Recursos estáticos (CSS, JS, iconos): Stale-While-Revalidate
+  // 3. Recursos estáticos (CSS, JS): NETWORK FIRST para garantizar siempre la versión más reciente
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.includes('/static/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 4. Otros recursos (imágenes, fuentes): Cache First con fallback a network
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      }).catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
+      return cachedResponse || fetch(event.request);
     })
   );
 });

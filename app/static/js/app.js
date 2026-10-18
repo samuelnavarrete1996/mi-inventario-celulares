@@ -364,18 +364,24 @@ const App = {
 
     registerServiceWorker() {
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
+            const doRegister = () => {
                 navigator.serviceWorker.register('/service-worker.js').then(reg => {
                     reg.update();
                 }).catch(e => console.warn(e));
+            };
 
-                let refreshing = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (!refreshing) {
-                        refreshing = true;
-                        window.location.reload();
-                    }
-                });
+            if (document.readyState === 'complete') {
+                doRegister();
+            } else {
+                window.addEventListener('load', doRegister);
+            }
+
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    window.location.reload();
+                }
             });
         }
 
