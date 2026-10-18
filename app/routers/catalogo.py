@@ -67,21 +67,22 @@ def obtener_accesorios_catalogo(
     cursor = conn.cursor()
 
     query = """
-    SELECT id, nombre, categoria, precio_venta, stock, es_servicio
+    SELECT id, nombre, categoria, precio_venta, precio_mayoreo, precio_20_pzs, precio_caja, imagen_url, stock, es_servicio
     FROM accesorios
-    WHERE (stock > 0 OR es_servicio = 1)
+    WHERE 1=1
     """
     params = []
 
     if categoria and categoria != "Todos":
-        query += " AND categoria = ?"
-        params.append(categoria)
+        cat_clean = categoria.rstrip('s').rstrip('es')
+        query += " AND (categoria = ? OR categoria LIKE ?)"
+        params.extend([categoria, f"{cat_clean}%"])
 
     if search:
-        query += " AND nombre LIKE ?"
-        params.append(f"%{search.strip()}%")
+        query += " AND (nombre LIKE ? OR categoria LIKE ?)"
+        params.extend([f"%{search.strip()}%", f"%{search.strip()}%"])
 
-    query += " ORDER BY nombre ASC"
+    query += " ORDER BY id ASC"
     cursor.execute(query, params)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()

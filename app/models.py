@@ -70,7 +70,11 @@ class AccesorioCreate(BaseModel):
     categoria: str = Field("Accesorio", description="Funda, Mica, Cargador, Cable, Audio, Reparación, Servicio, Accesorio, Otro")
     codigo_barras: Optional[str] = Field(None, description="Código de barras o SKU del producto")
     costo_compra: float = Field(0.0, ge=0, description="Costo unitario de compra")
-    precio_venta: float = Field(..., gt=0, description="Precio de venta unitario")
+    precio_venta: float = Field(..., ge=0, description="Precio de venta unitario")
+    precio_mayoreo: Optional[float] = Field(0.0, ge=0, description="Precio de mayoreo (1+ pzas)")
+    precio_20_pzs: Optional[float] = Field(0.0, ge=0, description="Precio para más de 20 piezas")
+    precio_caja: Optional[float] = Field(0.0, ge=0, description="Precio por caja cerrada")
+    imagen_url: Optional[str] = Field(None, description="URL o ruta de la fotografía del producto")
     stock: int = Field(0, ge=0, description="Cantidad en stock")
     es_servicio: bool = Field(False, description="True si es servicio/mano de obra")
 
@@ -81,6 +85,10 @@ class AccesorioUpdate(BaseModel):
     codigo_barras: Optional[str] = None
     costo_compra: Optional[float] = None
     precio_venta: Optional[float] = None
+    precio_mayoreo: Optional[float] = None
+    precio_20_pzs: Optional[float] = None
+    precio_caja: Optional[float] = None
+    imagen_url: Optional[str] = None
     stock: Optional[int] = None
     es_servicio: Optional[bool] = None
 
@@ -91,6 +99,10 @@ class AccesorioResponse(BaseModel):
     codigo_barras: Optional[str] = None
     costo_compra: Optional[float] = None
     precio_venta: float
+    precio_mayoreo: Optional[float] = 0.0
+    precio_20_pzs: Optional[float] = 0.0
+    precio_caja: Optional[float] = 0.0
+    imagen_url: Optional[str] = None
     stock: int
     es_servicio: int
     fecha_registro: str

@@ -856,9 +856,13 @@ def get_dashboard_metrics() -> Dict[str, Any]:
 
 def format_accesorio_dict(row: sqlite3.Row) -> Dict[str, Any]:
     d = dict(row)
-    c = float(d.get("costo_compra", 0.0))
-    p = float(d.get("precio_venta", 0.0))
+    c = float(d.get("costo_compra", 0.0) or 0.0)
+    p = float(d.get("precio_venta", 0.0) or 0.0)
     d["margen_unitario"] = round(p - c, 2)
+    d["precio_mayoreo"] = float(d.get("precio_mayoreo") or p)
+    d["precio_20_pzs"] = float(d.get("precio_20_pzs") or d.get("precio_mayoreo") or p)
+    d["precio_caja"] = float(d.get("precio_caja") or c)
+    d["imagen_url"] = d.get("imagen_url")
     return d
 
 def get_accesorios(
@@ -872,8 +876,9 @@ def get_accesorios(
     params = []
 
     if categoria and categoria != "Todos":
-        query += " AND categoria = ?"
-        params.append(categoria)
+        cat_clean = categoria.rstrip('s').rstrip('es')
+        query += " AND (categoria = ? OR categoria LIKE ?)"
+        params.extend([categoria, f"{cat_clean}%"])
 
     if solo_con_stock:
         query += " AND (stock > 0 OR es_servicio = 1)"
@@ -897,19 +902,35 @@ def get_accesorio_by_id(acc_id: int) -> Optional[Dict[str, Any]]:
     conn.close()
     return format_accesorio_dict(row) if row else None
 
-def create_accesorio(nombre: str, categoria: str, costo_compra: float, precio_venta: float, stock: int, es_servicio: bool, codigo_barras: Optional[str] = None) -> Dict[str, Any]:
+def create_accesorio(
+    nombre: str,
+    categoria: str,
+    costo_compra: float,
+    precio_venta: float,
+    stock: int,
+    es_servicio: bool,
+    codigo_barras: Optional[str] = None,
+    precio_mayoreo: float = 0.0,
+    precio_20_pzs: float = 0.0,
+    precio_caja: float = 0.0,
+    imagen_url: Optional[str] = None
+) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-    INSERT INTO accesorios (nombre, categoria, codigo_barras, costo_compra, precio_venta, stock, es_servicio, fecha_registro)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO accesorios (nombre, categoria, codigo_barras, costo_compra, precio_venta, precio_mayoreo, precio_20_pzs, precio_caja, imagen_url, stock, es_servicio, fecha_registro)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         nombre.strip(),
         categoria.strip(),
         codigo_barras.strip() if codigo_barras else None,
         round(costo_compra, 2),
         round(precio_venta, 2),
+        round(precio_mayoreo or precio_venta, 2),
+        round(precio_20_pzs or precio_mayoreo or precio_venta, 2),
+        round(precio_caja or costo_compra, 2),
+        imagen_url.strip() if imagen_url else None,
         stock if not es_servicio else 999,
         1 if es_servicio else 0,
         now
@@ -928,14 +949,14 @@ def update_accesorio(acc_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, A
         return None
 
     fields, values = [], []
-    for k in ("nombre", "categoria", "codigo_barras", "costo_compra", "precio_venta", "stock", "es_servicio"):
+    for k in ("nombre", "categoria", "codigo_barras", "costo_compra", "precio_venta", "precio_mayoreo", "precio_20_pzs", "precio_caja", "imagen_url", "stock", "es_servicio"):
         if k in datos and datos[k] is not None:
             fields.append(f"{k} = ?")
-            if k in ("costo_compra", "precio_venta"):
+            if k in ("costo_compra", "precio_venta", "precio_mayoreo", "precio_20_pzs", "precio_caja"):
                 values.append(round(float(datos[k]), 2))
             elif k == "es_servicio":
                 values.append(1 if datos[k] else 0)
-            elif k == "codigo_barras":
+            elif k in ("codigo_barras", "imagen_url"):
                 values.append(datos[k].strip() if datos[k] else None)
             else:
                 values.append(datos[k])

@@ -62,23 +62,29 @@ const Accesorios = {
                     ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700">Bajo (${acc.stock})</span>`
                     : `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">${acc.stock} pzas</span>`);
 
+            const pMay = acc.precio_mayoreo || acc.precio_venta || 0;
+            const p20 = acc.precio_20_pzs || pMay;
+            const pCaja = acc.precio_caja || acc.costo_compra || p20;
+
+            const imgHtml = acc.imagen_url 
+                ? `<img src="${acc.imagen_url}" class="w-11 h-11 object-contain rounded-xl border border-slate-200 bg-white p-1 flex-shrink-0 shadow-2xs" alt="${acc.nombre}" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
+                : `<span class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg flex-shrink-0">${acc.es_servicio ? '🔧' : '🔌'}</span>`;
+
             return `
             <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs sm:text-sm">
                 <td class="py-3 px-4 font-bold text-slate-800">
-                    <div class="flex items-center gap-2">
-                        <span class="p-1.5 rounded-lg bg-blue-50 text-blue-600">
-                            ${acc.es_servicio ? '🔧' : '🔌'}
-                        </span>
+                    <div class="flex items-center gap-3">
+                        ${imgHtml}
                         <div>
-                            <div>${acc.nombre}</div>
+                            <div class="leading-snug">${acc.nombre}</div>
                             <span class="text-xs text-slate-400 font-normal">${acc.categoria}</span>
                         </div>
                     </div>
                 </td>
-                <td class="py-3 px-4 text-slate-600">${acc.categoria}</td>
-                <td class="py-3 px-4 text-slate-600 admin-only">${App.formatCurrency(acc.costo_compra)}</td>
-                <td class="py-3 px-4 font-bold text-slate-900">${App.formatCurrency(acc.precio_venta)}</td>
-                <td class="py-3 px-4 text-emerald-600 font-semibold admin-only">+${App.formatCurrency(acc.margen_unitario)}</td>
+                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${acc.categoria}</td>
+                <td class="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">${App.formatCurrency(pMay)}</td>
+                <td class="py-3 px-4 whitespace-nowrap"><span class="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">${App.formatCurrency(p20)}</span></td>
+                <td class="py-3 px-4 whitespace-nowrap"><span class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">${App.formatCurrency(pCaja)}</span></td>
                 <td class="py-3 px-4">${stockBadge}</td>
                 <td class="py-3 px-4 text-right space-x-1">
                     <button onclick="POS.agregarAccesorioAlCarrito(${acc.id})" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition-all" title="Vender en POS">

@@ -216,28 +216,26 @@ def init_db():
 
     cursor.execute("PRAGMA table_info(accesorios);")
     acc_cols = [row["name"] for row in cursor.fetchall()]
-    if "codigo_barras" not in acc_cols:
-        cursor.execute("PRAGMA foreign_keys = OFF;")
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS accesorios_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL,
-            categoria TEXT NOT NULL DEFAULT 'Accesorio',
-            codigo_barras TEXT,
-            costo_compra REAL NOT NULL DEFAULT 0,
-            precio_venta REAL NOT NULL DEFAULT 0,
-            stock INTEGER NOT NULL DEFAULT 0,
-            es_servicio INTEGER NOT NULL DEFAULT 0,
-            fecha_registro TEXT NOT NULL
-        );
-        """)
-        cursor.execute("""
-        INSERT INTO accesorios_new (id, nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro)
-        SELECT id, nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro FROM accesorios;
-        """)
-        cursor.execute("DROP TABLE accesorios;")
-        cursor.execute("ALTER TABLE accesorios_new RENAME TO accesorios;")
-        cursor.execute("PRAGMA foreign_keys = ON;")
+    if "precio_mayoreo" not in acc_cols:
+        try:
+            cursor.execute("ALTER TABLE accesorios ADD COLUMN precio_mayoreo REAL NOT NULL DEFAULT 0;")
+        except Exception:
+            pass
+    if "precio_20_pzs" not in acc_cols:
+        try:
+            cursor.execute("ALTER TABLE accesorios ADD COLUMN precio_20_pzs REAL NOT NULL DEFAULT 0;")
+        except Exception:
+            pass
+    if "precio_caja" not in acc_cols:
+        try:
+            cursor.execute("ALTER TABLE accesorios ADD COLUMN precio_caja REAL NOT NULL DEFAULT 0;")
+        except Exception:
+            pass
+    if "imagen_url" not in acc_cols:
+        try:
+            cursor.execute("ALTER TABLE accesorios ADD COLUMN imagen_url TEXT;")
+        except Exception:
+            pass
 
     # 7. Tabla Cortes de Caja Diarios (Arqueo / Reporte Z)
     cursor.execute("""

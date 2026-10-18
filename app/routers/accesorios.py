@@ -34,7 +34,11 @@ def crear_accesorio(datos: AccesorioCreate, user: dict = Depends(require_role("d
             precio_venta=datos.precio_venta,
             stock=datos.stock,
             es_servicio=datos.es_servicio,
-            codigo_barras=datos.codigo_barras
+            codigo_barras=datos.codigo_barras,
+            precio_mayoreo=datos.precio_mayoreo or datos.precio_venta,
+            precio_20_pzs=datos.precio_20_pzs or datos.precio_mayoreo or datos.precio_venta,
+            precio_caja=datos.precio_caja or datos.costo_compra,
+            imagen_url=datos.imagen_url
         )
         return sanitizar_datos_sensibles(nuevo, user)
     except Exception as e:
