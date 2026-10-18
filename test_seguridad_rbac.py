@@ -20,7 +20,7 @@ from app.security import reset_all_rate_limits
 init_db()
 seed_demo_data_if_empty()
 
-ADMIN_PASSWORD = os.environ.get("ADMIN_DELETE_PASSWORD", "piso6bodega606.")
+ADMIN_PASSWORD = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
 
 @pytest.fixture(autouse=True)
 def reset_rate_limits():
@@ -28,6 +28,18 @@ def reset_rate_limits():
     reset_all_rate_limits()
     yield
     reset_all_rate_limits()
+
+
+@pytest.mark.anyio
+async def test_login_vendedor_con_contrasena_inicio():
+    """El vendedor puede autenticarse con la contraseña de inicio oficial 'piso6bodega606.'."""
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        res = await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["success"] is True
+        assert data["user"]["rol"] == "vendedor"
+        assert "sid" in client.cookies
 
 
 @pytest.mark.anyio

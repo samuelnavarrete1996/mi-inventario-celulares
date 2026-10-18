@@ -228,8 +228,8 @@ const App = {
             return;
         }
 
-        // Si son 4 dígitos numéricos, enviamos como pin. Si es contraseña/texto, enviamos como admin
-        const payload = /^\d{4}$/.test(val) ? { pin: val } : { username: 'admin', password: val };
+        // Enviamos el valor como pin/secreto para que el backend evalúe si es contraseña de inicio (vendedor) o de dueño (admin)
+        const payload = { pin: val };
 
         try {
             const res = await fetch('/api/auth/login', {

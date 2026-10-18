@@ -9,7 +9,7 @@ Test suite integral para verificar todas las operaciones del backend:
 """
 import os
 if "ADMIN_DELETE_PASSWORD" not in os.environ:
-    os.environ["ADMIN_DELETE_PASSWORD"] = "piso6bodega606."
+    os.environ["ADMIN_DELETE_PASSWORD"] = "erYHE7yse"
 
 import pytest
 import httpx

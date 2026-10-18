@@ -18,7 +18,7 @@ def verify_delete_password(entered_token: Optional[str]) -> bool:
     """Verifica en tiempo constante si el token ingresado coincide con ADMIN_DELETE_PASSWORD."""
     if not entered_token:
         return False
-    env_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "piso6bodega606.")
+    env_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
     token_clean = entered_token.strip()
     return (
         hmac.compare_digest(token_clean.encode("utf-8"), env_pwd.encode("utf-8"))

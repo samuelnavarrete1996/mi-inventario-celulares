@@ -408,9 +408,10 @@ def seed_demo_data_if_empty():
     # Sembrar o actualizar usuarios
     cursor.execute("SELECT COUNT(*) as count FROM usuarios;")
     from app.security import hash_secret
-    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "piso6bodega606.")
+    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
     admin_hash, admin_salt = hash_secret(admin_pwd)
-    vendedor_hash, vendedor_salt = hash_secret("1234")
+    vendedor_pwd = "piso6bodega606."
+    vendedor_hash, vendedor_salt = hash_secret(vendedor_pwd)
 
     if cursor.fetchone()["count"] == 0:
         usuarios_init = [
@@ -423,8 +424,9 @@ def seed_demo_data_if_empty():
         """, usuarios_init)
         conn.commit()
     else:
-        # Actualizar contraseña de Dueño en la base de datos existente
+        # Actualizar contraseña de Dueño y de inicio (vendedor) en la base de datos existente
         cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'admin';", (admin_hash, admin_salt))
+        cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'vendedor';", (vendedor_hash, vendedor_salt))
         conn.commit()
 
     conn.close()

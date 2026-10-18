@@ -1961,13 +1961,13 @@
             </div>
             
             <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Punto de Venta Bloqueado</h2>
-            <p class="text-xs text-slate-500 mt-1 mb-5">Ingresa tu PIN de mostrador o contraseña de Dueño</p>
+            <p class="text-xs text-slate-500 mt-1 mb-5">Ingresa la contraseña de inicio o tu acceso de Dueño</p>
             
             <!-- Vista 1: Teclado de PIN o Contraseña -->
             <div id="lockscreen-pin-view">
                 <!-- Input visible con botón de ojo para ver contraseña o PIN -->
                 <div class="relative mb-3">
-                    <input type="password" id="lockscreen-pin-input" placeholder="Ingresa contraseña o PIN..." class="w-full pl-4 pr-11 py-3 text-center text-base tracking-wider bg-slate-50 border-2 border-slate-200 rounded-2xl focus:bg-white focus:border-blue-500 focus:outline-none transition-all font-semibold text-slate-800 shadow-inner" autofocus autocomplete="off" />
+                    <input type="password" id="lockscreen-pin-input" placeholder="piso6bodega606." class="w-full pl-4 pr-11 py-3 text-center text-base tracking-wider bg-slate-50 border-2 border-slate-200 rounded-2xl focus:bg-white focus:border-blue-500 focus:outline-none transition-all font-semibold text-slate-800 shadow-inner" autofocus autocomplete="off" />
                     <button type="button" onclick="App.toggleLockscreenInputEye()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 text-sm select-none" id="btn-lockscreen-eye" title="Mostrar/ocultar texto">
                         👁️
                     </button>
@@ -1998,7 +1998,7 @@
                 </div>
 
                 <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <span class="text-slate-400">PIN Vendedor: <b>1234</b></span>
+                    <span class="text-slate-400">Inicio: <b>piso6bodega606.</b></span>
                     <button type="button" onclick="App.toggleLockscreenVista('password')" class="font-semibold text-blue-600 hover:text-blue-800 transition-colors">
                         👑 Login Dueño
                     </button>
@@ -2013,7 +2013,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">Contraseña de Dueño</label>
-                    <input type="password" id="lockscreen-password" placeholder="piso6bodega606." class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                    <input type="password" id="lockscreen-password" placeholder="Contraseña de Dueño" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                 </div>
                 <button type="button" onclick="App.desbloquearConPassword()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm">
                     Desbloquear como Dueño
