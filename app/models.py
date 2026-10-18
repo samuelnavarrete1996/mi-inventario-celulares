@@ -52,6 +52,7 @@ class EquipoResponse(BaseModel):
     estado_antiguedad: Optional[str] = "Fresco"
 
 class ClienteCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=2, description="Nombre completo del cliente")
     telefono: str = Field(..., min_length=7, description="Teléfono de contacto")
 
@@ -64,6 +65,7 @@ class ClienteResponse(BaseModel):
 # --- MODELOS DE ACCESORIOS Y SERVICIOS ---
 
 class AccesorioCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=1, description="Nombre del accesorio o servicio")
     categoria: str = Field("Accesorio", description="Funda, Mica, Cargador, Cable, Audio, Reparación, Servicio, Accesorio, Otro")
     codigo_barras: Optional[str] = Field(None, description="Código de barras o SKU del producto")
@@ -73,6 +75,7 @@ class AccesorioCreate(BaseModel):
     es_servicio: bool = Field(False, description="True si es servicio/mano de obra")
 
 class AccesorioUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     nombre: Optional[str] = None
     categoria: Optional[str] = None
     codigo_barras: Optional[str] = None
@@ -203,6 +206,7 @@ class VentaDetalleResponse(BaseModel):
 # --- MODELOS DE GARANTÍA ---
 
 class GarantiaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     imei: str = Field(..., description="IMEI del equipo a regresar por garantía")
     motivo: str = Field(..., min_length=2, description="Motivo de la devolución por garantía")
     falla_descripcion: Optional[str] = None
@@ -254,6 +258,7 @@ class DashboardMetrics(BaseModel):
 # --- MODELOS DE CORTE DE CAJA ---
 
 class CorteCajaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     efectivo_declarado: float = Field(..., ge=0, description="Efectivo físico contado en caja")
     notas: Optional[str] = None
 
@@ -293,6 +298,7 @@ class HistorialImeiResponse(BaseModel):
 # --- MODELOS DE REPARACIONES Y TALLER TÉCNICO ---
 
 class ReparacionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     cliente_nombre: str = Field(..., min_length=2, description="Nombre del cliente")
     cliente_telefono: str = Field(..., min_length=7, description="Teléfono de contacto para avisos por WhatsApp")
     dispositivo_modelo: str = Field(..., min_length=1, description="Ej. iPhone 13, Galaxy A54")
@@ -310,6 +316,7 @@ class ReparacionCreate(BaseModel):
     fecha_prometida: Optional[str] = None
 
 class ReparacionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     cliente_nombre: Optional[str] = None
     cliente_telefono: Optional[str] = None
     dispositivo_modelo: Optional[str] = None
@@ -330,6 +337,7 @@ class ReparacionUpdate(BaseModel):
     fecha_entrega: Optional[str] = None
 
 class ReparacionAbono(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     monto_abono: float = Field(..., gt=0, description="Monto del abono en efectivo o transferencia")
     metodo_pago: str = Field("Efectivo", description="Efectivo o Transferencia")
     notas: Optional[str] = None

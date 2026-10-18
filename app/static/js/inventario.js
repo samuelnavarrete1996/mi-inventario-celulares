@@ -423,7 +423,7 @@ const Inventario = {
 
     async enviarEliminacionDirecta(id, modelo, password) {
         try {
-            const res = await fetch(`/api/equipos/${id}?password=${encodeURIComponent(password)}`, {
+            const res = await fetch(`/api/equipos/${id}`, {
                 method: 'DELETE',
                 headers: { 'X-Admin-Password': password }
             });
@@ -491,7 +491,7 @@ const Inventario = {
             `;
 
             const id = this.equipoAEliminar.id;
-            const res = await fetch(`/api/equipos/${id}?password=${encodeURIComponent(password)}`, {
+            const res = await fetch(`/api/equipos/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'X-Admin-Password': password
