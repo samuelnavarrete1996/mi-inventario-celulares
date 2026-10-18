@@ -1,6 +1,6 @@
 import os
 if "ADMIN_DELETE_PASSWORD" not in os.environ:
-    os.environ["ADMIN_DELETE_PASSWORD"] = "erYHE7yse"
+    os.environ["ADMIN_DELETE_PASSWORD"] = "piso6bodega606."
 
 import pytest
 import time

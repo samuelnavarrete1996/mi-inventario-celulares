@@ -20,7 +20,7 @@ from app.security import reset_all_rate_limits
 init_db()
 seed_demo_data_if_empty()
 
-ADMIN_PASSWORD = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+ADMIN_PASSWORD = os.environ.get("ADMIN_DELETE_PASSWORD", "piso6bodega606.")
 
 @pytest.fixture(autouse=True)
 def reset_rate_limits():

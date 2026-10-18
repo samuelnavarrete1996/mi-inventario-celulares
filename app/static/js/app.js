@@ -39,21 +39,62 @@ const App = {
     },
 
     setupLockscreenListeners() {
-        // Soporte para entrada directa desde teclado físico o lector numérico
+        const pinInput = document.getElementById('lockscreen-pin-input');
+        if (pinInput) {
+            pinInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.desbloquearConInput();
+                }
+            });
+            pinInput.addEventListener('input', () => {
+                this.lockscreenPin = pinInput.value;
+            });
+        }
+
+        const pwdInput = document.getElementById('lockscreen-password');
+        if (pwdInput) {
+            pwdInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.desbloquearConPassword();
+                }
+            });
+        }
+
+        // Listener global de teclado físico / numérico
         window.addEventListener('keydown', (e) => {
             const modal = document.getElementById('modal-lockscreen');
             if (!modal || modal.classList.contains('hidden')) return;
 
-            // Si está en la vista de contraseña de dueño, permitir escribir normal
+            // Si está en la vista de contraseña tradicional de dueño
             const pwdView = document.getElementById('lockscreen-password-view');
             if (pwdView && !pwdView.classList.contains('hidden')) {
                 if (e.key === 'Enter') {
+                    e.preventDefault();
                     this.desbloquearConPassword();
                 }
                 return;
             }
 
-            if (/^[0-9]$/.test(e.key)) {
+            const input = document.getElementById('lockscreen-pin-input');
+            // Si el foco ya está dentro del input de PIN/contraseña
+            if (document.activeElement === input) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.desbloquearConInput();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.lockscreenLimpiarPin();
+                }
+                return;
+            }
+
+            // Si el foco no está en el input pero el lockscreen está activo
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.desbloquearConInput();
+            } else if (/^[0-9]$/.test(e.key)) {
                 e.preventDefault();
                 this.lockscreenPresionarDigito(e.key);
             } else if (e.key === 'Backspace') {
@@ -97,6 +138,10 @@ const App = {
                     errBox.classList.add('hidden');
                 }
             }
+            setTimeout(() => {
+                const pinInput = document.getElementById('lockscreen-pin-input');
+                if (pinInput) pinInput.focus();
+            }, 100);
         }
     },
 
@@ -127,48 +172,70 @@ const App = {
             if (pwdView) pwdView.classList.add('hidden');
             if (pinView) pinView.classList.remove('hidden');
             this.lockscreenLimpiarPin();
+            const pinInput = document.getElementById('lockscreen-pin-input');
+            if (pinInput) setTimeout(() => pinInput.focus(), 100);
+        }
+    },
+
+    toggleLockscreenInputEye() {
+        const input = document.getElementById('lockscreen-pin-input');
+        const btn = document.getElementById('btn-lockscreen-eye');
+        if (!input) return;
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (btn) btn.textContent = '🙈';
+        } else {
+            input.type = 'password';
+            if (btn) btn.textContent = '👁️';
         }
     },
 
     lockscreenPresionarDigito(digito) {
-        if (this.lockscreenPin.length >= 4) return;
-        this.lockscreenPin += digito;
-        this.actualizarPinDots();
-
-        if (this.lockscreenPin.length === 4) {
-            setTimeout(() => this.desbloquearConPin(this.lockscreenPin), 100);
+        const input = document.getElementById('lockscreen-pin-input');
+        if (input) {
+            input.value += digito;
+            this.lockscreenPin = input.value;
+            // Si se ingresan 4 dígitos exactos numéricos, auto-desbloquear
+            if (/^\d{4}$/.test(input.value)) {
+                setTimeout(() => this.desbloquearConInput(), 150);
+            }
         }
     },
 
     lockscreenBorrarDigito() {
-        if (this.lockscreenPin.length > 0) {
-            this.lockscreenPin = this.lockscreenPin.slice(0, -1);
-            this.actualizarPinDots();
+        const input = document.getElementById('lockscreen-pin-input');
+        if (input) {
+            input.value = input.value.slice(0, -1);
+            this.lockscreenPin = input.value;
         }
     },
 
     lockscreenLimpiarPin() {
         this.lockscreenPin = '';
-        this.actualizarPinDots();
+        const input = document.getElementById('lockscreen-pin-input');
+        if (input) {
+            input.value = '';
+        }
     },
 
-    actualizarPinDots() {
-        const dots = document.querySelectorAll('#lockscreen-pin-dots .pin-dot');
-        dots.forEach((dot, idx) => {
-            if (idx < this.lockscreenPin.length) {
-                dot.className = 'w-4 h-4 rounded-full bg-blue-600 border-2 border-blue-600 scale-110 transition-all pin-dot shadow-sm';
-            } else {
-                dot.className = 'w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all pin-dot';
-            }
-        });
-    },
+    async desbloquearConInput() {
+        const input = document.getElementById('lockscreen-pin-input');
+        const val = input ? input.value.trim() : '';
 
-    async desbloquearConPin(pin) {
+        if (!val) {
+            this.mostrarErrorLockscreen("Por favor ingresa la contraseña o PIN.");
+            if (input) input.focus();
+            return;
+        }
+
+        // Si son 4 dígitos numéricos, enviamos como pin. Si es contraseña/texto, enviamos como admin
+        const payload = /^\d{4}$/.test(val) ? { pin: val } : { username: 'admin', password: val };
+
         try {
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin: pin })
+                body: JSON.stringify(payload)
             });
 
             if (res.status === 429) {
@@ -179,7 +246,11 @@ const App = {
 
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
-                this.mostrarErrorLockscreen(data.detail || "PIN incorrecto. Intenta de nuevo.");
+                this.mostrarErrorLockscreen(data.detail || "Código o contraseña incorrecta.");
+                if (input) {
+                    input.select();
+                    input.focus();
+                }
                 return;
             }
 
@@ -190,10 +261,21 @@ const App = {
             this.aplicarModoAdmin();
             this.recargarDatosTrasDesbloqueo();
             this.iniciarTemporizadorInactividad();
-            this.showToast(`🔓 Bienvenido, ${data.user.nombre}.`, "success");
+
+            if (this.isAdmin) {
+                this.showToast(`👑 Bienvenido, ${data.user.nombre}. Modo Dueño activado.`, "success");
+            } else {
+                this.showToast(`🔓 Bienvenido, ${data.user.nombre}.`, "success");
+            }
         } catch (e) {
-            this.mostrarErrorLockscreen("Error de conexión al verificar PIN.");
+            this.mostrarErrorLockscreen("Error de conexión al verificar acceso.");
         }
+    },
+
+    async desbloquearConPin(pin) {
+        const input = document.getElementById('lockscreen-pin-input');
+        if (input && pin) input.value = pin;
+        return this.desbloquearConInput();
     },
 
     async desbloquearConPassword() {

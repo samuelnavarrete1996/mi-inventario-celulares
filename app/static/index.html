@@ -1963,41 +1963,44 @@
             <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Punto de Venta Bloqueado</h2>
             <p class="text-xs text-slate-500 mt-1 mb-5">Ingresa tu PIN de mostrador o contraseña de Dueño</p>
             
-            <!-- Vista 1: Teclado de PIN Rápido -->
+            <!-- Vista 1: Teclado de PIN o Contraseña -->
             <div id="lockscreen-pin-view">
-                <!-- Indicadores de PIN (4 dígitos) -->
-                <div class="flex justify-center items-center gap-3.5 mb-6" id="lockscreen-pin-dots">
-                    <span class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all pin-dot" data-idx="0"></span>
-                    <span class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all pin-dot" data-idx="1"></span>
-                    <span class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all pin-dot" data-idx="2"></span>
-                    <span class="w-4 h-4 rounded-full border-2 border-slate-300 bg-white transition-all pin-dot" data-idx="3"></span>
+                <!-- Input visible con botón de ojo para ver contraseña o PIN -->
+                <div class="relative mb-3">
+                    <input type="password" id="lockscreen-pin-input" placeholder="Ingresa contraseña o PIN..." class="w-full pl-4 pr-11 py-3 text-center text-base tracking-wider bg-slate-50 border-2 border-slate-200 rounded-2xl focus:bg-white focus:border-blue-500 focus:outline-none transition-all font-semibold text-slate-800 shadow-inner" autofocus autocomplete="off" />
+                    <button type="button" onclick="App.toggleLockscreenInputEye()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 text-sm select-none" id="btn-lockscreen-eye" title="Mostrar/ocultar texto">
+                        👁️
+                    </button>
                 </div>
 
-                <!-- Input oculto para teclados físicos / lectores -->
-                <input type="password" id="lockscreen-pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" class="sr-only" autofocus autocomplete="off" />
+                <!-- Botón Desbloquear Principal -->
+                <button type="button" onclick="App.desbloquearConInput()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-2xl text-sm transition-all shadow-md active:scale-[0.99] flex items-center justify-center gap-2 mb-3">
+                    <span>🔓 Desbloquear Punto de Venta</span>
+                </button>
 
                 <!-- Mensaje de error / estado -->
-                <div id="lockscreen-error" class="hidden text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl py-2 px-3 mb-4"></div>
+                <div id="lockscreen-error" class="hidden text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl py-2 px-3 mb-3"></div>
 
-                <!-- Teclado Numérico en Pantalla -->
-                <div class="grid grid-cols-3 gap-2.5 max-w-[240px] mx-auto mb-4">
-                    <button type="button" onclick="App.lockscreenPresionarDigito('1')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">1</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('2')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">2</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('3')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">3</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('4')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">4</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('5')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">5</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('6')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">6</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('7')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">7</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('8')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">8</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('9')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">9</button>
-                    <button type="button" onclick="App.lockscreenLimpiarPin()" class="h-13 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 text-xs font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">Limpiar</button>
-                    <button type="button" onclick="App.lockscreenPresionarDigito('0')" class="h-13 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-xl font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">0</button>
-                    <button type="button" onclick="App.lockscreenBorrarDigito()" class="h-13 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">⌫</button>
+                <!-- Teclado Numérico en Pantalla para Touchscreen -->
+                <div class="grid grid-cols-3 gap-2 max-w-[240px] mx-auto mb-3">
+                    <button type="button" onclick="App.lockscreenPresionarDigito('1')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">1</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('2')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">2</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('3')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">3</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('4')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">4</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('5')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">5</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('6')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">6</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('7')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">7</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('8')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">8</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('9')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">9</button>
+                    <button type="button" onclick="App.lockscreenLimpiarPin()" class="h-11 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 text-xs font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">Limpiar</button>
+                    <button type="button" onclick="App.lockscreenPresionarDigito('0')" class="h-11 bg-slate-50 hover:bg-slate-100 active:bg-blue-50 text-slate-800 active:text-blue-600 text-lg font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">0</button>
+                    <button type="button" onclick="App.lockscreenBorrarDigito()" class="h-11 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 text-base font-bold rounded-2xl border border-slate-200 transition-all active:scale-95">⌫</button>
                 </div>
 
-                <div class="pt-2 border-t border-slate-100">
-                    <button type="button" onclick="App.toggleLockscreenVista('password')" class="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
-                        👑 Entrar con usuario y contraseña (Dueño)
+                <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <span class="text-slate-400">PIN Vendedor: <b>1234</b></span>
+                    <button type="button" onclick="App.toggleLockscreenVista('password')" class="font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+                        👑 Login Dueño
                     </button>
                 </div>
             </div>
@@ -2009,15 +2012,15 @@
                     <input type="text" id="lockscreen-username" value="admin" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Contraseña</label>
-                    <input type="password" id="lockscreen-password" placeholder="••••••••" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Contraseña de Dueño</label>
+                    <input type="password" id="lockscreen-password" placeholder="piso6bodega606." class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                 </div>
                 <button type="button" onclick="App.desbloquearConPassword()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm">
-                    Desbloquear
+                    Desbloquear como Dueño
                 </button>
                 <div class="pt-2 text-center border-t border-slate-100">
                     <button type="button" onclick="App.toggleLockscreenVista('pin')" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors">
-                        ← Volver a PIN de 4 dígitos
+                        ← Volver a pantalla de desbloqueo rápido
                     </button>
                 </div>
             </div>

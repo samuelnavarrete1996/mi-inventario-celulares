@@ -405,14 +405,14 @@ def seed_demo_data_if_empty():
         """, demo_rep)
         conn.commit()
 
-    # Sembrar usuarios si la tabla está vacía
+    # Sembrar o actualizar usuarios
     cursor.execute("SELECT COUNT(*) as count FROM usuarios;")
-    if cursor.fetchone()["count"] == 0:
-        from app.security import hash_secret
-        admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
-        admin_hash, admin_salt = hash_secret(admin_pwd)
-        vendedor_hash, vendedor_salt = hash_secret("1234")
+    from app.security import hash_secret
+    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "piso6bodega606.")
+    admin_hash, admin_salt = hash_secret(admin_pwd)
+    vendedor_hash, vendedor_salt = hash_secret("1234")
 
+    if cursor.fetchone()["count"] == 0:
         usuarios_init = [
             ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, "dueno", 1, now),
             ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, "vendedor", 1, now)
@@ -421,6 +421,10 @@ def seed_demo_data_if_empty():
         INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion)
         VALUES (?, ?, ?, ?, ?, ?, ?);
         """, usuarios_init)
+        conn.commit()
+    else:
+        # Actualizar contraseña de Dueño en la base de datos existente
+        cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'admin';", (admin_hash, admin_salt))
         conn.commit()
 
     conn.close()
