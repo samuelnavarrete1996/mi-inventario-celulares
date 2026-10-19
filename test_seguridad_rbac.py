@@ -256,6 +256,28 @@ async def test_anti_fuga_costos_en_garantias_e_historial_imei_vendedor():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/auth/login", json={"pin": "piso6bodega606."})
 
+        # Asegurar que exista un equipo vendido de prueba y su venta asociada si no están en la base de datos
+        from app.database import get_db_connection
+        _conn = get_db_connection()
+        _cur = _conn.cursor()
+        _cur.execute("SELECT id FROM equipos WHERE imei = '356789123456788';")
+        _eq_row = _cur.fetchone()
+        _now = "2026-10-19 12:00:00"
+        if not _eq_row:
+            _cur.execute("INSERT INTO equipos (modelo, capacidad_gb, color, imei, grado, costo_compra, precio_venta, estado, fecha_registro) VALUES ('iPhone 12 Test', 128, 'Negro', '356789123456788', 'A', 6500.0, 9200.0, 'Vendido', ?);", (_now,))
+            _eq_id = _cur.lastrowid
+        else:
+            _eq_id = _eq_row["id"]
+
+        _cur.execute("SELECT id FROM venta_items WHERE equipo_id = ?;", (_eq_id,))
+        if not _cur.fetchone():
+            _cur.execute("INSERT OR IGNORE INTO clientes (id, nombre, telefono, fecha_registro) VALUES (9999, 'Cliente Test Garantia', '5599881122', ?);", (_now,))
+            _cur.execute("INSERT INTO ventas (equipo_id, cliente_id, precio_final, margen_ganancia, fecha_venta, metodo_pago, monto_efectivo) VALUES (?, 9999, 9200.0, 2700.0, ?, 'Efectivo', 9200.0);", (_eq_id, _now))
+            _v_id = _cur.lastrowid
+            _cur.execute("INSERT INTO venta_items (venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, tipo_item, cantidad) VALUES (?, ?, 9200.0, 6500.0, 2700.0, 'equipo', 1);", (_v_id, _eq_id))
+            _conn.commit()
+        _conn.close()
+
         # Consultar historial 360° de un IMEI vendido (sembrado en demo: 356789123456788)
         res_hist = await client.get("/api/garantias/historial-imei/356789123456788")
         assert res_hist.status_code == 200

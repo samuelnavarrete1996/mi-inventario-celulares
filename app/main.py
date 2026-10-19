@@ -31,7 +31,7 @@ async def global_unhandled_exception_handler(request: Request, exc: Exception):
         content={"detail": "Error interno del servidor. La operación no pudo completarse."}
     )
 
-# Configuración Segura de CORS
+# Configuración Segura de CORS (Permite localhost, red local Wi-Fi y subdominios de Render)
 allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
 if allowed_origins_env:
     allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
@@ -45,10 +45,10 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://[a-zA-Z0-9-]+\.onrender\.com$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$|^https://[a-zA-Z0-9-]+\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Admin-Password", "Accept"],
+    allow_headers=["*"],
 )
 
 # Middleware de Seguridad y Anti-Caché (OWASP Recommended)

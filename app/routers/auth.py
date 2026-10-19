@@ -169,7 +169,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
         max_age=14 * 3600,
         path="/",
         httponly=True,
-        samesite="strict",
+        samesite="lax",
         secure=is_https
     )
 
