@@ -90,7 +90,6 @@ async def security_and_cache_headers(request: Request, call_next):
 @app.on_event("startup")
 def on_startup():
     init_db()
-    seed_demo_data_if_empty()
 
 # Registro de routers de API
 app.include_router(auth.router)
