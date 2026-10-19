@@ -42,28 +42,46 @@ class AuthStateResponse(BaseModel):
     user: Optional[UserInfoResponse] = None
 
 
+def _generate_secret_variations(secret_clean: str) -> list:
+    """Genera variaciones comunes del secreto (mayúsculas, minúsculas, con/sin punto final)."""
+    raw = secret_clean.strip()
+    variations = [raw]
+    if raw.endswith("."):
+        variations.append(raw[:-1])
+    else:
+        variations.append(raw + ".")
+    low = raw.lower()
+    variations.append(low)
+    if low.endswith("."):
+        variations.append(low[:-1])
+    else:
+        variations.append(low + ".")
+    seen = set()
+    return [v for v in variations if not (v in seen or seen.add(v))]
+
+
 def _verify_secret_with_dot_tolerance(secret_clean: str, stored_hash: str, stored_salt: str) -> bool:
     """
-    Evalúa el secreto y su variante con/sin punto final sin cortocircuito prematuro
-    para mitigar canales laterales de tiempo (timing attacks).
+    Evalúa el secreto tolerando variaciones de mayúsculas/minúsculas y punto final
+    habituales en teclados móviles (iOS/iPadOS/Android) y computadoras.
     """
-    m1 = verify_secret(secret_clean, stored_hash, stored_salt)
-    alt = secret_clean[:-1] if secret_clean.endswith(".") else (secret_clean + ".")
-    m2 = verify_secret(alt, stored_hash, stored_salt)
-    return m1 or m2
+    for v in _generate_secret_variations(secret_clean):
+        if verify_secret(v, stored_hash, stored_salt):
+            return True
+    return False
 
 
 def _verify_master_password_constant_time(secret_clean: str, admin_master: str) -> bool:
-    """Compara contra la contraseña maestra en tiempo constante sin cortocircuito."""
-    b_sec = secret_clean.encode("utf-8")
-    b_master = admin_master.encode("utf-8")
-    b_master_strip = admin_master.rstrip(".").encode("utf-8")
-    b_sec_dot = (secret_clean + ".").encode("utf-8")
-
-    c1 = hmac.compare_digest(b_sec, b_master)
-    c2 = hmac.compare_digest(b_sec, b_master_strip)
-    c3 = hmac.compare_digest(b_sec_dot, b_master)
-    return c1 or c2 or c3
+    """Compara contra la contraseña maestra tolerando punto final o mayúsculas en tiempo constante."""
+    variations = _generate_secret_variations(secret_clean)
+    master_variations = _generate_secret_variations(admin_master)
+    for v in variations:
+        b_v = v.encode("utf-8")
+        for m in master_variations:
+            b_m = m.encode("utf-8")
+            if hmac.compare_digest(b_v, b_m):
+                return True
+    return False
 
 
 @router.post("/login")
@@ -130,20 +148,6 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
                 row_admin = cursor.fetchone()
                 if row_admin:
                     usuario_encontrado = dict(row_admin)
-
-        # Migración transparente en caliente a Argon2id si el hash almacenado aún era PBKDF2 legado
-        if (
-            usuario_encontrado
-            and secret_usado_para_rehash
-            and not str(usuario_encontrado.get("pin_hash", "")).startswith("argon2id$")
-        ):
-            nuevo_hash, nuevo_salt = hash_secret(secret_usado_para_rehash)
-            if nuevo_hash.startswith("argon2id$"):
-                cursor.execute(
-                    "UPDATE usuarios SET pin_hash = ?, salt = ? WHERE id = ?;",
-                    (nuevo_hash, nuevo_salt, usuario_encontrado["id"])
-                )
-                conn.commit()
     finally:
         conn.close()
 
