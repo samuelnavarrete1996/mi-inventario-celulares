@@ -57,9 +57,28 @@ const Accesorios = {
         this.renderizar();
     },
 
+    _searchTimeout: null,
     buscar(q) {
         this.busqueda = q;
+        const btnClear = document.getElementById('btn-limpiar-acc-search');
+        if (btnClear) {
+            btnClear.classList.toggle('hidden', !q || q.trim() === '');
+        }
+        clearTimeout(this._searchTimeout);
+        this._searchTimeout = setTimeout(() => {
+            this.cargar();
+        }, 180);
+    },
+
+    limpiarBusqueda() {
+        const input = document.getElementById('acc-search-input');
+        if (input) input.value = '';
+        const btnClear = document.getElementById('btn-limpiar-acc-search');
+        if (btnClear) btnClear.classList.add('hidden');
+        this.busqueda = '';
+        clearTimeout(this._searchTimeout);
         this.cargar();
+        if (input) input.focus();
     },
 
     renderizar() {
