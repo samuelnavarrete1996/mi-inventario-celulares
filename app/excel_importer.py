@@ -248,6 +248,26 @@ def generar_plantilla_excel_bytes() -> bytes:
     return out.getvalue()
 
 
+def generar_plantilla_celulares_csv() -> bytes:
+    """Genera un archivo CSV profesional optimizado al 100% para Google Sheets y Excel (UTF-8 con BOM)."""
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator='\r\n')
+    
+    headers = ["modelo", "capacidad_gb", "color", "imei", "grado", "costo_compra", "precio_venta"]
+    writer.writerow(headers)
+    
+    ejemplos = [
+        ["iPhone 14", 128, "Negro Medianoche", "356789123456790", "A", 9500.0, 13000.0],
+        ["Samsung Galaxy S23", 256, "Verde", "356789123456791", "A", 9000.0, 12500.0],
+        ["Xiaomi Redmi Note 12", 128, "Azul", "356789123456792", "B", 2800.0, 3900.0],
+        ["iPhone 11", 64, "Blanco", "356789123456793", "C", 3500.0, 4800.0],
+    ]
+    for row in ejemplos:
+        writer.writerow(row)
+        
+    return output.getvalue().encode('utf-8-sig')
+
+
 def generar_plantilla_stock_accesorios_excel() -> bytes:
     """Genera un archivo Excel (.xlsx) con la lista completa de accesorios para carga masiva de stock."""
     from app import crud
@@ -303,51 +323,124 @@ def generar_plantilla_stock_accesorios_excel() -> bytes:
     return out.getvalue()
 
 
-def importar_stock_accesorios_excel(contenido_bytes: bytes, usuario: str = "Admin") -> Dict[str, Any]:
-    """Procesa el Excel de stock de accesorios y actualiza masivamente en base de datos registrando Kardex."""
+def generar_plantilla_stock_accesorios_csv() -> bytes:
+    """Genera un archivo CSV profesional optimizado al 100% para Google Sheets con el catálogo completo de accesorios."""
     from app import crud
+    accesorios = crud.get_accesorios()
+    accesorios_fisicos = [a for a in accesorios if not a.get("es_servicio")]
 
-    wb = openpyxl.load_workbook(io.BytesIO(contenido_bytes), data_only=True)
-    ws = wb.active
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator='\r\n')
 
-    headers = [cell.value for cell in ws[1] if cell.value is not None]
-    norm_headers = [str(h).strip().lower().replace(" ", "").replace("_", "") for h in headers]
+    # Encabezados compatibles con Google Sheets
+    headers = ["ID", "Nombre del Accesorio", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
+    writer.writerow(headers)
 
-    # Identificar columna ID y columna Nuevo Stock
-    id_col = None
-    stock_col = None
+    for a in accesorios_fisicos:
+        writer.writerow([
+            a["id"],
+            a["nombre"],
+            a["categoria"],
+            int(a.get("stock", 0) or 0),
+            int(a.get("stock", 0) or 0),
+            float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0)
+        ])
 
-    for idx, h in enumerate(norm_headers):
-        if h in ("id", "codigo", "clave"):
-            id_col = idx
-        elif h in ("nuevostock", "stock", "stockfisico", "piezas", "cantidad"):
-            stock_col = idx
+    return output.getvalue().encode('utf-8-sig')
 
-    if id_col is None or stock_col is None:
-        raise ValueError("El archivo Excel debe contener al menos las columnas 'ID' y 'NUEVO STOCK'.")
+
+def importar_stock_accesorios_excel(contenido_bytes: bytes, filename: str = "", usuario: str = "Admin") -> Dict[str, Any]:
+    """Procesa el archivo de stock de accesorios (compatible con Google Sheets .csv y Excel .xlsx) y actualiza masivamente registrando Kardex."""
+    from app import crud
 
     items_to_update = []
     errores = []
 
-    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        if not row or row[id_col] is None:
-            continue
-        try:
-            acc_id = int(row[id_col])
-            val_stock = row[stock_col]
-            if val_stock is None or str(val_stock).strip() == "":
+    filename_lower = filename.lower()
+    is_csv = filename_lower.endswith('.csv')
+    if not is_csv and not contenido_bytes.startswith(b'PK'):
+        is_csv = True
+
+    if is_csv:
+        texto = None
+        for enc in ('utf-8-sig', 'utf-8', 'latin-1', 'cp1252'):
+            try:
+                texto = contenido_bytes.decode(enc)
+                break
+            except Exception:
                 continue
-            nuevo_stock = max(0, int(float(str(val_stock).strip())))
-            items_to_update.append({"id": acc_id, "stock": nuevo_stock})
-        except Exception as e:
-            errores.append(f"Fila {row_idx}: {str(e)}")
+
+        if not texto:
+            raise ValueError("No se pudo leer la codificación del archivo CSV de Google Sheets.")
+
+        reader = csv.reader(io.StringIO(texto))
+        filas = list(reader)
+        if not filas:
+            raise ValueError("El archivo está vacío.")
+
+        headers = [str(c).strip().lower().replace(" ", "").replace("_", "") for c in filas[0]]
+        id_col = None
+        stock_col = None
+
+        for idx, h in enumerate(headers):
+            if h in ("id", "codigo", "clave"):
+                id_col = idx
+            elif h in ("nuevostock", "stock", "stockfisico", "piezas", "cantidad"):
+                stock_col = idx
+
+        if id_col is None or stock_col is None:
+            raise ValueError("El archivo de Google Sheets/CSV debe contener al menos las columnas 'ID' y 'NUEVO STOCK'.")
+
+        for row_idx, row in enumerate(filas[1:], start=2):
+            if not row or len(row) <= max(id_col, stock_col) or not str(row[id_col]).strip():
+                continue
+            try:
+                acc_id = int(float(str(row[id_col]).strip()))
+                val_stock = str(row[stock_col]).strip()
+                if val_stock == "":
+                    continue
+                nuevo_stock = max(0, int(float(val_stock)))
+                items_to_update.append({"id": acc_id, "stock": nuevo_stock})
+            except Exception as e:
+                errores.append(f"Fila {row_idx}: {str(e)}")
+    else:
+        wb = openpyxl.load_workbook(io.BytesIO(contenido_bytes), data_only=True)
+        ws = wb.active
+
+        headers = [cell.value for cell in ws[1] if cell.value is not None]
+        norm_headers = [str(h).strip().lower().replace(" ", "").replace("_", "") for h in headers]
+
+        id_col = None
+        stock_col = None
+
+        for idx, h in enumerate(norm_headers):
+            if h in ("id", "codigo", "clave"):
+                id_col = idx
+            elif h in ("nuevostock", "stock", "stockfisico", "piezas", "cantidad"):
+                stock_col = idx
+
+        if id_col is None or stock_col is None:
+            raise ValueError("El archivo Excel debe contener al menos las columnas 'ID' y 'NUEVO STOCK'.")
+
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not row or row[id_col] is None:
+                continue
+            try:
+                acc_id = int(row[id_col])
+                val_stock = row[stock_col]
+                if val_stock is None or str(val_stock).strip() == "":
+                    continue
+                nuevo_stock = max(0, int(float(str(val_stock).strip())))
+                items_to_update.append({"id": acc_id, "stock": nuevo_stock})
+            except Exception as e:
+                errores.append(f"Fila {row_idx}: {str(e)}")
 
     if not items_to_update:
         raise ValueError("No se encontraron filas con datos válidos de ID y stock para procesar.")
 
     res = crud.actualizar_stock_masivo(
         items=items_to_update,
-        motivo_general="Importación masiva desde Excel",
+        motivo_general="Importación masiva desde Google Sheets / Excel",
         usuario=usuario
     )
     res["errores_filas"] = errores

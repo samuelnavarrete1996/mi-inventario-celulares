@@ -22,10 +22,24 @@ async def test_plantilla_stock_excel():
         login_res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
         assert login_res.status_code == 200
 
+        # Formato Excel (.xlsx)
         res = await client.get("/api/accesorios/plantilla-stock")
         assert res.status_code == 200
         assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in res.headers["content-type"]
         assert len(res.content) > 1000
+
+        # Formato Google Sheets (.csv)
+        res_sheets = await client.get("/api/accesorios/plantilla-stock?formato=sheets")
+        assert res_sheets.status_code == 200
+        assert "text/csv" in res_sheets.headers["content-type"]
+        assert "GoogleSheets.csv" in res_sheets.headers.get("content-disposition", "")
+        csv_text = res_sheets.content.decode("utf-8-sig")
+        assert "ID" in csv_text and "NUEVO STOCK" in csv_text
+
+        # Endpoint directo plantilla-sheets
+        res_direct = await client.get("/api/accesorios/plantilla-sheets")
+        assert res_direct.status_code == 200
+        assert "text/csv" in res_direct.headers["content-type"]
 
 @pytest.mark.anyio
 async def test_sugerido_reabastecimiento():

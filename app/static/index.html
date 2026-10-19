@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/custom.css?v=20261019_v15">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20261019_v16">
     <script>
         tailwind.config = {
             theme: {
@@ -161,13 +161,12 @@
                             <h2 class="text-lg font-bold text-slate-800">Registrar Teléfono</h2>
                         </div>
                         <div class="flex items-center gap-1.5">
-                            <button type="button" onclick="Inventario.abrirModalExcel()" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-2xs transition-all" title="Cargar lote de celulares desde Excel o CSV">
+                            <button type="button" onclick="Inventario.abrirModalExcel()" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-2xs transition-all" title="Cargar lote de celulares desde Google Sheets o Excel">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                <span>Subir Excel</span>
+                                <span>Subir Archivo</span>
                             </button>
-                            <a href="/api/equipos/plantilla-excel" class="inline-flex items-center gap-1 px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-semibold transition-all" title="Descargar plantilla de Excel para llenar">
-                                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                <span>Plantilla</span>
+                            <a href="/api/equipos/plantilla-sheets" class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-all shadow-2xs" title="Descargar plantilla para Google Sheets (.csv)">
+                                <span>📊 Plantilla Sheets</span>
                             </a>
                         </div>
                     </div>
@@ -671,12 +670,15 @@
                     <p class="text-xs text-slate-500">Fundas, micas 9D, cargadores, cables, reparaciones y mano de obra.</p>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
-                    <input type="file" id="input-excel-stock" accept=".xlsx, .xls" class="hidden" onchange="Accesorios.procesarArchivoStockExcel(this)">
-                    <button onclick="Accesorios.descargarPlantillaStock()" class="admin-only px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Descargar lista en Excel para conteo de inventario">
-                        <span>📥</span> <span>Plantilla Excel</span>
+                    <input type="file" id="input-excel-stock" accept=".xlsx, .xls, .csv" class="hidden" onchange="Accesorios.procesarArchivoStockExcel(this)">
+                    <button onclick="Accesorios.descargarPlantillaStock('sheets')" class="admin-only px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Descargar plantilla lista para Google Sheets (.csv)">
+                        <span>📊</span> <span>Plantilla Google Sheets</span>
                     </button>
-                    <button onclick="Accesorios.seleccionarArchivoStockExcel()" class="admin-only px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Subir Excel para actualizar stock masivamente">
-                        <span>📤</span> <span>Subir Excel</span>
+                    <button onclick="Accesorios.descargarPlantillaStock('xlsx')" class="admin-only px-2.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1" title="Descargar plantilla para Microsoft Excel (.xlsx)">
+                        <span>📥</span> <span>Excel</span>
+                    </button>
+                    <button onclick="Accesorios.seleccionarArchivoStockExcel()" class="admin-only px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Subir archivo de Google Sheets (.csv) o Excel (.xlsx) para actualizar stock masivamente">
+                        <span>📤</span> <span>Subir Archivo</span>
                     </button>
                     <button onclick="Accesorios.abrirModalCargaRapida()" class="admin-only px-3.5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Captura rápida interactiva en pantalla con teclado">
                         <span>⚡</span> <span>Carga Rápida</span>
@@ -1231,8 +1233,8 @@
                     <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-2 border border-emerald-100">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     </div>
-                    <span class="text-sm font-bold text-slate-800 block">Haz clic para seleccionar o arrastra tu archivo Excel</span>
-                    <span class="text-xs text-slate-400 mt-0.5 block">Formatos permitidos: .XLSX o .CSV</span>
+                    <span class="text-sm font-bold text-slate-800 block">Haz clic para seleccionar o arrastra tu archivo</span>
+                    <span class="text-xs text-slate-400 mt-0.5 block">Formatos soportados: Google Sheets (.CSV) o Microsoft Excel (.XLSX)</span>
                 </div>
             </div>
 
@@ -1253,11 +1255,15 @@
             </div>
 
             <!-- Botones inferiores -->
-            <div class="mt-5 pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
-                <a href="/api/equipos/plantilla-excel" class="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    Descargar Plantilla de Ejemplo (.xlsx)
-                </a>
+            <div class="mt-5 pt-3 border-t border-slate-100 flex flex-wrap justify-between items-center gap-2 text-xs">
+                <div class="flex items-center gap-2">
+                    <a href="/api/equipos/plantilla-sheets" class="text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 font-bold flex items-center gap-1 transition-all">
+                        <span>📊 Plantilla Google Sheets (.csv)</span>
+                    </a>
+                    <a href="/api/equipos/plantilla-excel" class="text-blue-600 hover:text-blue-800 px-2 py-1.5 font-semibold flex items-center gap-1 hover:underline">
+                        <span>📑 Versión Excel (.xlsx)</span>
+                    </a>
+                </div>
                 <button type="button" onclick="Inventario.cerrarModalExcel()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-all">
                     Cerrar
                 </button>
@@ -2360,15 +2366,15 @@
         </div>
     </div>
 
-    <!-- SCRIPTS DE LA APLICACIÓN (con cache-busting v15) -->
-    <script src="/static/js/app.js?v=20261019_v15"></script>
-    <script src="/static/js/inventario.js?v=20261019_v15"></script>
-    <script src="/static/js/pos.js?v=20261019_v15"></script>
-    <script src="/static/js/accesorios.js?v=20261019_v15"></script>
-    <script src="/static/js/caja.js?v=20261019_v15"></script>
-    <script src="/static/js/garantias.js?v=20261019_v15"></script>
-    <script src="/static/js/reportes.js?v=20261019_v15"></script>
-    <script src="/static/js/reparaciones.js?v=20261019_v15"></script>
-    <script src="/static/js/etiquetas_scanner.js?v=20261019_v15"></script>
+    <!-- SCRIPTS DE LA APLICACIÓN (con cache-busting v16) -->
+    <script src="/static/js/app.js?v=20261019_v16"></script>
+    <script src="/static/js/inventario.js?v=20261019_v16"></script>
+    <script src="/static/js/pos.js?v=20261019_v16"></script>
+    <script src="/static/js/accesorios.js?v=20261019_v16"></script>
+    <script src="/static/js/caja.js?v=20261019_v16"></script>
+    <script src="/static/js/garantias.js?v=20261019_v16"></script>
+    <script src="/static/js/reportes.js?v=20261019_v16"></script>
+    <script src="/static/js/reparaciones.js?v=20261019_v16"></script>
+    <script src="/static/js/etiquetas_scanner.js?v=20261019_v16"></script>
 </body>
 </html>

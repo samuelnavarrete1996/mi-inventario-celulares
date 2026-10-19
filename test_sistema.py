@@ -187,10 +187,24 @@ async def test_historial_ventas():
 async def test_descargar_plantilla_excel():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         await login_as_admin(client)
+        # Formato Excel por defecto
         res = await client.get("/api/equipos/plantilla-excel")
         assert res.status_code == 200
         assert len(res.content) > 1000
         assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in res.headers["content-type"]
+
+        # Formato Google Sheets (.csv)
+        res_sheets = await client.get("/api/equipos/plantilla-excel?formato=sheets")
+        assert res_sheets.status_code == 200
+        assert "text/csv" in res_sheets.headers["content-type"]
+        assert "google_sheets.csv" in res_sheets.headers.get("content-disposition", "")
+        csv_text = res_sheets.content.decode("utf-8-sig")
+        assert "modelo" in csv_text and "imei" in csv_text
+
+        # Endpoint directo plantilla-sheets
+        res_direct = await client.get("/api/equipos/plantilla-sheets")
+        assert res_direct.status_code == 200
+        assert "text/csv" in res_direct.headers["content-type"]
 
 @pytest.mark.anyio
 async def test_importar_excel():

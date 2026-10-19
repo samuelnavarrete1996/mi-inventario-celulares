@@ -6,7 +6,11 @@ from app.models import (
     AccesorioAjusteStockRequest, AccesorioActualizacionMasivaRequest, MovimientoStockResponse
 )
 from app.security import get_current_user, require_role, sanitizar_datos_sensibles
-from app.excel_importer import generar_plantilla_stock_accesorios_excel, importar_stock_accesorios_excel
+from app.excel_importer import (
+    generar_plantilla_stock_accesorios_excel,
+    generar_plantilla_stock_accesorios_csv,
+    importar_stock_accesorios_excel
+)
 
 router = APIRouter(prefix="/api/accesorios", tags=["Accesorios y Servicios"])
 
@@ -26,35 +30,67 @@ def listar_accesorios(
 # --- CARGA MASIVA Y EXCEL (PILAR 1) ---
 
 @router.get("/plantilla-stock")
-def descargar_plantilla_stock(user: dict = Depends(require_role("dueno"))):
-    """Descarga un archivo Excel (.xlsx) con los 283 accesorios para conteo y carga masiva de stock."""
+def descargar_plantilla_stock(
+    formato: Optional[str] = Query(None, description="Formato: 'sheets' o 'csv' para Google Sheets, 'xlsx' para Excel"),
+    user: dict = Depends(require_role("dueno"))
+):
+    """Descarga un archivo con los accesorios para conteo y carga masiva de stock compatible con Google Sheets y Excel."""
     try:
-        excel_bytes = generar_plantilla_stock_accesorios_excel()
+        if formato in ("sheets", "csv"):
+            contenido = generar_plantilla_stock_accesorios_csv()
+            return Response(
+                content=contenido,
+                media_type="text/csv; charset=utf-8",
+                headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_GoogleSheets.csv"}
+            )
+        else:
+            excel_bytes = generar_plantilla_stock_accesorios_excel()
+            return Response(
+                content=excel_bytes,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_SamuelNavarrete.xlsx"}
+            )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generando plantilla: {str(e)}")
+
+@router.get("/plantilla-sheets")
+def descargar_plantilla_stock_sheets(user: dict = Depends(require_role("dueno"))):
+    """Descarga la plantilla de accesorios optimizada directamente para Google Sheets (.csv UTF-8 con BOM)."""
+    try:
+        contenido = generar_plantilla_stock_accesorios_csv()
         return Response(
-            content=excel_bytes,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_SamuelNavarrete.xlsx"}
+            content=contenido,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_GoogleSheets.csv"}
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generando plantilla Excel: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generando plantilla Google Sheets: {str(e)}")
 
 @router.post("/importar-stock-excel")
-async def importar_stock_excel(archivo: UploadFile = File(...), user: dict = Depends(require_role("dueno"))):
-    """Procesa el Excel cargado con nuevo stock y actualiza de forma masiva registrando el Kardex."""
-    if not archivo.filename or not archivo.filename.lower().endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo debe ser un libro de Excel (.xlsx)")
+async def importar_stock_excel(
+    archivo: Optional[UploadFile] = File(None),
+    file: Optional[UploadFile] = File(None),
+    user: dict = Depends(require_role("dueno"))
+):
+    """Procesa el archivo de Google Sheets (.csv) o Excel (.xlsx) cargado con nuevo stock y actualiza registrando Kardex."""
+    target_file = archivo or file
+    if not target_file:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se recibió ningún archivo para procesar.")
+
+    if not target_file.filename or not target_file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo debe ser una hoja de Google Sheets (.csv) o Excel (.xlsx)")
     
-    contenido = await archivo.read()
+    contenido = await target_file.read()
     if len(contenido) > 25 * 1024 * 1024:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="El archivo supera el límite de 25 MB.")
 
     try:
-        res = importar_stock_accesorios_excel(contenido, usuario=user.get("nombre") or user.get("username") or "Dueño")
+        res = importar_stock_accesorios_excel(contenido, filename=target_file.filename, usuario=user.get("nombre") or user.get("username") or "Dueño")
         return res
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al procesar el archivo Excel: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al procesar el archivo: {str(e)}")
 
 @router.post("/actualizacion-masiva-rapida")
 def actualizacion_masiva_rapida(datos: AccesorioActualizacionMasivaRequest, user: dict = Depends(require_role("dueno"))):

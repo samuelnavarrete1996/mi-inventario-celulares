@@ -300,11 +300,12 @@ const Accesorios = {
     },
 
     // ========================================================
-    // PILAR 1: PLANTILLA EXCEL Y SUBIDA MASIVA DE STOCK
+    // PILAR 1: PLANTILLA GOOGLE SHEETS / EXCEL Y SUBIDA MASIVA
     // ========================================================
-    descargarPlantillaStock() {
-        App.showToast("Generando plantilla Excel para conteo...", "info");
-        window.open('/api/accesorios/plantilla-stock', '_blank');
+    descargarPlantillaStock(formato = 'sheets') {
+        const nombre = (formato === 'sheets' || formato === 'csv') ? 'Google Sheets (.csv)' : 'Excel (.xlsx)';
+        App.showToast(`Descargando plantilla para ${nombre}...`, "info");
+        window.open(`/api/accesorios/plantilla-stock?formato=${formato}`, '_blank');
     },
 
     seleccionarArchivoStockExcel() {
@@ -323,8 +324,9 @@ const Accesorios = {
 
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('archivo', file);
 
-        App.showToast("Procesando Excel de inventario...", "info");
+        App.showToast("Procesando archivo de stock (Google Sheets / Excel)...", "info");
 
         try {
             const res = await fetch('/api/accesorios/importar-stock-excel', {

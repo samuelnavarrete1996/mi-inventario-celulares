@@ -4,7 +4,12 @@ from fastapi import APIRouter, HTTPException, Query, Header, UploadFile, File, R
 from typing import List, Optional
 from app import crud
 from app.models import EquipoCreate, EquipoUpdate, EquipoResponse
-from app.excel_importer import procesar_archivo_excel_o_csv, guardar_equipos_importados, generar_plantilla_excel_bytes
+from app.excel_importer import (
+    procesar_archivo_excel_o_csv,
+    guardar_equipos_importados,
+    generar_plantilla_excel_bytes,
+    generar_plantilla_celulares_csv
+)
 from app.security import (
     get_current_user,
     require_role,
@@ -53,13 +58,34 @@ def registrar_equipo(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al registrar el equipo.")
 
 @router.get("/plantilla-excel")
-def descargar_plantilla_excel(user: dict = Depends(require_role("dueno"))):
-    """Descarga una plantilla de Excel (.xlsx) preformateada para carga masiva de celulares."""
-    contenido = generar_plantilla_excel_bytes()
+def descargar_plantilla_excel(
+    formato: Optional[str] = Query(None, description="Formato: 'sheets' o 'csv' para Google Sheets, 'xlsx' para Excel"),
+    user: dict = Depends(require_role("dueno"))
+):
+    """Descarga una plantilla preformateada para carga masiva de celulares compatible con Google Sheets y Excel."""
+    if formato in ("sheets", "csv"):
+        contenido = generar_plantilla_celulares_csv()
+        return Response(
+            content=contenido,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=plantilla_celulares_google_sheets.csv"}
+        )
+    else:
+        contenido = generar_plantilla_excel_bytes()
+        return Response(
+            content=contenido,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=plantilla_inventario_celulares.xlsx"}
+        )
+
+@router.get("/plantilla-sheets")
+def descargar_plantilla_sheets(user: dict = Depends(require_role("dueno"))):
+    """Descarga la plantilla de celulares optimizada directamente para Google Sheets (.csv UTF-8 con BOM)."""
+    contenido = generar_plantilla_celulares_csv()
     return Response(
         content=contenido,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=plantilla_inventario_celulares.xlsx"}
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=plantilla_celulares_google_sheets.csv"}
     )
 
 @router.post("/importar-excel")
