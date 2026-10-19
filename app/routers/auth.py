@@ -83,9 +83,10 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
     secret_usado_para_rehash = None
 
     try:
-        # Caso A: Login con PIN rápido o código de acceso (evalúa todos los usuarios activos sin cortocircuito)
-        if datos.pin:
-            pin_limpio = datos.pin.strip()
+        # Caso A: Login con PIN rápido o contraseña directa (evalúa todos los usuarios activos sin cortocircuito)
+        secret_rapido = (datos.pin or datos.password).strip() if (datos.pin or (datos.password and not datos.username)) else None
+        if secret_rapido:
+            pin_limpio = secret_rapido
             cursor.execute("SELECT * FROM usuarios WHERE activo = 1;")
             todos_usuarios = cursor.fetchall()
             candidato = None

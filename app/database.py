@@ -17,11 +17,20 @@ if os.path.exists(_env_file):
         pass
 
 
+TURSO_URL = os.environ.get("TURSO_DATABASE_URL") or os.environ.get("TURSO_URL") or os.environ.get("DATABASE_URL")
+TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN") or os.environ.get("TURSO_TOKEN") or os.environ.get("DATABASE_AUTH_TOKEN")
+
+def is_turso_enabled() -> bool:
+    """Retorna True si las credenciales de Turso Cloud están configuradas."""
+    return bool(TURSO_URL and TURSO_TOKEN and ("turso.io" in TURSO_URL or "libsql:" in TURSO_URL))
+
 def _resolve_sqlite_path() -> str:
     """Resuelve la ruta de SQLite verificando soporte de bloqueo de archivos (compatible con contenedores y montajes FUSE)."""
     explicit = os.environ.get("DATABASE_PATH")
     if explicit:
         return explicit
+    if is_turso_enabled():
+        return os.path.join(tempfile.gettempdir(), "inventario.db")
 
     default_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "inventario.db")
     try:
@@ -30,7 +39,7 @@ def _resolve_sqlite_path() -> str:
         conn.commit()
         conn.close()
         return default_path
-    except sqlite3.OperationalError:
+    except Exception:
         try:
             if os.path.exists(default_path) and os.path.getsize(default_path) == 0:
                 os.remove(default_path)
@@ -40,13 +49,6 @@ def _resolve_sqlite_path() -> str:
 
 
 DATABASE_FILE = _resolve_sqlite_path()
-
-TURSO_URL = os.environ.get("TURSO_DATABASE_URL") or os.environ.get("TURSO_URL") or os.environ.get("DATABASE_URL")
-TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN") or os.environ.get("TURSO_TOKEN") or os.environ.get("DATABASE_AUTH_TOKEN")
-
-def is_turso_enabled() -> bool:
-    """Retorna True si las credenciales de Turso Cloud están configuradas."""
-    return bool(TURSO_URL and TURSO_TOKEN and ("turso.io" in TURSO_URL or "libsql:" in TURSO_URL))
 
 def get_db_connection():
     """Retorna una conexión a Turso Cloud si está configurada, o a SQLite local con WAL y busy_timeout para evitar condiciones de carrera."""

@@ -63,8 +63,14 @@ _RATE_LIMIT_DB_PATH = os.path.join(tempfile.gettempdir(), "pos_rate_limit.sqlite
 
 def _get_rl_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(_RATE_LIMIT_DB_PATH, timeout=5.0)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA busy_timeout=5000;")
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+    except Exception:
+        pass
+    try:
+        conn.execute("PRAGMA busy_timeout=5000;")
+    except Exception:
+        pass
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS login_attempts (
