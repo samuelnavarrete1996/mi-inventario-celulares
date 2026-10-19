@@ -372,12 +372,32 @@ def registrar_venta_carrito(
                 if cursor.rowcount == 0:
                     raise ValueError(f"El equipo '{det['nombre_item']}' ya fue vendido en una operación simultánea.")
             elif det["accesorio_id"] and not det.get("es_servicio", False):
+                cursor.execute("SELECT stock FROM accesorios WHERE id = ?", (det["accesorio_id"],))
+                prev_row = cursor.fetchone()
+                prev_stock = prev_row["stock"] if prev_row else 0
+
                 cursor.execute(
                     "UPDATE accesorios SET stock = stock - ? WHERE id = ? AND stock >= ?",
                     (det["cantidad"], det["accesorio_id"], det["cantidad"])
                 )
                 if cursor.rowcount == 0:
                     raise ValueError(f"Stock insuficiente para '{det['nombre_item']}' debido a una venta simultánea.")
+
+                try:
+                    cursor.execute("""
+                    INSERT INTO movimientos_stock_accesorios (accesorio_id, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, usuario, fecha)
+                    VALUES (?, 'VENTA', ?, ?, ?, ?, ?, ?);
+                    """, (
+                        det["accesorio_id"],
+                        det["cantidad"],
+                        prev_stock,
+                        prev_stock - det["cantidad"],
+                        f"Venta en POS #{venta_id}",
+                        "Venta Mostrador",
+                        now
+                    ))
+                except Exception:
+                    pass
 
             cursor.execute("""
             INSERT INTO venta_items (venta_id, equipo_id, accesorio_id, tipo_item, nombre_item, cantidad, precio_final, costo_compra, margen_ganancia)
@@ -1016,6 +1036,245 @@ def delete_accesorio(acc_id: int) -> bool:
     conn.commit()
     conn.close()
     return deleted
+
+# --- Kardex, Auditoría de Stock y Reabastecimiento de Accesorios ---
+
+MAPEO_TIPOS_KARDEX_DB = {
+    'COMPRA': 'ENTRADA',
+    'ENTRADA': 'ENTRADA',
+    'VENTA': 'VENTA',
+    'MERMA': 'MERMA',
+    'AJUSTE': 'AJUSTE',
+    'AJUSTE_AUDITORIA': 'AJUSTE',
+    'MUESTRA': 'MUESTRA',
+    'MUESTRA_USO_TIENDA': 'MUESTRA',
+    'DEVOLUCION_PROVEEDOR': 'AJUSTE',
+    'CARGA_MASIVA': 'ENTRADA'
+}
+
+def registrar_movimiento_stock_accesorio(
+    accesorio_id: int,
+    tipo_movimiento: str,
+    cantidad: int,
+    stock_anterior: int,
+    stock_nuevo: int,
+    motivo: str,
+    usuario: str = "Admin",
+    cursor: Optional[Any] = None
+) -> None:
+    """Registra una entrada, salida o ajuste en el Kardex de accesorios para auditoría."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    tipo_upper = (tipo_movimiento or "AJUSTE").strip().upper()
+    tipo_valido_db = MAPEO_TIPOS_KARDEX_DB.get(tipo_upper, "AJUSTE")
+
+    motivo_final = motivo.strip() if motivo else "Ajuste de inventario"
+    if tipo_upper in ('COMPRA', 'AJUSTE_AUDITORIA', 'MUESTRA_USO_TIENDA', 'DEVOLUCION_PROVEEDOR') and tipo_upper not in motivo_final.upper():
+        motivo_final = f"[{tipo_upper}] {motivo_final}"
+
+    sql = """
+    INSERT INTO movimientos_stock_accesorios (accesorio_id, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, usuario, fecha)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    """
+    params = (accesorio_id, tipo_valido_db, cantidad, stock_anterior, stock_nuevo, motivo_final, usuario, now)
+    if cursor:
+        cursor.execute(sql, params)
+    else:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(sql, params)
+        conn.commit()
+        conn.close()
+
+def ajustar_stock_accesorio(
+    acc_id: int,
+    nuevo_stock: int,
+    tipo_movimiento: str = "AJUSTE",
+    motivo: str = "Ajuste manual de stock",
+    usuario: str = "Admin"
+) -> Dict[str, Any]:
+    """Ajusta el stock de un accesorio registrando el motivo en el Kardex (Auditoría Anti-Mermas)."""
+    if nuevo_stock < 0:
+        raise ValueError("El stock no puede ser un número negativo.")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        _begin_immediate(cursor)
+        cursor.execute("SELECT id, stock, nombre FROM accesorios WHERE id = ?", (acc_id,))
+        acc = cursor.fetchone()
+        if not acc:
+            raise ValueError(f"Accesorio con ID {acc_id} no encontrado.")
+        stock_anterior = int(acc["stock"] or 0)
+        diferencia = abs(nuevo_stock - stock_anterior)
+        cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ?", (nuevo_stock, acc_id))
+        registrar_movimiento_stock_accesorio(
+            accesorio_id=acc_id,
+            tipo_movimiento=tipo_movimiento,
+            cantidad=diferencia,
+            stock_anterior=stock_anterior,
+            stock_nuevo=nuevo_stock,
+            motivo=motivo,
+            usuario=usuario,
+            cursor=cursor
+        )
+        cursor.execute("SELECT * FROM accesorios WHERE id = ?", (acc_id,))
+        row = cursor.fetchone()
+        conn.commit()
+        return format_accesorio_dict(row) if row else None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def actualizar_stock_masivo(
+    items: List[Dict[str, Any]],
+    motivo_general: str = "Carga masiva de inventario",
+    usuario: str = "Admin"
+) -> Dict[str, Any]:
+    """Actualiza en masa el stock de múltiples accesorios en una sola transacción atómica."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    total_actualizados = 0
+    try:
+        _begin_immediate(cursor)
+        for it in items:
+            acc_id = int(it["id"])
+            nuevo_stock = max(0, int(it.get("stock", 0)))
+            cursor.execute("SELECT stock FROM accesorios WHERE id = ?", (acc_id,))
+            row = cursor.fetchone()
+            if row:
+                stock_ant = int(row["stock"] or 0)
+                if stock_ant != nuevo_stock:
+                    dif = abs(nuevo_stock - stock_ant)
+                    tipo = "ENTRADA" if nuevo_stock > stock_ant else "AJUSTE"
+                    cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ?", (nuevo_stock, acc_id))
+                    registrar_movimiento_stock_accesorio(
+                        accesorio_id=acc_id,
+                        tipo_movimiento=tipo,
+                        cantidad=dif,
+                        stock_anterior=stock_ant,
+                        stock_nuevo=nuevo_stock,
+                        motivo=motivo_general,
+                        usuario=usuario,
+                        cursor=cursor
+                    )
+                    total_actualizados += 1
+        conn.commit()
+        return {
+            "total_actualizados": total_actualizados,
+            "mensaje": f"Se actualizaron exitosamente {total_actualizados} accesorios."
+        }
+    finally:
+        conn.close()
+
+def get_historial_kardex_accesorios(
+    acc_id: Optional[int] = None,
+    tipo: Optional[str] = None,
+    limit: int = 150
+) -> List[Dict[str, Any]]:
+    """Consulta la bitácora de movimientos de accesorios para auditoría."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = """
+    SELECT 
+        m.id,
+        m.accesorio_id,
+        a.nombre as accesorio_nombre,
+        a.categoria as accesorio_categoria,
+        m.tipo_movimiento,
+        m.cantidad,
+        m.stock_anterior,
+        m.stock_nuevo,
+        m.motivo,
+        m.usuario,
+        m.fecha
+    FROM movimientos_stock_accesorios m
+    JOIN accesorios a ON m.accesorio_id = a.id
+    WHERE 1=1
+    """
+    params = []
+    if acc_id:
+        query += " AND m.accesorio_id = ?"
+        params.append(acc_id)
+    if tipo and tipo != "Todos":
+        query += " AND m.tipo_movimiento = ?"
+        params.append(tipo.upper())
+    query += " ORDER BY m.id DESC LIMIT ?"
+    params.append(limit)
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def generar_sugerido_reabastecimiento(stock_objetivo: int = 10, stock_minimo: int = 3) -> Dict[str, Any]:
+    """
+    Analiza accesorios agotados o con stock bajo y genera una lista de compra inteligente
+    con cantidades sugeridas para reordenar al proveedor y texto para WhatsApp.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, nombre, categoria, costo_compra, precio_mayoreo, stock, imagen_url
+    FROM accesorios
+    WHERE es_servicio = 0 AND stock <= ?
+    ORDER BY categoria ASC, stock ASC, nombre ASC;
+    """, (stock_minimo,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    items = []
+    total_piezas_pedir = 0
+    inversion_estimada = 0.0
+
+    for r in rows:
+        d = dict(r)
+        curr_stock = int(d["stock"] or 0)
+        sugerido = max(1, stock_objetivo - curr_stock)
+        costo = float(d.get("costo_compra", 0.0) or 0.0)
+        subtotal = round(sugerido * costo, 2)
+        d["cantidad_sugerida"] = sugerido
+        d["subtotal_estimado"] = subtotal
+        items.append(d)
+        total_piezas_pedir += sugerido
+        inversion_estimada += subtotal
+
+    inversion_estimada = round(inversion_estimada, 2)
+
+    # Texto formateado para WhatsApp al proveedor
+    now_str = datetime.now().strftime("%d/%m/%Y")
+    lineas_wa = [
+        f"📦 *PEDIDO DE REABASTECIMIENTO - SAMUEL NAVARRETE* ({now_str})",
+        f"Total artículos: {len(items)} | Total piezas: {total_piezas_pedir} pzs\n"
+    ]
+    por_cat: Dict[str, list] = {}
+    for it in items:
+        cat = it["categoria"]
+        if cat not in por_cat:
+            por_cat[cat] = []
+        por_cat[cat].append(f"• *{it['cantidad_sugerida']} pzs* - {it['nombre']} (Stock actual: {it['stock']})")
+
+    for cat, prods in por_cat.items():
+        lineas_wa.append(f"📁 *{cat.upper()}*")
+        lineas_wa.extend(prods)
+        lineas_wa.append("")
+
+    texto_whatsapp = "\n".join(lineas_wa)
+
+    total_agotados = sum(1 for it in items if int(it.get("stock", 0)) <= 0)
+
+    return {
+        "items": items,
+        "sugeridos": items,
+        "total_items": len(items),
+        "total_items_surtir": len(items),
+        "total_agotados": total_agotados,
+        "total_piezas_sugeridas": total_piezas_pedir,
+        "inversion_estimada": inversion_estimada,
+        "inversion_estimada_total": inversion_estimada,
+        "texto_whatsapp": texto_whatsapp,
+        "mensaje_whatsapp": texto_whatsapp
+    }
+
 
 # ==============================================================================
 # CORTES DE CAJA DIARIOS (ARQUEO / REPORTE Z)

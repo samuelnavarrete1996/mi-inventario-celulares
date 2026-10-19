@@ -268,6 +268,27 @@ def init_db():
         except Exception:
             pass
 
+    # 6b. Tabla Kardex y Auditoría de Movimientos de Stock de Accesorios
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS movimientos_stock_accesorios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        accesorio_id INTEGER NOT NULL,
+        tipo_movimiento TEXT NOT NULL CHECK(tipo_movimiento IN ('ENTRADA', 'VENTA', 'MERMA', 'AJUSTE', 'MUESTRA')),
+        cantidad INTEGER NOT NULL,
+        stock_anterior INTEGER NOT NULL,
+        stock_nuevo INTEGER NOT NULL,
+        motivo TEXT NOT NULL,
+        usuario TEXT NOT NULL DEFAULT 'Sistema',
+        fecha TEXT NOT NULL,
+        FOREIGN KEY (accesorio_id) REFERENCES accesorios (id) ON DELETE CASCADE
+    );
+    """)
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_mov_stock_acc_id ON movimientos_stock_accesorios(accesorio_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_mov_stock_fecha ON movimientos_stock_accesorios(fecha);")
+    except Exception:
+        pass
+
     # 7. Tabla Cortes de Caja Diarios (Arqueo / Reporte Z)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS cortes_caja (

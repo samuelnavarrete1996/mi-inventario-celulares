@@ -148,6 +148,63 @@ class AccesorioResponse(BaseModel):
     fecha_registro: str
     margen_unitario: Optional[float] = None
 
+class AccesorioAjusteStockRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    nuevo_stock: int = Field(..., ge=0, le=1000000, description="Nuevo stock físico")
+    tipo_movimiento: str = Field("AJUSTE", description="ENTRADA, VENTA, MERMA, AJUSTE, MUESTRA, COMPRA, AJUSTE_AUDITORIA, MUESTRA_USO_TIENDA, DEVOLUCION_PROVEEDOR")
+    motivo: Optional[str] = Field(None, max_length=200, description="Motivo del ajuste")
+    notas: Optional[str] = Field(None, max_length=300, description="Notas complementarias")
+
+    @field_validator('tipo_movimiento')
+    def validate_tipo(cls, v):
+        v_clean = v.strip().upper()
+        permitidos = (
+            'ENTRADA', 'VENTA', 'MERMA', 'AJUSTE', 'MUESTRA',
+            'COMPRA', 'AJUSTE_AUDITORIA', 'MUESTRA_USO_TIENDA',
+            'DEVOLUCION_PROVEEDOR', 'CARGA_MASIVA'
+        )
+        if v_clean not in permitidos:
+            raise ValueError(f"El tipo de movimiento debe ser uno de: {', '.join(permitidos)}")
+        return v_clean
+
+    @model_validator(mode='after')
+    def validate_motivo(self):
+        if not self.motivo:
+            self.motivo = self.notas or "Ajuste manual de inventario"
+        return self
+
+class AccesorioStockItemMasivo(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: int = Field(..., gt=0)
+    stock: Optional[int] = Field(None, ge=0, le=1000000)
+    nuevo_stock: Optional[int] = Field(None, ge=0, le=1000000)
+
+    @model_validator(mode='after')
+    def validate_stock_alias(self):
+        if self.stock is None and self.nuevo_stock is not None:
+            self.stock = self.nuevo_stock
+        elif self.stock is None:
+            self.stock = 0
+        return self
+
+class AccesorioActualizacionMasivaRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    items: List[AccesorioStockItemMasivo]
+    motivo: Optional[str] = Field("Carga masiva de stock", max_length=200)
+
+class MovimientoStockResponse(BaseModel):
+    id: int
+    accesorio_id: int
+    accesorio_nombre: Optional[str] = None
+    accesorio_categoria: Optional[str] = None
+    tipo_movimiento: str
+    cantidad: int
+    stock_anterior: int
+    stock_nuevo: int
+    motivo: str
+    usuario: str
+    fecha: str
+
 # --- MODELOS DE CARRITO Y VENTAS ---
 
 class ItemCarrito(BaseModel):

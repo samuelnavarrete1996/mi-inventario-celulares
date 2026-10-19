@@ -246,3 +246,110 @@ def generar_plantilla_excel_bytes() -> bytes:
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
+
+
+def generar_plantilla_stock_accesorios_excel() -> bytes:
+    """Genera un archivo Excel (.xlsx) con la lista completa de accesorios para carga masiva de stock."""
+    from app import crud
+    accesorios = crud.get_accesorios()
+    # Excluir servicios intangibles
+    accesorios_fisicos = [a for a in accesorios if not a.get("es_servicio")]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Carga Stock Accesorios"
+
+    # Encabezados
+    headers = ["ID", "Nombre del Accesorio", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
+    ws.append(headers)
+
+    for a in accesorios_fisicos:
+        ws.append([
+            a["id"],
+            a["nombre"],
+            a["categoria"],
+            int(a.get("stock", 0) or 0),
+            int(a.get("stock", 0) or 0), # Prellenado con stock actual para fácil edición
+            float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0)
+        ])
+
+    # Estilos de encabezado
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="0F766E", end_color="0F766E", fill_type="solid") # Verde Teal
+    nuevo_stock_fill = PatternFill(start_color="15803D", end_color="15803D", fill_type="solid") # Verde Esmeralda Destacado
+    alignment_center = Alignment(horizontal="center", vertical="center")
+
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = nuevo_stock_fill if col_idx == 5 else header_fill
+        cell.alignment = alignment_center
+
+    # Resaltar la columna NUEVO STOCK en las filas de datos con fondo suave
+    editable_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+    for r in range(2, len(accesorios_fisicos) + 2):
+        cell_stock = ws.cell(row=r, column=5)
+        cell_stock.fill = editable_fill
+        cell_stock.alignment = alignment_center
+        cell_stock.font = Font(name="Calibri", size=11, bold=True)
+
+    # Anchos de columna
+    anchos = [8, 48, 24, 14, 18, 20]
+    for col_idx, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = ancho
+
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+def importar_stock_accesorios_excel(contenido_bytes: bytes, usuario: str = "Admin") -> Dict[str, Any]:
+    """Procesa el Excel de stock de accesorios y actualiza masivamente en base de datos registrando Kardex."""
+    from app import crud
+
+    wb = openpyxl.load_workbook(io.BytesIO(contenido_bytes), data_only=True)
+    ws = wb.active
+
+    headers = [cell.value for cell in ws[1] if cell.value is not None]
+    norm_headers = [str(h).strip().lower().replace(" ", "").replace("_", "") for h in headers]
+
+    # Identificar columna ID y columna Nuevo Stock
+    id_col = None
+    stock_col = None
+
+    for idx, h in enumerate(norm_headers):
+        if h in ("id", "codigo", "clave"):
+            id_col = idx
+        elif h in ("nuevostock", "stock", "stockfisico", "piezas", "cantidad"):
+            stock_col = idx
+
+    if id_col is None or stock_col is None:
+        raise ValueError("El archivo Excel debe contener al menos las columnas 'ID' y 'NUEVO STOCK'.")
+
+    items_to_update = []
+    errores = []
+
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or row[id_col] is None:
+            continue
+        try:
+            acc_id = int(row[id_col])
+            val_stock = row[stock_col]
+            if val_stock is None or str(val_stock).strip() == "":
+                continue
+            nuevo_stock = max(0, int(float(str(val_stock).strip())))
+            items_to_update.append({"id": acc_id, "stock": nuevo_stock})
+        except Exception as e:
+            errores.append(f"Fila {row_idx}: {str(e)}")
+
+    if not items_to_update:
+        raise ValueError("No se encontraron filas con datos válidos de ID y stock para procesar.")
+
+    res = crud.actualizar_stock_masivo(
+        items=items_to_update,
+        motivo_general="Importación masiva desde Excel",
+        usuario=usuario
+    )
+    res["errores_filas"] = errores
+    return res
+

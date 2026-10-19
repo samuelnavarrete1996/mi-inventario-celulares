@@ -6,6 +6,7 @@ const POS = {
     metodoPago: 'Efectivo', // 'Efectivo', 'Transferencia', 'Combinado', 'Equipo Garantía'
     reciboActual: null,
     catalogoTab: 'equipos', // 'equipos' o 'accesorios'
+    compatibilidadFiltro: '',
 
     init() {
         this.setupSearch();
@@ -594,6 +595,28 @@ const POS = {
         }
     },
 
+    filtrarAccesoriosRapido(termino) {
+        const inputSearch = document.getElementById('pos-search-input');
+        if (inputSearch) {
+            inputSearch.value = termino;
+        }
+        this.buscarAccesoriosPOS(termino);
+    },
+
+    filtrarCompatibilidad(marca, btn) {
+        this.compatibilidadFiltro = marca;
+        document.querySelectorAll('.btn-pos-chip').forEach(b => {
+            b.classList.remove('bg-blue-600', 'text-white');
+            b.classList.add('bg-slate-100', 'text-slate-600');
+        });
+        if (btn) {
+            btn.classList.add('bg-blue-600', 'text-white');
+            btn.classList.remove('bg-slate-100', 'text-slate-600');
+        }
+        const query = document.getElementById('pos-search-input')?.value.trim() || '';
+        this.buscarAccesoriosPOS(query);
+    },
+
     async buscarAccesoriosPOS(query = '') {
         const container = document.getElementById('pos-grid-accesorios');
         const emptyState = document.getElementById('pos-accesorios-empty-state');
@@ -603,7 +626,20 @@ const POS = {
             const url = `/api/accesorios?search=${encodeURIComponent(query)}`;
             const res = await fetch(url);
             if (!res.ok) throw new Error("Error cargando catálogo de accesorios");
-            const items = await res.json();
+            let items = await res.json();
+
+            // Filtrado por compatibilidad de modelo / marca
+            if (this.compatibilidadFiltro) {
+                const f = this.compatibilidadFiltro.toLowerCase();
+                if (f === 'universal') {
+                    items = items.filter(acc => {
+                        const n = acc.nombre.toLowerCase();
+                        return n.includes('universal') || (!n.includes('iphone') && !n.includes('samsung') && !n.includes('xiaomi') && !n.includes('motorola'));
+                    });
+                } else {
+                    items = items.filter(acc => acc.nombre.toLowerCase().includes(f) || acc.categoria.toLowerCase().includes(f));
+                }
+            }
 
             if (items.length === 0) {
                 container.innerHTML = '';

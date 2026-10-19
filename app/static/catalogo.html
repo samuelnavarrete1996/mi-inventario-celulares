@@ -629,7 +629,7 @@
                 }
             },
 
-            // --- LÓGICA DE PRECIOS DINÁMICOS (+20 PZS) ---
+            // --- LÓGICA DE PRECIOS DINÁMICOS (+20 PZS Y POR CAJA) ---
             calcularItem(item) {
                 if (item.tipo === 'equipo') {
                     const pUnit = item.precio_venta || 0;
@@ -638,23 +638,31 @@
                         subtotal: pUnit * (item.cantidad || 1),
                         nivelTexto: 'Precio Contado',
                         aplica20: false,
+                        aplicaCaja: false,
                         ahorro: 0
                     };
                 } else {
                     const cant = item.cantidad || 1;
                     const pMay = item.precio_mayoreo || item.precio_venta || 0;
                     const p20 = (item.precio_20_pzs && item.precio_20_pzs > 0) ? item.precio_20_pzs : pMay;
+                    const pCaja = (item.precio_caja && item.precio_caja > 0) ? item.precio_caja : p20;
 
                     let precioUnitario = pMay;
                     let nivelTexto = 'Mayoreo (1+)';
                     let aplica20 = false;
+                    let aplicaCaja = false;
                     let ahorro = 0;
 
-                    // Si compra 20 o más piezas del mismo modelo, cambia automáticamente al precio de 20 pzs
-                    if (cant >= 20) {
+                    // Escala de precios por volumen: Caja (+50 pzs) > +20 Pzs > Mayoreo (1+)
+                    if (cant >= 50 && pCaja < pMay) {
+                        precioUnitario = pCaja;
+                        nivelTexto = 'Por Caja / +50 Pzs (Tarifa Preferencial)';
+                        aplicaCaja = true;
+                        ahorro = Math.max(0, (pMay - pCaja) * cant);
+                    } else if (cant >= 20 && p20 < pMay) {
                         precioUnitario = p20;
                         nivelTexto = '+20 Pzs (Precio Especial)';
-                        aplica20 = (p20 < pMay);
+                        aplica20 = true;
                         ahorro = Math.max(0, (pMay - p20) * cant);
                     }
 
@@ -664,10 +672,13 @@
                         subtotal: subtotal,
                         nivelTexto: nivelTexto,
                         aplica20: aplica20,
+                        aplicaCaja: aplicaCaja,
                         ahorro: ahorro,
                         pMay: pMay,
                         p20: p20,
-                        faltanPara20: Math.max(0, 20 - cant)
+                        pCaja: pCaja,
+                        faltanPara20: Math.max(0, 20 - cant),
+                        faltanParaCaja: Math.max(0, 50 - cant)
                     };
                 }
             },
@@ -726,22 +737,37 @@
                             ? `${item.modelo} (${item.capacidad_gb}GB - ${item.color})`
                             : item.nombre;
 
-                        // Mensaje o badge de la regla de 20 piezas
+                        // Mensaje o badge de la regla de volumen (+20 pzs y Por Caja)
                         let infoPrecioHtml = '';
                         if (item.tipo === 'accesorio') {
-                            if (calc.aplica20) {
+                            if (calc.aplicaCaja) {
                                 infoPrecioHtml = `
-                                <div class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-black">
-                                    <span>🎉 Precio +20 Pzs aplicado: $${calc.precioUnitario.toFixed(2)} c/u</span>
+                                <div class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-black">
+                                    <span>👑 Tarifa Por Caja (+50): $${calc.precioUnitario.toFixed(2)} c/u</span>
                                     <span class="text-slate-400 line-through">($${calc.pMay.toFixed(2)})</span>
+                                </div>`;
+                            } else if (calc.aplica20) {
+                                infoPrecioHtml = `
+                                <div class="flex items-center justify-between text-[10px] bg-blue-50 text-blue-800 border border-blue-200 p-1.5 rounded-lg">
+                                    <span class="font-bold">✨ Precio +20 Pzs: $${calc.precioUnitario.toFixed(2)} c/u</span>
+                                    ${calc.pCaja < calc.p20 ? `
+                                    <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 50)" class="text-emerald-700 font-black ml-1.5 underline cursor-pointer hover:text-emerald-900" title="Alcanzar 50 pzs para precio caja">
+                                        Subir a Caja ($${calc.pCaja.toFixed(2)})
+                                    </button>` : ''}
                                 </div>`;
                             } else if (calc.faltanPara20 > 0 && calc.p20 < calc.pMay) {
                                 infoPrecioHtml = `
                                 <div class="flex items-center justify-between text-[10px] text-slate-500 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                                    <span>Mayoreo: $${calc.precioUnitario.toFixed(2)} c/u (Faltan ${calc.faltanPara20} para $${calc.p20.toFixed(2)})</span>
-                                    <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 20)" class="text-blue-600 hover:text-blue-800 font-black ml-1.5 underline cursor-pointer">
-                                        +20 Pzs
-                                    </button>
+                                    <span>Mayoreo: $${calc.precioUnitario.toFixed(2)} c/u</span>
+                                    <div class="flex items-center gap-1">
+                                        <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 20)" class="text-blue-600 hover:text-blue-800 font-black underline cursor-pointer">
+                                            +20 Pzs ($${calc.p20.toFixed(2)})
+                                        </button>
+                                        ${calc.pCaja < calc.p20 ? `
+                                        <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 50)" class="text-emerald-600 hover:text-emerald-800 font-black underline cursor-pointer ml-1">
+                                            Caja ($${calc.pCaja.toFixed(2)})
+                                        </button>` : ''}
+                                    </div>
                                 </div>`;
                             } else {
                                 infoPrecioHtml = `<span class="text-[11px] text-slate-500 font-medium">Mayoreo: $${calc.precioUnitario.toFixed(2)} c/u</span>`;
@@ -884,7 +910,10 @@
                         texto += `   • Cantidad: 1 unidad\n`;
                         texto += `   • Precio: $${calc.precioUnitario.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
                     } else {
-                        const tagDescuento = calc.aplica20 ? ` (✨ Precio +20 Pzs aplicado)` : ` (Mayoreo 1+)`;
+                        let tagDescuento = ' (Mayoreo 1+)';
+                        if (calc.aplicaCaja) tagDescuento = ' (👑 Precio Por Caja aplicado)';
+                        else if (calc.aplica20) tagDescuento = ' (✨ Precio +20 Pzs aplicado)';
+
                         texto += `${numero} *${item.nombre}*\n`;
                         texto += `   • Categoría: ${item.categoria}\n`;
                         texto += `   • Cantidad: *${item.cantidad} piezas*${tagDescuento}\n`;
@@ -897,7 +926,7 @@
                 texto += `─────────────────────────\n`;
                 texto += `📦 *Total de piezas:* ${totalPiezas}\n`;
                 if (ahorroTotal > 0) {
-                    texto += `🎉 *Ahorro por volumen (+20 pzs):* -$${ahorroTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
+                    texto += `🎉 *Ahorro por volumen aplicado:* -$${ahorroTotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
                 }
                 texto += `💰 *TOTAL DE LA CUENTA:* *$${totalFinal.toLocaleString('es-MX', {minimumFractionDigits: 2})} MXN*\n\n`;
 
