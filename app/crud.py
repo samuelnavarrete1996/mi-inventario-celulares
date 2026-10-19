@@ -1330,6 +1330,14 @@ def create_reparacion(datos: Dict[str, Any]) -> Dict[str, Any]:
     conn.close()
     return get_reparacion_by_id(new_id)
 
+COLUMNAS_PERMITIDAS_REPARACION = {
+    "cliente_nombre", "cliente_telefono", "dispositivo_modelo", "color",
+    "imei_serie", "codigo_patron", "falla_reportada", "diagnostico_tecnico",
+    "condicion_recepcion", "costo_refaccion", "precio_servicio", "anticipo",
+    "saldo_pendiente", "estado", "fecha_ingreso", "fecha_prometida",
+    "fecha_entrega", "tecnico_responsable", "notas"
+}
+
 def update_reparacion(rep_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1351,7 +1359,7 @@ def update_reparacion(rep_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, 
     campos = []
     valores = []
     for k, v in datos.items():
-        if k not in ("id", "folio", "margen_ganancia"):
+        if k in COLUMNAS_PERMITIDAS_REPARACION:
             campos.append(f"{k} = ?")
             valores.append(v)
 

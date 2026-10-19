@@ -318,14 +318,52 @@ def init_db():
     conn.close()
 
 def seed_demo_data_if_empty():
-    """Inserta datos de demostración si la base de datos está vacía."""
+    """
+    Inserta datos de demostración solo si la base de datos está vacía y se solicita explícitamente vía
+    SEED_DEMO_DATA=1 o durante la ejecución de pruebas automatizadas.
+    Garantiza siempre la inicialización segura de usuarios de acceso.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 1. Inicialización o sincronización de usuarios
+    from app.security import hash_secret
+    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+    admin_hash, admin_salt = hash_secret(admin_pwd)
+    vendedor_pwd = os.environ.get("VENDEDOR_PASSWORD", "piso6bodega606.")
+    vendedor_hash, vendedor_salt = hash_secret(vendedor_pwd)
+
+    cursor.execute("SELECT COUNT(*) as count FROM usuarios;")
+    user_count = cursor.fetchone()["count"]
+
+    if user_count == 0:
+        usuarios_init = [
+            ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, "dueno", 1, now),
+            ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, "vendedor", 1, now)
+        ]
+        cursor.executemany("""
+        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """, usuarios_init)
+        conn.commit()
+    else:
+        # Solo sincronizar si se proporcionó una variable de entorno explícita para evitar sobreescritura accidental
+        if "ADMIN_DELETE_PASSWORD" in os.environ:
+            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'admin';", (admin_hash, admin_salt))
+        if "VENDEDOR_PASSWORD" in os.environ:
+            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'vendedor';", (vendedor_hash, vendedor_salt))
+        conn.commit()
+
+    # 2. Siembra de datos demo (solo en tests o con bandera explícita SEED_DEMO_DATA=1)
+    debe_sembrar = os.environ.get("SEED_DEMO_DATA") == "1" or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+    if not debe_sembrar:
+        conn.close()
+        return
 
     cursor.execute("SELECT COUNT(*) as count FROM equipos;")
     count = cursor.fetchone()["count"]
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     if count == 0:
         demo_equipos = [
@@ -372,7 +410,7 @@ def seed_demo_data_if_empty():
 
         conn.commit()
 
-    # Sembrar accesorios demo si la tabla está vacía
+    # Sembrar accesorios demo si la tabla está vacía y se está en modo siembra
     cursor.execute("SELECT COUNT(*) as count FROM accesorios;")
     if cursor.fetchone()["count"] == 0:
         demo_acc = [
@@ -390,7 +428,7 @@ def seed_demo_data_if_empty():
         """, demo_acc)
         conn.commit()
 
-    # Sembrar reparaciones demo si la tabla está vacía
+    # Sembrar reparaciones demo si la tabla está vacía y se está en modo siembra
     cursor.execute("SELECT COUNT(*) as count FROM reparaciones;")
     if cursor.fetchone()["count"] == 0:
         demo_rep = [
@@ -401,30 +439,6 @@ def seed_demo_data_if_empty():
         INSERT INTO reparaciones (folio, cliente_nombre, cliente_telefono, dispositivo_modelo, color, imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico, condicion_recepcion, costo_refaccion, precio_servicio, anticipo, saldo_pendiente, estado, fecha_ingreso, fecha_prometida, fecha_entrega, tecnico_responsable, notas)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """, demo_rep)
-        conn.commit()
-
-    # Sembrar o actualizar usuarios
-    cursor.execute("SELECT COUNT(*) as count FROM usuarios;")
-    from app.security import hash_secret
-    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
-    admin_hash, admin_salt = hash_secret(admin_pwd)
-    vendedor_pwd = "piso6bodega606."
-    vendedor_hash, vendedor_salt = hash_secret(vendedor_pwd)
-
-    if cursor.fetchone()["count"] == 0:
-        usuarios_init = [
-            ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, "dueno", 1, now),
-            ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, "vendedor", 1, now)
-        ]
-        cursor.executemany("""
-        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
-        """, usuarios_init)
-        conn.commit()
-    else:
-        # Actualizar contraseña de Dueño y de inicio (vendedor) en la base de datos existente
-        cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'admin';", (admin_hash, admin_salt))
-        cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'vendedor';", (vendedor_hash, vendedor_salt))
         conn.commit()
 
     conn.close()

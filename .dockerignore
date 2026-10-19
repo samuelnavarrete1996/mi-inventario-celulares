@@ -9,3 +9,10 @@ venv
 .venv
 env
 *.log
+*.db
+*.sqlite*
+inventario.db
+*.bak*
+.env
+.env.*
+

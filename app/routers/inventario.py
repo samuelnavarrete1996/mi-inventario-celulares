@@ -117,19 +117,18 @@ def actualizar_equipo(
 @router.delete("/{equipo_id}", status_code=status.HTTP_200_OK)
 def eliminar_equipo(
     equipo_id: int,
-    password: Optional[str] = Query(None, description="Contraseña de autorización"),
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
     user: dict = Depends(get_current_user)
 ):
     """
     Elimina un equipo si aún no ha sido vendido.
-    Requiere sesión activa de Dueño o contraseña de autorización válida.
+    Requiere sesión activa de Dueño o cabecera 'X-Admin-Password' con contraseña válida.
+    No se permite el envío de contraseñas por URL (query parameters) por seguridad.
     """
-    token = x_admin_password or password
-    if not (is_user_dueno(user) or verify_delete_password(token)):
+    if not (is_user_dueno(user) or verify_delete_password(x_admin_password)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren permisos de Dueño o contraseña de autorización válida."
+            detail="Se requieren permisos de Dueño o cabecera X-Admin-Password válida."
         )
 
     try:

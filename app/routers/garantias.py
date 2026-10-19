@@ -1,19 +1,22 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 from typing import List, Optional, Dict, Any
 from app import crud
 from app.models import GarantiaCreate, GarantiaResponse
+from app.security import get_current_user
 
 router = APIRouter(prefix="/api/garantias", tags=["Garantías"])
 
 @router.get("/verificar-imei")
 def verificar_imei_garantia(
-    imei: str = Query(..., description="IMEI del equipo vendido a consultar para garantía")
+    imei: str = Query(..., description="IMEI del equipo vendido a consultar para garantía"),
+    user: dict = Depends(get_current_user)
 ):
     """
     Verifica los datos de venta de un equipo y calcula si está dentro de su plazo de garantía:
     - Grado A: 90 días
     - Grado B: 30 días
     - Grado C: 15 días
+    (Requiere sesión activa).
     """
     try:
         info = crud.buscar_equipo_para_garantia(imei)
@@ -24,12 +27,16 @@ def verificar_imei_garantia(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al verificar garantía: {str(e)}")
 
 @router.post("/devolucion", response_model=GarantiaResponse, status_code=status.HTTP_201_CREATED)
-def procesar_devolucion_garantia(garantia: GarantiaCreate):
+def procesar_devolucion_garantia(
+    garantia: GarantiaCreate,
+    user: dict = Depends(get_current_user)
+):
     """
     Procesa el regreso de un equipo por garantía:
     - Registra la devolución con el motivo y falla.
     - Actualiza el estado del equipo defectuoso (En Garantía, Reingresado a Inventario o Baja por Daño).
     - Permite enlazarlo al reemplazo correspondiente.
+    (Requiere sesión activa).
     """
     try:
         resultado = crud.procesar_devolucion_garantia(garantia)
@@ -40,16 +47,23 @@ def procesar_devolucion_garantia(garantia: GarantiaCreate):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error procesando garantía: {str(e)}")
 
 @router.get("", response_model=List[Dict[str, Any]])
-def listar_historial_garantias(limit: int = 100):
-    """Obtiene el historial de todas las devoluciones y reclamos de garantía procesados."""
+def listar_historial_garantias(
+    limit: int = 100,
+    user: dict = Depends(get_current_user)
+):
+    """Obtiene el historial de todas las devoluciones y reclamos de garantía procesados (requiere sesión activa)."""
     return crud.get_historial_garantias(limit=limit)
 
 @router.get("/historial-imei/{imei}")
-def obtener_historial_completo_imei(imei: str):
+def obtener_historial_completo_imei(
+    imei: str,
+    user: dict = Depends(get_current_user)
+):
     """
     Trazabilidad 360° por IMEI:
     Línea de tiempo cronológica completa de la vida del equipo
     (Ingreso, ventas, reclamos de garantía, reemplazos entregados).
+    (Requiere sesión activa).
     """
     try:
         return crud.obtener_historial_imei(imei)

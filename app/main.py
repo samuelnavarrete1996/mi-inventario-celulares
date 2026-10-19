@@ -13,24 +13,45 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# Configuración de CORS
+# Configuración Segura de CORS
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
+if allowed_origins_env:
+    allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+else:
+    allowed_origins = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.onrender\.com$",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Middleware anti-caché para archivos estáticos y Single Page Application
+# Middleware de Seguridad y Anti-Caché (OWASP Recommended)
 @app.middleware("http")
-async def add_anti_cache_headers(request, call_next):
+async def security_and_cache_headers(request, call_next):
     response = await call_next(request)
+    
+    # Cabeceras de Seguridad HTTP para mitigar Clickjacking, MIME sniffing y XSS
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    
+    # Anti-caché para archivos estáticos y Single Page Application
     path = request.url.path
     if path.endswith((".html", ".js", ".css", ".json")) or path == "/":
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        
     return response
 
 # Inicializar Base de Datos en el arranque

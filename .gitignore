@@ -7,3 +7,10 @@ __pycache__/
 venv/
 .venv/
 env/
+*.db
+*.sqlite*
+inventario.db
+*.bak*
+.env
+.env.*
+!.env.example
