@@ -256,10 +256,10 @@ const Garantias = {
 
                         <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:border-slate-300 transition-all">
                             <div class="flex justify-between items-start gap-2 mb-1">
-                                <h5 class="font-bold text-slate-900 text-xs sm:text-sm">${ev.titulo}</h5>
+                                <h5 class="font-bold text-slate-900 text-xs sm:text-sm">${App.escapeHtml(ev.titulo)}</h5>
                                 <span class="text-[11px] font-mono text-slate-400 whitespace-nowrap">${App.formatDate(ev.fecha)}</span>
                             </div>
-                            <p class="text-xs text-slate-600 leading-relaxed">${ev.descripcion}</p>
+                            <p class="text-xs text-slate-600 leading-relaxed">${App.escapeHtml(ev.descripcion)}</p>
                         </div>
                     </div>
                     `;
@@ -267,7 +267,7 @@ const Garantias = {
             }
         } catch (e) {
             if (containerEventos) {
-                containerEventos.innerHTML = `<div class="py-6 text-center text-rose-500 font-semibold">${e.message}</div>`;
+                containerEventos.innerHTML = `<div class="py-6 text-center text-rose-500 font-semibold">${App.escapeHtml(e.message)}</div>`;
             }
         }
     },

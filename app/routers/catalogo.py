@@ -17,9 +17,9 @@ def ver_catalogo_publico():
 
 @router.get("/api/catalogo/equipos")
 def obtener_equipos_catalogo(
-    marca: Optional[str] = Query(None, description="Filtrar por marca (iPhone, Samsung, Xiaomi, etc.)"),
-    grado: Optional[str] = Query(None, description="Filtrar por grado estético (A, B, C)"),
-    search: Optional[str] = Query(None, description="Búsqueda por modelo o color")
+    marca: Optional[str] = Query(None, max_length=60, description="Filtrar por marca (iPhone, Samsung, Xiaomi, etc.)"),
+    grado: Optional[str] = Query(None, max_length=10, description="Filtrar por grado estético (A, B, C)"),
+    search: Optional[str] = Query(None, max_length=100, description="Búsqueda por modelo o color")
 ) -> List[Dict[str, Any]]:
     """
     Retorna el catálogo público de celulares DISPONIBLES para clientes.
@@ -56,8 +56,8 @@ def obtener_equipos_catalogo(
 
 @router.get("/api/catalogo/accesorios")
 def obtener_accesorios_catalogo(
-    categoria: Optional[str] = Query(None, description="Categoría de accesorios"),
-    search: Optional[str] = Query(None, description="Búsqueda por nombre")
+    categoria: Optional[str] = Query(None, max_length=80, description="Categoría de accesorios"),
+    search: Optional[str] = Query(None, max_length=100, description="Búsqueda por nombre")
 ) -> List[Dict[str, Any]]:
     """
     Retorna el catálogo público de accesorios y servicios disponibles.

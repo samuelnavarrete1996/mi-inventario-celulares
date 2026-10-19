@@ -3,7 +3,7 @@ import re
 import csv
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from app import crud
 from app.models import EquipoCreate
 

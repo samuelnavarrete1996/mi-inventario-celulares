@@ -1,17 +1,35 @@
 import os
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from app.database import init_db, seed_demo_data_if_empty
 from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup, reparaciones, catalogo, auth
+
+logger = logging.getLogger("inventario.security")
+
+# Ocultar documentación interactiva en producción salvo que se habilite explícitamente
+_enable_docs = os.environ.get("ENABLE_API_DOCS", "1") == "1" and not os.environ.get("RENDER")
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(
     title="Mi Inventario - Celulares Samuel Navarrete",
     description="Sistema web para control de inventario, punto de venta (POS) y reportes de telefonía móvil.",
-    version="2.0.0"
+    version="2.1.0",
+    docs_url="/docs" if _enable_docs else None,
+    redoc_url="/redoc" if _enable_docs else None,
+    openapi_url="/openapi.json" if _enable_docs else None,
 )
+
+# Manejador global de excepciones no controladas para evitar fuga de stack traces en producción
+@app.exception_handler(Exception)
+async def global_unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("Excepción no controlada en %s %s: %s", request.method, request.url.path, repr(exc))
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Error interno del servidor. La operación no pudo completarse."}
+    )
 
 # Configuración Segura de CORS
 allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
@@ -27,27 +45,40 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.onrender\.com$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://[a-zA-Z0-9-]+\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Password", "Accept"],
 )
 
 # Middleware de Seguridad y Anti-Caché (OWASP Recommended)
 @app.middleware("http")
-async def security_and_cache_headers(request, call_next):
+async def security_and_cache_headers(request: Request, call_next):
     response = await call_next(request)
     
-    # Cabeceras de Seguridad HTTP para mitigar Clickjacking, MIME sniffing y XSS
+    # Cabeceras de Seguridad HTTP para mitigar Clickjacking, MIME sniffing, XSS y ataques de protocolo
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: https: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self'; "
+        "base-uri 'self'; "
+        "form-action 'self';"
+    )
+    if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     
-    # Anti-caché para archivos estáticos y Single Page Application
+    # Anti-caché para archivos estáticos, API y Single Page Application
     path = request.url.path
-    if path.endswith((".html", ".js", ".css", ".json")) or path == "/":
+    if path.endswith((".html", ".js", ".css", ".json")) or path == "/" or path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -112,4 +143,4 @@ def serve_service_worker():
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "app": "Mi Inventario Samuel Navarrete", "version": "2.0.0"}
+    return {"status": "ok", "app": "Mi Inventario Samuel Navarrete", "version": "2.1.0"}

@@ -680,6 +680,35 @@ const App = {
         }
     },
 
+    escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    escapeJsArg(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/"/g, '&quot;')
+            .replace(/\n/g, ' ')
+            .replace(/\r/g, '');
+    },
+
+    sanitizeUrl(url) {
+        if (!url) return '';
+        const clean = String(url).trim();
+        if (/^(https?:\/\/|\/|static\/)/i.test(clean)) {
+            return this.escapeHtml(clean);
+        }
+        return '';
+    },
+
     formatCurrency(amount) {
         return new Intl.NumberFormat('es-MX', {
             style: 'currency',
@@ -719,7 +748,7 @@ const App = {
                 <span class="w-1.5 h-1.5 mr-1 bg-rose-500 rounded-full"></span> Grado C
             </span>`;
         }
-        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">${grado}</span>`;
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">${this.escapeHtml(grado)}</span>`;
     },
 
     getAgingBadge(dias, estado) {
@@ -766,7 +795,7 @@ const App = {
 
         toast.innerHTML = `
             ${iconSvg}
-            <span>${message}</span>
+            <span>${this.escapeHtml(message)}</span>
         `;
 
         container.appendChild(toast);

@@ -302,6 +302,25 @@
             seccionActiva: 'accesorios',
             _toastTimeout: null,
 
+            escapeHtml(str) {
+                if (str === null || str === undefined) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            },
+
+            sanitizeUrl(url) {
+                if (!url) return '';
+                const clean = String(url).trim();
+                if (/^(https?:\/\/|\/|static\/)/i.test(clean)) {
+                    return this.escapeHtml(clean);
+                }
+                return '';
+            },
+
             async init() {
                 this.cargarCarritoDeStorage();
                 await this.cargarAccesorios();
@@ -381,9 +400,9 @@
                             </div>
                             
                             <div>
-                                <h4 class="text-lg font-black text-slate-900 group-hover:text-blue-600 transition-colors leading-tight">${eq.modelo}</h4>
+                                <h4 class="text-lg font-black text-slate-900 group-hover:text-blue-600 transition-colors leading-tight">${this.escapeHtml(eq.modelo)}</h4>
                                 <p class="text-xs text-slate-500 font-medium mt-1 flex items-center gap-1.5">
-                                    <span>🎨 Color: <strong>${eq.color}</strong></span>
+                                    <span>🎨 Color: <strong>${this.escapeHtml(eq.color)}</strong></span>
                                 </p>
                             </div>
                         </div>
@@ -429,7 +448,7 @@
 
                     const imgHtml = acc.imagen_url 
                         ? `<div class="w-full h-40 bg-slate-50/80 rounded-xl overflow-hidden mb-2.5 flex items-center justify-center p-2.5 border border-slate-100 group-hover:border-blue-200 transition-colors">
-                               <img src="${acc.imagen_url}" alt="${acc.nombre}" class="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200" loading="lazy" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">
+                               <img src="${this.sanitizeUrl(acc.imagen_url)}" alt="${this.escapeHtml(acc.nombre)}" class="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200" loading="lazy" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">
                            </div>`
                         : `<div class="w-full h-40 bg-blue-50/50 rounded-xl mb-2.5 flex items-center justify-center text-4xl border border-blue-100/50">
                                ${acc.es_servicio ? '🔧' : '🔌'}
@@ -444,10 +463,10 @@
                         <div>
                             ${imgHtml}
                             <div class="flex items-center justify-between gap-1 mb-1">
-                                <span class="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">${acc.categoria}</span>
+                                <span class="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">${this.escapeHtml(acc.categoria)}</span>
                                 ${cantEnCarro > 0 ? `<span class="text-[11px] font-black text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">En carro: ${cantEnCarro}</span>` : ''}
                             </div>
-                            <h4 class="font-bold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">${acc.nombre}</h4>
+                            <h4 class="font-bold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">${this.escapeHtml(acc.nombre)}</h4>
                         </div>
 
                         <!-- 3 Niveles de Precio Mayorista -->
@@ -698,7 +717,7 @@
                         const calc = this.calcularItem(item);
 
                         const imgHtml = item.imagen_url
-                            ? `<img src="${item.imagen_url}" class="w-14 h-14 object-contain rounded-xl border border-slate-100 bg-white p-1 flex-shrink-0" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
+                            ? `<img src="${this.sanitizeUrl(item.imagen_url)}" class="w-14 h-14 object-contain rounded-xl border border-slate-100 bg-white p-1 flex-shrink-0" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
                             : `<div class="w-14 h-14 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl flex-shrink-0">
                                    ${item.tipo === 'equipo' ? '📱' : '🔌'}
                                </div>`;
@@ -832,7 +851,7 @@
                     toast.className = 'fixed top-16 right-4 z-50 bg-slate-900/95 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-bold transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-none border border-slate-700 max-w-sm';
                     document.body.appendChild(toast);
                 }
-                toast.innerHTML = `<span class="text-base">${icono}</span><span class="leading-tight">${mensaje}</span>`;
+                toast.innerHTML = `<span class="text-base">${this.escapeHtml(icono)}</span><span class="leading-tight">${this.escapeHtml(mensaje)}</span>`;
                 toast.classList.remove('opacity-0', 'translate-y-2', 'pointer-events-none');
                 clearTimeout(this._toastTimeout);
                 this._toastTimeout = setTimeout(() => {

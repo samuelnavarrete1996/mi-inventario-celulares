@@ -121,16 +121,16 @@ const Reparaciones = {
             return `
             <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors ${bgRow}">
                 <td class="py-3 px-4 font-mono font-bold text-xs text-blue-700 whitespace-nowrap">
-                    ${r.folio}
+                    ${App.escapeHtml(r.folio)}
                 </td>
                 <td class="py-3 px-4">
-                    <div class="font-bold text-slate-900 text-xs">${r.dispositivo_modelo}</div>
-                    <div class="text-[11px] text-slate-500 truncate max-w-xs">${r.falla_reportada}</div>
-                    ${r.codigo_patron ? `<div class="text-[10px] text-amber-700 font-mono">Clave: ${r.codigo_patron}</div>` : ''}
+                    <div class="font-bold text-slate-900 text-xs">${App.escapeHtml(r.dispositivo_modelo)}</div>
+                    <div class="text-[11px] text-slate-500 truncate max-w-xs">${App.escapeHtml(r.falla_reportada)}</div>
+                    ${r.codigo_patron ? `<div class="text-[10px] text-amber-700 font-mono">Clave: ${App.escapeHtml(r.codigo_patron)}</div>` : ''}
                 </td>
                 <td class="py-3 px-4 whitespace-nowrap">
-                    <div class="font-semibold text-slate-800 text-xs">${r.cliente_nombre}</div>
-                    <div class="text-[11px] text-slate-400 font-mono">${r.cliente_telefono}</div>
+                    <div class="font-semibold text-slate-800 text-xs">${App.escapeHtml(r.cliente_nombre)}</div>
+                    <div class="text-[11px] text-slate-400 font-mono">${App.escapeHtml(r.cliente_telefono)}</div>
                 </td>
                 <td class="py-3 px-4 whitespace-nowrap">
                     <select onchange="Reparaciones.cambiarEstado(${r.id}, this.value)" class="text-xs font-bold rounded-lg border border-slate-200 py-1 px-2 bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none">

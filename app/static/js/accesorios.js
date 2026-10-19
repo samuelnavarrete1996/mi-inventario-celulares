@@ -69,7 +69,7 @@ const Accesorios = {
             const pCaja = acc.precio_caja || acc.costo_compra || p20;
 
             const imgHtml = acc.imagen_url 
-                ? `<img src="${acc.imagen_url}" class="w-11 h-11 object-contain rounded-xl border border-slate-200 bg-white p-1 flex-shrink-0 shadow-2xs" alt="${acc.nombre}" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
+                ? `<img src="${App.sanitizeUrl(acc.imagen_url)}" class="w-11 h-11 object-contain rounded-xl border border-slate-200 bg-white p-1 flex-shrink-0 shadow-2xs" alt="${App.escapeHtml(acc.nombre)}" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
                 : `<span class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg flex-shrink-0">${acc.es_servicio ? '🔧' : '🔌'}</span>`;
 
             return `
@@ -78,12 +78,12 @@ const Accesorios = {
                     <div class="flex items-center gap-3">
                         ${imgHtml}
                         <div>
-                            <div class="leading-snug">${acc.nombre}</div>
-                            <span class="text-xs text-slate-400 font-normal">${acc.categoria}</span>
+                            <div class="leading-snug">${App.escapeHtml(acc.nombre)}</div>
+                            <span class="text-xs text-slate-400 font-normal">${App.escapeHtml(acc.categoria)}</span>
                         </div>
                     </div>
                 </td>
-                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${acc.categoria}</td>
+                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${App.escapeHtml(acc.categoria)}</td>
                 <td class="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">${App.formatCurrency(pMay)}</td>
                 <td class="py-3 px-4 whitespace-nowrap"><span class="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">${App.formatCurrency(p20)}</span></td>
                 <td class="py-3 px-4 whitespace-nowrap"><span class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">${App.formatCurrency(pCaja)}</span></td>

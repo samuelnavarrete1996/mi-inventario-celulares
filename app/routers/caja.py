@@ -11,8 +11,11 @@ def obtener_resumen_corte(user: dict = Depends(get_current_user)):
     """Obtiene el acumulado de ventas del turno actual (requiere sesión activa)."""
     try:
         return crud.obtener_resumen_corte_actual()
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al calcular el resumen de corte de caja."
+        )
 
 @router.post("/corte", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 def realizar_corte_caja(datos: CorteCajaCreate, user: dict = Depends(get_current_user)):
@@ -22,8 +25,13 @@ def realizar_corte_caja(datos: CorteCajaCreate, user: dict = Depends(get_current
             efectivo_declarado=datos.efectivo_declarado,
             notas=datos.notas
         )
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al registrar el corte de caja."
+        )
 
 @router.get("/historial", response_model=List[Dict[str, Any]])
 def historial_cortes(

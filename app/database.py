@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import tempfile
 from datetime import datetime
 
 # Cargar variables de entorno desde .env si existe
@@ -15,7 +16,30 @@ if os.path.exists(_env_file):
     except Exception:
         pass
 
-DATABASE_FILE = os.environ.get("DATABASE_PATH") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "inventario.db")
+
+def _resolve_sqlite_path() -> str:
+    """Resuelve la ruta de SQLite verificando soporte de bloqueo de archivos (compatible con contenedores y montajes FUSE)."""
+    explicit = os.environ.get("DATABASE_PATH")
+    if explicit:
+        return explicit
+
+    default_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "inventario.db")
+    try:
+        conn = sqlite3.connect(default_path, timeout=5.0)
+        conn.execute("CREATE TABLE IF NOT EXISTS _health_lock_check (id INTEGER PRIMARY KEY);")
+        conn.commit()
+        conn.close()
+        return default_path
+    except sqlite3.OperationalError:
+        try:
+            if os.path.exists(default_path) and os.path.getsize(default_path) == 0:
+                os.remove(default_path)
+        except Exception:
+            pass
+        return os.path.join(tempfile.gettempdir(), "inventario.db")
+
+
+DATABASE_FILE = _resolve_sqlite_path()
 
 TURSO_URL = os.environ.get("TURSO_DATABASE_URL") or os.environ.get("TURSO_URL") or os.environ.get("DATABASE_URL")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN") or os.environ.get("TURSO_TOKEN") or os.environ.get("DATABASE_AUTH_TOKEN")
@@ -25,14 +49,19 @@ def is_turso_enabled() -> bool:
     return bool(TURSO_URL and TURSO_TOKEN and ("turso.io" in TURSO_URL or "libsql:" in TURSO_URL))
 
 def get_db_connection():
-    """Retorna una conexión a Turso Cloud si está configurada, o a SQLite local."""
+    """Retorna una conexión a Turso Cloud si está configurada, o a SQLite local con WAL y busy_timeout para evitar condiciones de carrera."""
     if is_turso_enabled():
         from app.turso_client import TursoConnection
         return TursoConnection(TURSO_URL, TURSO_TOKEN)
 
-    conn = sqlite3.connect(DATABASE_FILE)
+    conn = sqlite3.connect(DATABASE_FILE, timeout=15.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 10000;")
     conn.execute("PRAGMA foreign_keys = ON;")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+    except sqlite3.OperationalError:
+        pass
     return conn
 
 def init_db():

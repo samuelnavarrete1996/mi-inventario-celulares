@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, HTTPException, status, Depends
 from typing import List, Optional, Dict, Any
 from app import crud
 from app.models import VentaDetalleResponse
-from app.security import get_current_user, require_role, is_user_dueno
+from app.security import get_current_user, require_role, is_user_dueno, sanitizar_datos_sensibles
 
 router = APIRouter(prefix="/api/reportes", tags=["Reportes"])
 
@@ -11,18 +11,20 @@ def obtener_metricas_dashboard(user: dict = Depends(get_current_user)) -> Dict[s
     """
     Dashboard de ganancias y métricas del mes actual.
     Si el usuario no es Dueño, se omiten confidencialmente los totales financieros
-    (ganancias, capital y ventas diarias).
+    (ganancias, capital, ventas diarias y desglose monetario por método de pago).
     """
     metrics = crud.get_dashboard_metrics()
     if not is_user_dueno(user):
         metrics["total_ganancias_mes"] = None
         metrics["total_ventas_mes"] = None
+        metrics["equipos_vendidos_mes"] = None
         metrics["cantidad_equipos_vendidos"] = None
         metrics["capital_inventario"] = None
         metrics["valor_venta_inventario"] = None
         metrics["margen_promedio_mes"] = None
         metrics["ventas_por_dia"] = []
-    return metrics
+        metrics["desglose_metodos_pago"] = {}
+    return sanitizar_datos_sensibles(metrics, user)
 
 @router.get("/ventas", response_model=List[VentaDetalleResponse])
 def historial_ventas(

@@ -14,23 +14,24 @@ from app.security import (
 
 router = APIRouter(prefix="/api/equipos", tags=["Inventario"])
 
+MAX_EXCEL_UPLOAD_BYTES = 10 * 1024 * 1024  # Límite de 10 MB para evitar DoS por agotamiento de memoria
+
 def verify_delete_password(entered_token: Optional[str]) -> bool:
     """Verifica en tiempo constante si el token ingresado coincide con ADMIN_DELETE_PASSWORD."""
     if not entered_token:
         return False
     env_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
     token_clean = entered_token.strip()
-    return (
-        hmac.compare_digest(token_clean.encode("utf-8"), env_pwd.encode("utf-8"))
-        or hmac.compare_digest(token_clean.encode("utf-8"), env_pwd.rstrip(".").encode("utf-8"))
-        or hmac.compare_digest((token_clean + ".").encode("utf-8"), env_pwd.encode("utf-8"))
-    )
+    c1 = hmac.compare_digest(token_clean.encode("utf-8"), env_pwd.encode("utf-8"))
+    c2 = hmac.compare_digest(token_clean.encode("utf-8"), env_pwd.rstrip(".").encode("utf-8"))
+    c3 = hmac.compare_digest((token_clean + ".").encode("utf-8"), env_pwd.encode("utf-8"))
+    return c1 or c2 or c3
 
 @router.get("", response_model=List[EquipoResponse])
 def listar_equipos(
     solo_disponibles: bool = Query(True, description="Mostrar solo equipos con estado 'Disponible'"),
-    search: Optional[str] = Query(None, description="Búsqueda por modelo, IMEI o color"),
-    grado: Optional[str] = Query(None, description="Filtrar por grado: A, B o C"),
+    search: Optional[str] = Query(None, max_length=100, description="Búsqueda por modelo, IMEI o color"),
+    grado: Optional[str] = Query(None, max_length=5, description="Filtrar por grado: A, B o C"),
     user: dict = Depends(get_current_user)
 ):
     """Obtiene la lista de equipos en inventario. Oculta costos confidenciales si no es dueño."""
@@ -68,11 +69,13 @@ async def importar_equipos_excel(
 ):
     """Sube y procesa una hoja de Excel (.xlsx) o CSV con celulares. Exclusivo para rol Dueño."""
     try:
-        contenido = await file.read()
+        contenido = await file.read(MAX_EXCEL_UPLOAD_BYTES + 1)
         if not contenido:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo subido está vacío.")
+        if len(contenido) > MAX_EXCEL_UPLOAD_BYTES:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="El archivo excede el tamaño máximo permitido (10 MB).")
 
-        resultado = procesar_archivo_excel_o_csv(contenido, file.filename)
+        resultado = procesar_archivo_excel_o_csv(contenido, file.filename or "")
         validos = resultado["validos"]
         errores = resultado["errores"]
 
@@ -86,6 +89,8 @@ async def importar_equipos_excel(
             "errores": errores,
             "equipos": sanitizar_datos_sensibles(guardados, user)
         }
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
@@ -109,10 +114,17 @@ def actualizar_equipo(
     user: dict = Depends(require_role("dueno"))
 ):
     """Actualiza datos de un equipo. Exclusivo para rol Dueño y con respuesta sanitizada."""
-    actualizado = crud.update_equipo(equipo_id, datos)
-    if not actualizado:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipo no encontrado.")
-    return sanitizar_datos_sensibles(actualizado, user)
+    try:
+        actualizado = crud.update_equipo(equipo_id, datos)
+        if not actualizado:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipo no encontrado.")
+        return sanitizar_datos_sensibles(actualizado, user)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al actualizar el equipo.")
 
 @router.delete("/{equipo_id}", status_code=status.HTTP_200_OK)
 def eliminar_equipo(

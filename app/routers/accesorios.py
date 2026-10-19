@@ -8,13 +8,15 @@ router = APIRouter(prefix="/api/accesorios", tags=["Accesorios y Servicios"])
 
 @router.get("", response_model=List[AccesorioResponse])
 def listar_accesorios(
-    categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
+    categoria: Optional[str] = Query(None, max_length=80, description="Filtrar por categoría"),
     solo_con_stock: bool = Query(False, description="Mostrar solo items con stock disponible o servicios"),
-    search: Optional[str] = Query(None, description="Búsqueda por nombre"),
+    search: Optional[str] = Query(None, max_length=100, description="Búsqueda por nombre"),
+    q: Optional[str] = Query(None, max_length=100, description="Alias de búsqueda por código o nombre"),
     user: dict = Depends(get_current_user)
 ):
     """Obtiene el catálogo de accesorios y servicios/reparaciones. Oculta costos si no es dueño."""
-    items = crud.get_accesorios(categoria=categoria, solo_con_stock=solo_con_stock, search=search)
+    termino = search if search is not None else q
+    items = crud.get_accesorios(categoria=categoria, solo_con_stock=solo_con_stock, search=termino)
     return sanitizar_datos_sensibles(items, user)
 
 @router.get("/{acc_id}", response_model=AccesorioResponse)
@@ -41,15 +43,24 @@ def crear_accesorio(datos: AccesorioCreate, user: dict = Depends(require_role("d
             imagen_url=datos.imagen_url
         )
         return sanitizar_datos_sensibles(nuevo, user)
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al registrar el accesorio.")
 
 @router.put("/{acc_id}", response_model=AccesorioResponse)
 def actualizar_accesorio(acc_id: int, datos: AccesorioUpdate, user: dict = Depends(require_role("dueno"))):
-    actualizado = crud.update_accesorio(acc_id, datos.model_dump(exclude_unset=True))
-    if not actualizado:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
-    return sanitizar_datos_sensibles(actualizado, user)
+    try:
+        actualizado = crud.update_accesorio(acc_id, datos.model_dump(exclude_unset=True))
+        if not actualizado:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
+        return sanitizar_datos_sensibles(actualizado, user)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al actualizar el accesorio.")
 
 @router.delete("/{acc_id}", status_code=status.HTTP_200_OK)
 def eliminar_accesorio(acc_id: int, user: dict = Depends(require_role("dueno"))):

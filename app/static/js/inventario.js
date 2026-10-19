@@ -170,7 +170,7 @@ const Inventario = {
                     <div class="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 mb-3">
                         <div class="font-bold flex items-center gap-1.5 text-sm">
                             <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            ${data.mensaje}
+                            ${App.escapeHtml(data.mensaje)}
                         </div>
                         <p class="text-xs text-emerald-700 mt-1">Se agregaron ${data.importados_count} teléfonos al inventario disponible.</p>
                     </div>
@@ -180,7 +180,7 @@ const Inventario = {
                     html += `
                         <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs space-y-1 max-h-36 overflow-y-auto">
                             <div class="font-bold uppercase tracking-wider text-[11px] text-amber-800">Filas omitidas o con advertencias (${data.errores.length}):</div>
-                            ${data.errores.map(err => `<div>• ${err}</div>`).join('')}
+                            ${data.errores.map(err => `<div>• ${App.escapeHtml(err)}</div>`).join('')}
                         </div>
                     `;
                 }
@@ -264,7 +264,7 @@ const Inventario = {
                 throw new Error("No se pudo obtener el inventario.");
             }
         } catch (err) {
-            tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-rose-500">Error al cargar inventario: ${err.message}</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-rose-500">Error al cargar inventario: ${App.escapeHtml(err.message)}</td></tr>`;
         }
     },
 
@@ -341,7 +341,7 @@ const Inventario = {
                         </span>
                         <div>
                             <div class="flex items-center gap-1.5">
-                                <span>${equipo.modelo}</span>
+                                <span>${App.escapeHtml(equipo.modelo)}</span>
                                 ${agingBadge}
                             </div>
                             <span class="text-xs text-slate-400 font-normal">${equipo.capacidad_gb} GB</span>
@@ -350,11 +350,11 @@ const Inventario = {
                 </td>
                 <td class="py-3 px-4 text-slate-600">
                     <span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5 bg-slate-400"></span>
-                    ${equipo.color}
+                    ${App.escapeHtml(equipo.color)}
                 </td>
                 <td class="py-3 px-4">
                     <span class="font-mono text-xs text-slate-700 bg-slate-100 px-2 py-1 rounded select-all font-medium">
-                        ${equipo.imei}
+                        ${App.escapeHtml(equipo.imei)}
                     </span>
                 </td>
                 <td class="py-3 px-4">
@@ -382,10 +382,10 @@ const Inventario = {
                     <button onclick="Etiquetas.abrirParaEquipo(${equipo.id})" class="inline-flex items-center p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Generar e Imprimir Etiqueta">
                         🏷️
                     </button>
-                    <button onclick="Garantias.consultarHistorialIMEI('${equipo.imei}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver Historial Universal 360°">
+                    <button onclick="Garantias.consultarHistorialIMEI('${App.escapeJsArg(equipo.imei)}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver Historial Universal 360°">
                         📋
                     </button>
-                    <button onclick="Inventario.eliminarEquipo(${equipo.id}, '${equipo.modelo}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors admin-only" title="Eliminar equipo">
+                    <button onclick="Inventario.eliminarEquipo(${Number(equipo.id)}, '${App.escapeJsArg(equipo.modelo)}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors admin-only" title="Eliminar equipo">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </td>

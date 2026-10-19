@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/clientes", tags=["Clientes"])
 
 @router.get("", response_model=List[ClienteResponse])
 def listar_clientes(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=500),
     user: dict = Depends(get_current_user)
 ):
     """Lista los clientes registrados (requiere sesión activa)."""
@@ -22,7 +22,7 @@ def listar_clientes(
 
 @router.get("/buscar-telefono", response_model=Optional[ClienteResponse])
 def buscar_por_telefono(
-    telefono: str = Query(..., description="Teléfono a buscar"),
+    telefono: str = Query(..., min_length=3, max_length=30, description="Teléfono a buscar"),
     user: dict = Depends(get_current_user)
 ):
     """Permite autocompletar el nombre del cliente en el POS si ya existe en la base de datos (requiere sesión activa)."""

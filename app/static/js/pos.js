@@ -412,11 +412,11 @@ const POS = {
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-sm">🎧</span>
-                                    <h5 class="font-bold text-slate-800 text-sm truncate">${acc.nombre}</h5>
+                                    <h5 class="font-bold text-slate-800 text-sm truncate">${App.escapeHtml(acc.nombre)}</h5>
                                 </div>
                                 <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                    <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium">${acc.categoria}</span>
-                                    ${acc.codigo_barras ? `<span>•</span><span class="font-mono text-[10px] text-slate-500">${acc.codigo_barras}</span>` : ''}
+                                    <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium">${App.escapeHtml(acc.categoria)}</span>
+                                    ${acc.codigo_barras ? `<span>•</span><span class="font-mono text-[10px] text-slate-500">${App.escapeHtml(acc.codigo_barras)}</span>` : ''}
                                     <span>•</span>
                                     <span class="text-[10px] text-slate-500">Stock: ${acc.stock}</span>
                                 </div>
@@ -467,13 +467,13 @@ const POS = {
                         <div class="flex justify-between items-start gap-2">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-1.5">
-                                    <h5 class="font-bold text-slate-800 text-sm truncate">${eq.modelo}</h5>
+                                    <h5 class="font-bold text-slate-800 text-sm truncate">${App.escapeHtml(eq.modelo)}</h5>
                                     <span class="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-medium">${eq.capacidad_gb}GB</span>
                                 </div>
                                 <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                    <span>${eq.color}</span>
+                                    <span>${App.escapeHtml(eq.color)}</span>
                                     <span>•</span>
-                                    <span class="font-mono text-[11px] text-slate-600">IMEI: ${eq.imei}</span>
+                                    <span class="font-mono text-[11px] text-slate-600">IMEI: ${App.escapeHtml(eq.imei)}</span>
                                 </div>
                             </div>
                             <div class="flex items-center gap-1">
@@ -620,11 +620,11 @@ const POS = {
                 <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between group">
                     <div>
                         <div class="flex justify-between items-start gap-1 mb-1.5">
-                            <span class="text-[10px] uppercase font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">${acc.categoria}</span>
+                            <span class="text-[10px] uppercase font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">${App.escapeHtml(acc.categoria)}</span>
                             <span class="text-xs ${acc.stock <= 3 && !acc.es_servicio ? 'text-rose-600 font-bold' : 'text-slate-500 font-medium'}">${stockTxt}</span>
                         </div>
-                        <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors mb-0.5">${acc.nombre}</h4>
-                        ${acc.codigo_barras ? `<p class="font-mono text-[11px] text-slate-400">SKU: ${acc.codigo_barras}</p>` : ''}
+                        <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors mb-0.5">${App.escapeHtml(acc.nombre)}</h4>
+                        ${acc.codigo_barras ? `<p class="font-mono text-[11px] text-slate-400">SKU: ${App.escapeHtml(acc.codigo_barras)}</p>` : ''}
                     </div>
 
                     <div class="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between gap-2">
@@ -687,7 +687,7 @@ const POS = {
                     <div>
                         <div class="flex justify-between items-start gap-1.5 mb-2">
                             <span class="text-[11px] font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium select-all">
-                                ${equipo.imei}
+                                ${App.escapeHtml(equipo.imei)}
                             </span>
                             <div class="flex items-center gap-1">
                                 ${App.getGradeBadge(equipo.grado)}
@@ -695,12 +695,12 @@ const POS = {
                             </div>
                         </div>
                         <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors">
-                            ${equipo.modelo}
+                            ${App.escapeHtml(equipo.modelo)}
                         </h4>
                         <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5 mb-3">
                             <span class="font-semibold text-slate-700">${equipo.capacidad_gb} GB</span>
                             <span>•</span>
-                            <span>${equipo.color}</span>
+                            <span>${App.escapeHtml(equipo.color)}</span>
                         </div>
                     </div>
 
@@ -733,7 +733,7 @@ const POS = {
             }).join('');
 
         } catch (err) {
-            container.innerHTML = `<div class="col-span-full text-center text-rose-500 py-6">Error: ${err.message}</div>`;
+            container.innerHTML = `<div class="col-span-full text-center text-rose-500 py-6">Error: ${App.escapeHtml(err.message)}</div>`;
         }
     },
 
@@ -881,7 +881,7 @@ const POS = {
                     <div class="py-2 ${idx > 0 ? 'border-t border-slate-100' : ''}">
                         <div class="flex justify-between items-start text-xs">
                             <div class="font-bold text-slate-800">
-                                🎧 ${it.nombre_item || it.modelo} <span class="font-medium text-slate-500">x${it.cantidad || 1}</span>
+                                🎧 ${App.escapeHtml(it.nombre_item || it.modelo)} <span class="font-medium text-slate-500">x${it.cantidad || 1}</span>
                             </div>
                             <div class="font-extrabold text-slate-900 ml-2">
                                 ${App.formatCurrency(it.precio_final)}
@@ -895,7 +895,7 @@ const POS = {
                 <div class="py-2.5 ${idx > 0 ? 'border-t border-slate-100' : ''}">
                     <div class="flex justify-between items-start text-xs">
                         <div class="font-bold text-slate-800">
-                            📱 ${it.modelo} <span class="font-normal text-slate-500">(${it.capacidad_gb || ''}GB • ${it.color || ''})</span>
+                            📱 ${App.escapeHtml(it.modelo)} <span class="font-normal text-slate-500">(${App.escapeHtml(it.capacidad_gb || '')}GB • ${App.escapeHtml(it.color || '')})</span>
                         </div>
                         <div class="font-extrabold text-slate-900 ml-2">
                             ${App.formatCurrency(it.precio_final)}
@@ -903,7 +903,7 @@ const POS = {
                     </div>
                     <div class="flex items-center justify-between text-[11px] text-slate-500 mt-1">
                         <span class="font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 select-all font-semibold">
-                            IMEI: ${it.imei || 'N/A'}
+                            IMEI: ${App.escapeHtml(it.imei || 'N/A')}
                         </span>
                         <div>${it.grado ? App.getGradeBadge(it.grado) : ''}</div>
                     </div>
@@ -946,7 +946,7 @@ const POS = {
                 containerMetodo.innerHTML = `
                     <div class="flex justify-between text-xs py-1">
                         <span class="text-slate-500">Método de Pago:</span>
-                        <span class="font-bold text-slate-800">${mp} (${App.formatCurrency(datosVenta.precio_final)})</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(mp)} (${App.formatCurrency(datosVenta.precio_final)})</span>
                     </div>
                 `;
             }

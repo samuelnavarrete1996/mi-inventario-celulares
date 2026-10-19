@@ -1,7 +1,8 @@
 """
-app/security.py - Módulo de Autenticación, Hashing, JWT y Control de Acceso por Roles (RBAC).
-Implementa sesiones seguras mediante cookies HttpOnly, rate-limiting persistente multi-worker
-contra fuerza bruta y dependencias de autorización para FastAPI.
+app/security.py - Módulo de Autenticación, Hashing Argon2id/PBKDF2, JWT y Control de Acceso por Roles (RBAC).
+Implementa sesiones seguras mediante cookies HttpOnly con revocación server-side (jti denylist),
+hashing Argon2id (OWASP 2026) con retrocompatibilidad PBKDF2, resistencia a timing attacks,
+rate-limiting persistente multi-worker contra fuerza bruta y dependencias de autorización para FastAPI.
 """
 
 import os
@@ -11,6 +12,7 @@ import hashlib
 import secrets
 import sqlite3
 import tempfile
+import ctypes
 from typing import Optional, Dict, Any, Tuple
 import jwt
 from fastapi import Request, HTTPException, status, Depends
@@ -34,17 +36,26 @@ def _load_dotenv_if_present() -> None:
 
 _load_dotenv_if_present()
 
-# Clave secreta para firma de JWT (mínimo 32 bytes para HS256 según RFC 7518)
-_raw_secret = os.environ.get("JWT_SECRET") or os.environ.get("ADMIN_DELETE_PASSWORD")
-if not _raw_secret:
-    # Si no se definió JWT_SECRET ni ADMIN_DELETE_PASSWORD, genera una clave efímera segura por instancia
-    _raw_secret = secrets.token_hex(32)
+# Separación criptográfica de claves: nunca usar ADMIN_DELETE_PASSWORD en crudo como clave HMAC de JWT
+_explicit_jwt_secret = os.environ.get("JWT_SECRET")
+if _explicit_jwt_secret:
+    JWT_SECRET = (
+        hashlib.sha256(_explicit_jwt_secret.encode("utf-8")).hexdigest()
+        if len(_explicit_jwt_secret) < 32
+        else _explicit_jwt_secret
+    )
+else:
+    _fallback_seed = os.environ.get("ADMIN_DELETE_PASSWORD") or secrets.token_hex(32)
+    JWT_SECRET = hmac.new(
+        b"SN-POS-JWT-SIGNING-KEY-V2",
+        _fallback_seed.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
 
-JWT_SECRET = hashlib.sha256(_raw_secret.encode("utf-8")).hexdigest() if len(_raw_secret) < 32 else _raw_secret
 JWT_ALGORITHM = "HS256"
 COOKIE_NAME = "sid"
 
-# Rate Limiting persistente en SQLite local (compartido entre múltiples workers de Uvicorn)
+# Rate Limiting y Denylist de Sesiones Revocadas persistentes en SQLite local (compartido entre workers)
 MAX_FAILED_ATTEMPTS_IP = 5
 MAX_FAILED_ATTEMPTS_GLOBAL = 15
 LOCKOUT_SECONDS = 15 * 60  # 15 minutos
@@ -53,6 +64,7 @@ _RATE_LIMIT_DB_PATH = os.path.join(tempfile.gettempdir(), "pos_rate_limit.sqlite
 def _get_rl_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(_RATE_LIMIT_DB_PATH, timeout=5.0)
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS login_attempts (
@@ -63,6 +75,14 @@ def _get_rl_conn() -> sqlite3.Connection:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_ts ON login_attempts(ip, ts);")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            jti TEXT PRIMARY KEY,
+            exp INTEGER NOT NULL
+        );
+        """
+    )
     return conn
 
 def get_client_ip(request: Request) -> str:
@@ -70,13 +90,11 @@ def get_client_ip(request: Request) -> str:
     Extrae la IP real del cliente de forma segura detrás de Render / Cloudflare.
     Evita IP Spoofing ignorando valores inyectados al inicio de X-Forwarded-For.
     """
-    # 1. Encabezados verificados por el edge de Cloudflare/Render
     for header in ("true-client-ip", "cf-connecting-ip"):
         val = request.headers.get(header)
         if val:
             return val.strip()
 
-    # 2. En X-Forwarded-For, el último IP fue añadido por el proxy reverso confiable de Render
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         ips = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
@@ -150,34 +168,174 @@ def reset_all_rate_limits() -> None:
         conn.close()
 
 
-# --- Hashing seguro de Contraseñas y PINs con PBKDF2-HMAC-SHA256 ---
+# --- Hashing Criptográfico con Argon2id (OWASP Recommended) + Fallback Retrocompatible PBKDF2 ---
+
+ARGON2_TIME_COST = 2
+ARGON2_MEMORY_COST_KIB = 19456  # 19 MiB según recomendación OWASP
+ARGON2_PARALLELISM = 1
+ARGON2_HASH_LEN = 32
+PBKDF2_ITERATIONS = 100000
+
+_argon2_cffi_low_level = None
+_libargon2_cdll = None
+
+try:
+    from argon2 import low_level as _argon2_cffi_low_level  # type: ignore
+except ImportError:
+    for _lib_path in (
+        "/usr/lib/x86_64-linux-gnu/libargon2.so.1",
+        "libargon2.so.1",
+        "libargon2.so",
+    ):
+        try:
+            _lib = ctypes.CDLL(_lib_path)
+            _lib.argon2id_hash_raw.argtypes = [
+                ctypes.c_uint32,
+                ctypes.c_uint32,
+                ctypes.c_uint32,
+                ctypes.c_char_p,
+                ctypes.c_size_t,
+                ctypes.c_char_p,
+                ctypes.c_size_t,
+                ctypes.c_char_p,
+                ctypes.c_size_t,
+            ]
+            _lib.argon2id_hash_raw.restype = ctypes.c_int
+            _libargon2_cdll = _lib
+            break
+        except Exception:
+            continue
+
+
+def _compute_argon2id_hex(secret_bytes: bytes, salt_bytes: bytes) -> Optional[str]:
+    """Calcula el digest Argon2id en hexadecimal usando argon2-cffi o libargon2 nativa."""
+    if _argon2_cffi_low_level is not None:
+        try:
+            raw = _argon2_cffi_low_level.hash_secret_raw(
+                secret=secret_bytes,
+                salt=salt_bytes,
+                time_cost=ARGON2_TIME_COST,
+                memory_cost=ARGON2_MEMORY_COST_KIB,
+                parallelism=ARGON2_PARALLELISM,
+                hash_len=ARGON2_HASH_LEN,
+                type=_argon2_cffi_low_level.Type.ID,
+            )
+            return f"argon2id${raw.hex()}"
+        except Exception:
+            pass
+
+    if _libargon2_cdll is not None:
+        try:
+            out_buf = ctypes.create_string_buffer(ARGON2_HASH_LEN)
+            rc = _libargon2_cdll.argon2id_hash_raw(
+                ARGON2_TIME_COST,
+                ARGON2_MEMORY_COST_KIB,
+                ARGON2_PARALLELISM,
+                secret_bytes,
+                len(secret_bytes),
+                salt_bytes,
+                len(salt_bytes),
+                out_buf,
+                ARGON2_HASH_LEN,
+            )
+            if rc == 0:
+                return f"argon2id${out_buf.raw.hex()}"
+        except Exception:
+            pass
+
+    return None
+
+
+def _compute_pbkdf2_hex(secret_bytes: bytes, salt_bytes: bytes, iterations: int = PBKDF2_ITERATIONS) -> str:
+    """Calcula PBKDF2-HMAC-SHA256 para retrocompatibilidad o fallback."""
+    derived = hashlib.pbkdf2_hmac(
+        hash_name="sha256",
+        password=secret_bytes,
+        salt=salt_bytes,
+        iterations=iterations,
+    )
+    return derived.hex()
+
 
 def hash_secret(secret: str, salt_hex: Optional[str] = None) -> Tuple[str, str]:
-    """Genera un hash criptográfico seguro PBKDF2 con sal aleatoria única."""
+    """
+    Genera un hash criptográfico seguro Argon2id (con sal aleatoria única de 128 bits).
+    Si Argon2id no está disponible en el sistema operativo, utiliza PBKDF2-HMAC-SHA256.
+    """
     if salt_hex is None:
         salt_bytes = secrets.token_bytes(16)
         salt_hex = salt_bytes.hex()
     else:
         salt_bytes = bytes.fromhex(salt_hex)
 
-    derived = hashlib.pbkdf2_hmac(
-        hash_name="sha256",
-        password=secret.encode("utf-8"),
-        salt=salt_bytes,
-        iterations=100000
-    )
-    return derived.hex(), salt_hex
+    secret_bytes = secret.encode("utf-8")
+    argon2_hash = _compute_argon2id_hex(secret_bytes, salt_bytes)
+    if argon2_hash is not None:
+        return argon2_hash, salt_hex
+
+    return _compute_pbkdf2_hex(secret_bytes, salt_bytes), salt_hex
+
 
 def verify_secret(secret: str, hash_hex: str, salt_hex: str) -> bool:
-    """Verifica un secreto en tiempo constante para mitigar ataques de timing."""
+    """
+    Verifica un secreto en tiempo constante usando hmac.compare_digest.
+    Soporta transparentemente hashes Argon2id ('argon2id$...') y hashes heredados PBKDF2.
+    """
     try:
-        new_hash, _ = hash_secret(secret, salt_hex)
-        return hmac.compare_digest(new_hash, hash_hex)
+        salt_bytes = bytes.fromhex(salt_hex)
+        secret_bytes = secret.encode("utf-8")
+
+        if hash_hex.startswith("argon2id$"):
+            candidate = _compute_argon2id_hex(secret_bytes, salt_bytes)
+            if candidate is None:
+                return False
+            return hmac.compare_digest(candidate.encode("ascii"), hash_hex.encode("ascii"))
+        else:
+            candidate_pbkdf2 = _compute_pbkdf2_hex(secret_bytes, salt_bytes)
+            return hmac.compare_digest(candidate_pbkdf2.encode("ascii"), hash_hex.encode("ascii"))
     except Exception:
         return False
 
 
-# --- Manejo de Tokens JWT ---
+# Hash y salt precalculados para mitigación de ataques de temporización (Timing Attacks) cuando un usuario no existe
+_DUMMY_HASH, _DUMMY_SALT = hash_secret("dummy_anti_timing_secret_argon_2026")
+
+def verify_dummy_secret(secret: str) -> bool:
+    """Ejecuta el algoritmo de hashing completo contra un hash señuelo para igualar tiempos de respuesta."""
+    return verify_secret(secret, _DUMMY_HASH, _DUMMY_SALT)
+
+
+# --- Manejo de Tokens JWT y Revocación de Sesiones (jti) ---
+
+def revoke_token_jti(jti: str, exp: int) -> None:
+    """Registra el identificador único (jti) de un token en la lista negra hasta su expiración."""
+    if not jti:
+        return
+    now = int(time.time())
+    conn = _get_rl_conn()
+    try:
+        with conn:
+            conn.execute("DELETE FROM revoked_tokens WHERE exp <= ?;", (now,))
+            conn.execute(
+                "INSERT OR REPLACE INTO revoked_tokens (jti, exp) VALUES (?, ?);",
+                (jti, int(exp)),
+            )
+    finally:
+        conn.close()
+
+
+def is_token_jti_revoked(jti: Optional[str]) -> bool:
+    """Verifica si el jti del token ha sido revocado explícitamente mediante logout."""
+    if not jti:
+        return False
+    conn = _get_rl_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM revoked_tokens WHERE jti = ? LIMIT 1;", (jti,))
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
 
 def create_access_token(user_id: int, username: str, rol: str, nombre: str, ttl_hours: int = 14) -> str:
     """Crea un token JWT firmado con expiración e identificador único (jti)."""
@@ -189,19 +347,24 @@ def create_access_token(user_id: int, username: str, rol: str, nombre: str, ttl_
         "nombre": nombre,
         "exp": now + (ttl_hours * 3600),
         "iat": now,
-        "jti": secrets.token_hex(8)
+        "jti": secrets.token_hex(12),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
+
 def decode_access_token(token: str) -> Optional[dict]:
-    """Decodifica y valida la firma y expiración de un token JWT."""
+    """Decodifica y valida la firma, expiración y estado de no-revocación de un token JWT."""
     try:
-        return jwt.decode(
+        payload = jwt.decode(
             token,
             JWT_SECRET,
             algorithms=[JWT_ALGORITHM],
-            options={"require": ["sub", "rol", "exp", "iat"]}
+            options={"require": ["sub", "rol", "exp", "iat"]},
         )
+        jti = payload.get("jti")
+        if jti and is_token_jti_revoked(jti):
+            return None
+        return payload
     except (jwt.PyJWTError, Exception):
         return None
 
@@ -267,7 +430,7 @@ def get_current_user_optional(request: Request) -> Optional[dict]:
         "id": int(payload["sub"]),
         "username": payload.get("username"),
         "rol": payload.get("rol"),
-        "nombre": payload.get("nombre")
+        "nombre": payload.get("nombre"),
     }
 
 def get_current_user(request: Request) -> dict:

@@ -125,7 +125,7 @@ const Caja = {
                             <td class="py-2.5 px-3 font-bold ${c.diferencia >= 0 ? 'text-emerald-600' : 'text-rose-600'}">
                                 ${c.diferencia >= 0 ? '+' : ''}${App.formatCurrency(c.diferencia)}
                             </td>
-                            <td class="py-2.5 px-3 text-slate-500 italic">${c.notas || '--'}</td>
+                            <td class="py-2.5 px-3 text-slate-500 italic">${App.escapeHtml(c.notas || '--')}</td>
                         </tr>
                     `).join('');
                 }

@@ -167,7 +167,7 @@ const Reportes = {
                 🔀 Combinado
             </span>`;
         }
-        return `<span class="text-xs text-slate-600">${metodo}</span>`;
+        return `<span class="text-xs text-slate-600">${App.escapeHtml(metodo)}</span>`;
     },
 
     async cargarHistorialVentas(fechaInicio = null, fechaFin = null) {
@@ -212,8 +212,8 @@ const Reportes = {
                         ${App.formatDate(v.fecha_venta)}
                     </td>
                     <td class="py-3 px-4">
-                        <div class="font-medium text-slate-800 text-sm">${v.cliente_nombre}</div>
-                        <div class="text-xs text-slate-400 font-mono">${v.cliente_telefono}</div>
+                        <div class="font-medium text-slate-800 text-sm">${App.escapeHtml(v.cliente_nombre)}</div>
+                        <div class="text-xs text-slate-400 font-mono">${App.escapeHtml(v.cliente_telefono)}</div>
                     </td>
                     <td class="py-3 px-4">
                         <div class="flex items-center gap-1.5">
@@ -221,8 +221,8 @@ const Reportes = {
                                 ${totalEquipos} ${totalEquipos === 1 ? 'teléfono' : 'teléfonos'}
                             </span>
                         </div>
-                        <div class="text-xs text-slate-600 font-medium mt-1 truncate max-w-xs" title="${v.resumen_modelos}">
-                            ${v.resumen_modelos || v.modelo}
+                        <div class="text-xs text-slate-600 font-medium mt-1 truncate max-w-xs" title="${App.escapeHtml(v.resumen_modelos)}">
+                            ${App.escapeHtml(v.resumen_modelos || v.modelo)}
                         </div>
                     </td>
                     <td class="py-3 px-4">
@@ -243,7 +243,7 @@ const Reportes = {
                                 <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                 Recibo
                             </button>
-                            <button onclick="Garantias.abrirModal('${primerImei}')" class="inline-flex items-center px-2.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-lg shadow-2xs transition-all gap-1" title="Regresar celular por garantía / reclamo">
+                            <button onclick="Garantias.abrirModal('${App.escapeJsArg(primerImei)}')" class="inline-flex items-center px-2.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-lg shadow-2xs transition-all gap-1" title="Regresar celular por garantía / reclamo">
                                 <span>🛡️</span>
                                 <span>Garantía</span>
                             </button>
@@ -254,7 +254,7 @@ const Reportes = {
             }).join('');
 
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-rose-500">Error: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-rose-500">Error: ${App.escapeHtml(err.message)}</td></tr>`;
         }
     },
 

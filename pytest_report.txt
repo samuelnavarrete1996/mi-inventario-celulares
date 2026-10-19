@@ -1,0 +1,40 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-8.0.0-compat
+rootdir: /working_dir/c_d05d414a52093699/Auditoria_Seguridad_Inventario
+collected 33 items
+
+test_seguridad_rbac.py::test_login_vendedor_con_contrasena_inicio PASSED
+test_seguridad_rbac.py::test_pin_1234_queda_bloqueado_y_rechazado PASSED
+test_seguridad_rbac.py::test_login_dueno_con_credenciales PASSED
+test_seguridad_rbac.py::test_rate_limiting_fuerza_bruta PASSED
+test_seguridad_rbac.py::test_anti_fuga_f12_equipos_vendedor PASSED
+test_seguridad_rbac.py::test_dueno_recibe_costos_completos PASSED
+test_seguridad_rbac.py::test_vendedor_bloqueado_reportes_ventas PASSED
+test_seguridad_rbac.py::test_dueno_accede_reportes_ventas PASSED
+test_seguridad_rbac.py::test_dashboard_sanitizado_para_vendedor PASSED
+test_seguridad_rbac.py::test_backups_restringidos_solo_dueno PASSED
+test_seguridad_rbac.py::test_logout_cierra_sesion PASSED
+test_seguridad_rbac.py::test_argon2id_hashing_y_retrocompatibilidad_pbkdf2 PASSED
+test_seguridad_rbac.py::test_anti_fuga_costos_en_garantias_e_historial_imei_vendedor PASSED
+test_seguridad_rbac.py::test_validaciones_estrictas_update_y_cabeceras_csp PASSED
+test_sistema.py::test_startup_and_health PASSED
+test_sistema.py::test_listar_inventario PASSED
+test_sistema.py::test_venta_carrito_pago_combinado PASSED
+test_sistema.py::test_pago_combinado_desbalanceado_falla PASSED
+test_sistema.py::test_dashboard_reportes PASSED
+test_sistema.py::test_historial_ventas PASSED
+test_sistema.py::test_descargar_plantilla_excel PASSED
+test_sistema.py::test_importar_excel PASSED
+test_sistema.py::test_flujo_devolucion_garantia_y_reemplazo PASSED
+test_sistema.py::test_eliminar_equipo_requiere_password PASSED
+test_mejoras.py::test_accesorios_crud PASSED
+test_mejoras.py::test_venta_combinada_equipo_y_accesorio PASSED
+test_mejoras.py::test_corte_de_caja_arqueo PASSED
+test_mejoras.py::test_historial_imei_timeline PASSED
+test_mejoras.py::test_antiguedad_stock_calculada PASSED
+test_mejoras.py::test_backup_export_json_y_db PASSED
+test_nuevas_mejoras.py::test_reparaciones_flujo_completo PASSED
+test_nuevas_mejoras.py::test_catalogo_publico_privacidad PASSED
+test_nuevas_mejoras.py::test_pwa_manifest_and_sw PASSED
+
+============================== 33 passed in 1.25s ==============================
