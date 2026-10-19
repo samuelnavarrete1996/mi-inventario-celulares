@@ -1,6 +1,10 @@
 /* Estilos personalizados para Mi Inventario Samuel Navarrete */
 
 /* Fuentes y scrollbar */
+.hidden {
+    display: none !important;
+}
+
 body {
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     -webkit-font-smoothing: antialiased;
