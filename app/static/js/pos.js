@@ -443,7 +443,7 @@ const POS = {
                             <div class="flex items-center gap-1.5">
                                 <div class="relative w-24">
                                     <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-slate-400 text-xs font-bold">$</span>
-                                    <input type="number" step="0.50" min="0" value="${item.precio_final}" 
+                                    <input type="number" step="any" min="0" value="${item.precio_final}" 
                                         onchange="POS.actualizarPrecioItem(${acc.id}, this.value, 'accesorio')"
                                         oninput="POS.actualizarPrecioItem(${acc.id}, this.value, 'accesorio')"
                                         class="w-full pl-5 pr-2 py-1 text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none">
@@ -492,7 +492,7 @@ const POS = {
                                 <label class="text-[11px] uppercase font-bold text-slate-400">Precio:</label>
                                 <div class="relative w-28">
                                     <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-slate-400 text-xs font-bold">$</span>
-                                    <input type="number" step="0.50" min="0" value="${item.precio_final}" 
+                                    <input type="number" step="any" min="0" value="${item.precio_final}" 
                                         onchange="POS.actualizarPrecioItem(${eq.id}, this.value, 'equipo')"
                                         oninput="POS.actualizarPrecioItem(${eq.id}, this.value, 'equipo')"
                                         class="w-full pl-5 pr-2 py-1 text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none">
@@ -844,7 +844,7 @@ const POS = {
                 monto_garantia: mGt,
                 items: this.carrito.map(it => {
                     if (it.tipo === 'accesorio') {
-                        const nombreFinal = it.accesorio.color 
+                        const nombreFinal = (it.accesorio.color && !it.accesorio.nombre.includes(it.accesorio.color))
                             ? `${it.accesorio.nombre} (${it.accesorio.color})` 
                             : it.accesorio.nombre;
                         return {

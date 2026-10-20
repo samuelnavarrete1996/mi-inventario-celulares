@@ -288,7 +288,7 @@ def registrar_venta_carrito(
                 total_margen_ganancia += margen_item
 
                 acc_color = acc["color"] if "color" in acc.keys() and acc["color"] else None
-                nombre_con_color = f"{acc['nombre']} ({acc_color})" if acc_color else acc["nombre"]
+                nombre_con_color = f"{acc['nombre']} ({acc_color})" if (acc_color and f"({acc_color})" not in acc["nombre"]) else acc["nombre"]
                 nombre_final = getattr(item, "nombre_item", None) or nombre_con_color
 
                 detalles_items.append({
