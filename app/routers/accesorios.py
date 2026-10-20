@@ -48,7 +48,7 @@ def descargar_plantilla_stock(
             return Response(
                 content=excel_bytes,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_SamuelNavarrete.xlsx"}
+                headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_Excel.xlsx"}
             )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generando plantilla: {str(e)}")

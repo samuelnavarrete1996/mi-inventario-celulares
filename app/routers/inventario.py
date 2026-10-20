@@ -75,7 +75,7 @@ def descargar_plantilla_excel(
         return Response(
             content=contenido,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=plantilla_inventario_celulares.xlsx"}
+            headers={"Content-Disposition": "attachment; filename=plantilla_inventario_celulares_Excel.xlsx"}
         )
 
 @router.get("/plantilla-sheets")

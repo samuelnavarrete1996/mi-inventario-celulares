@@ -314,9 +314,19 @@ const Accesorios = {
     // PILAR 1: PLANTILLA GOOGLE SHEETS / EXCEL Y SUBIDA MASIVA
     // ========================================================
     descargarPlantillaStock(formato = 'sheets') {
-        const nombre = (formato === 'sheets' || formato === 'csv') ? 'Google Sheets (.csv)' : 'Excel (.xlsx)';
+        const esSheets = (formato === 'sheets' || formato === 'csv');
+        const nombre = esSheets ? 'Google Sheets (.csv)' : 'Excel (.xlsx)';
         App.showToast(`Descargando plantilla para ${nombre}...`, "info");
-        window.open(`/api/accesorios/plantilla-stock?formato=${formato}`, '_blank');
+        const url = esSheets 
+            ? '/api/accesorios/plantilla-sheets' 
+            : '/api/accesorios/plantilla-stock?formato=xlsx';
+        const filename = esSheets ? 'Carga_Stock_Accesorios_GoogleSheets.csv' : 'Carga_Stock_Accesorios_Excel.xlsx';
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     },
 
     seleccionarArchivoStockExcel() {
