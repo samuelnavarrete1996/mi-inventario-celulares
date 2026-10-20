@@ -465,6 +465,9 @@ const App = {
             Inventario.cargarEquipos();
         } else if (tabName === 'pos') {
             POS.buscarEquipos('');
+            if (typeof POS.cargarAlertasCredito === 'function') {
+                POS.cargarAlertasCredito();
+            }
         } else if (tabName === 'accesorios') {
             if (typeof Accesorios !== 'undefined') Accesorios.cargar();
         } else if (tabName === 'reportes') {

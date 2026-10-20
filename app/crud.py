@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from app.database import get_db_connection
 from app.models import EquipoCreate, EquipoUpdate, ItemCarrito, GarantiaCreate
@@ -214,7 +214,11 @@ def registrar_venta_carrito(
     monto_transferencia: float = 0.0,
     monto_tarjeta: float = 0.0,
     monto_garantia: float = 0.0,
-    notas: Optional[str] = None
+    notas: Optional[str] = None,
+    es_credito: bool = False,
+    plazo_dias: Optional[int] = None,
+    fecha_vencimiento: Optional[str] = None,
+    monto_anticipo: float = 0.0
 ) -> Dict[str, Any]:
     """
     Registra una venta con múltiples equipos o accesorios/servicios y métodos de pago:
@@ -327,44 +331,80 @@ def registrar_venta_carrito(
 
         # 3. Validar método de pago
         metodo = metodo_pago.strip()
-        if metodo.lower() in ("equipo garantia", "equipo garantía", "garantia", "garantía"):
-            metodo = "Equipo Garantía"
-        elif metodo.lower() in ("transferencia", "transf"):
-            metodo = "Transferencia"
-        elif metodo.lower() in ("combinado", "combinar"):
-            metodo = "Combinado"
+        es_cred = bool(es_credito or metodo.lower() in ("nota de credito", "nota de crédito", "credito", "crédito"))
+
+        if es_cred:
+            metodo = "Nota de Crédito"
+            plazo = plazo_dias if (plazo_dias in (15, 30)) else 15
+            if not fecha_vencimiento:
+                f_venc = (datetime.now() + timedelta(days=plazo)).strftime("%Y-%m-%d")
+            else:
+                f_venc = fecha_vencimiento.strip()
+            anticipo = round(float(monto_anticipo or 0.0), 2)
+            saldo = max(0.0, round(total_precio_final - anticipo, 2))
+            estado_cred = "Liquidada" if saldo <= 0 else "Pendiente"
+            m_efectivo = anticipo
+            m_transf = 0.0
+            m_tarjeta = 0.0
+            m_garantia = 0.0
         else:
-            metodo = "Efectivo"
+            plazo = 0
+            f_venc = None
+            anticipo = 0.0
+            saldo = 0.0
+            estado_cred = None
+            if metodo.lower() in ("equipo garantia", "equipo garantía", "garantia", "garantía"):
+                metodo = "Equipo Garantía"
+            elif metodo.lower() in ("transferencia", "transf"):
+                metodo = "Transferencia"
+            elif metodo.lower() in ("combinado", "combinar"):
+                metodo = "Combinado"
+            else:
+                metodo = "Efectivo"
 
-        m_efectivo = round(float(monto_efectivo), 2)
-        m_transf = round(float(monto_transferencia), 2)
-        m_tarjeta = round(float(monto_tarjeta), 2)
-        m_garantia = round(float(monto_garantia), 2)
+            m_efectivo = round(float(monto_efectivo), 2)
+            m_transf = round(float(monto_transferencia), 2)
+            m_tarjeta = round(float(monto_tarjeta), 2)
+            m_garantia = round(float(monto_garantia), 2)
 
-        if metodo == "Efectivo" and (m_efectivo + m_transf + m_garantia) == 0:
-            m_efectivo = total_precio_final
-        elif metodo == "Transferencia" and (m_efectivo + m_transf + m_garantia) == 0:
-            m_transf = total_precio_final
-        elif metodo == "Equipo Garantía" and (m_efectivo + m_transf + m_garantia) == 0:
-            m_garantia = total_precio_final
-        elif metodo == "Combinado":
-            suma_pagos = round(m_efectivo + m_transf + m_tarjeta + m_garantia, 2)
-            if abs(suma_pagos - total_precio_final) > 0.05:
-                raise ValueError(f"En pago combinado, la suma de montos (${suma_pagos:,.2f}) debe coincidir con el total (${total_precio_final:,.2f}).")
+            if metodo == "Efectivo" and (m_efectivo + m_transf + m_garantia) == 0:
+                m_efectivo = total_precio_final
+            elif metodo == "Transferencia" and (m_efectivo + m_transf + m_garantia) == 0:
+                m_transf = total_precio_final
+            elif metodo == "Equipo Garantía" and (m_efectivo + m_transf + m_garantia) == 0:
+                m_garantia = total_precio_final
+            elif metodo == "Combinado":
+                suma_pagos = round(m_efectivo + m_transf + m_tarjeta + m_garantia, 2)
+                if abs(suma_pagos - total_precio_final) > 0.05:
+                    raise ValueError(f"En pago combinado, la suma de montos (${suma_pagos:,.2f}) debe coincidir con el total (${total_precio_final:,.2f}).")
 
         # 4. Insertar Cabecera de Venta
         primer_equipo_id = equipos_ids_usados[0] if equipos_ids_usados else None
         cursor.execute("""
         INSERT INTO ventas (
             equipo_id, cliente_id, precio_final, margen_ganancia, fecha_venta,
-            metodo_pago, monto_efectivo, monto_transferencia, monto_tarjeta, monto_garantia, notas
+            metodo_pago, monto_efectivo, monto_transferencia, monto_tarjeta, monto_garantia, notas,
+            es_credito, plazo_dias, fecha_vencimiento, monto_credito, monto_anticipo, saldo_pendiente, estado_credito
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             primer_equipo_id, cliente_id, total_precio_final, total_margen_ganancia, now,
-            metodo, m_efectivo, m_transf, m_tarjeta, m_garantia, notas
+            metodo, m_efectivo, m_transf, m_tarjeta, m_garantia, notas,
+            1 if es_cred else 0,
+            plazo if es_cred else 0,
+            f_venc if es_cred else None,
+            total_precio_final if es_cred else 0.0,
+            anticipo if es_cred else 0.0,
+            saldo if es_cred else 0.0,
+            estado_cred if es_cred else None
         ))
         venta_id = cursor.lastrowid
+
+        if es_cred and anticipo > 0:
+            cursor.execute("""
+            INSERT INTO abonos_ventas_credito (venta_id, monto, fecha, metodo_pago, notas, usuario)
+            VALUES (?, ?, ?, 'Efectivo', 'Anticipo inicial', 'Cajero')
+            """, (venta_id, anticipo, now))
 
         # 5. Insertar items y actualizar estado/stock de forma atómica (Compare-And-Swap)
         for det in detalles_items:
@@ -445,6 +485,13 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
         COALESCE(v.monto_garantia, 0) as monto_garantia,
         v.notas,
         v.equipo_id,
+        COALESCE(v.es_credito, 0) as es_credito,
+        COALESCE(v.plazo_dias, 0) as plazo_dias,
+        v.fecha_vencimiento,
+        COALESCE(v.monto_credito, 0) as monto_credito,
+        COALESCE(v.monto_anticipo, 0) as monto_anticipo,
+        COALESCE(v.saldo_pendiente, 0) as saldo_pendiente,
+        v.estado_credito,
         c.nombre as cliente_nombre,
         c.telefono as cliente_telefono
     FROM ventas v
@@ -531,6 +578,9 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
         venta_dict["grado"] = p.get("grado")
         venta_dict["costo_compra"] = p.get("costo_compra")
 
+    cursor.execute("SELECT * FROM abonos_ventas_credito WHERE venta_id = ? ORDER BY id ASC", (venta_id,))
+    venta_dict["abonos"] = [dict(a) for a in cursor.fetchall()]
+
     if not conn_ext:
         conn.close()
 
@@ -554,6 +604,13 @@ def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, f
         COALESCE(v.monto_garantia, 0) as monto_garantia,
         v.notas,
         v.equipo_id,
+        COALESCE(v.es_credito, 0) as es_credito,
+        COALESCE(v.plazo_dias, 0) as plazo_dias,
+        v.fecha_vencimiento,
+        COALESCE(v.monto_credito, 0) as monto_credito,
+        COALESCE(v.monto_anticipo, 0) as monto_anticipo,
+        COALESCE(v.saldo_pendiente, 0) as saldo_pendiente,
+        v.estado_credito,
         c.nombre as cliente_nombre,
         c.telefono as cliente_telefono
     FROM ventas v
@@ -691,6 +748,185 @@ def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, f
 
     conn.close()
     return resultado
+
+
+# ==============================================================================
+# NOTAS DE CRÉDITO A CLIENTES (15 Y 30 DÍAS) Y ALERTAS DE VENCIMIENTO
+# ==============================================================================
+
+def get_notas_credito(estado_filtro: Optional[str] = None) -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Actualización automática de estado Vencida si pasó la fecha límite
+    try:
+        cursor.execute("""
+        UPDATE ventas
+        SET estado_credito = 'Vencida'
+        WHERE es_credito = 1
+          AND saldo_pendiente > 0
+          AND date('now', 'localtime') > date(fecha_vencimiento)
+          AND (estado_credito IS NULL OR estado_credito != 'Vencida');
+        """)
+        conn.commit()
+    except Exception:
+        pass
+
+    cursor.execute("""
+    SELECT 
+        v.id,
+        v.cliente_id,
+        v.precio_final as total_venta,
+        v.fecha_venta,
+        COALESCE(v.plazo_dias, 15) as plazo_dias,
+        v.fecha_vencimiento,
+        COALESCE(v.monto_anticipo, 0) as monto_anticipo,
+        COALESCE(v.saldo_pendiente, 0) as saldo_pendiente,
+        v.estado_credito,
+        c.nombre as cliente_nombre,
+        c.telefono as cliente_telefono,
+        CAST(ROUND(julianday(date(v.fecha_vencimiento)) - julianday(date('now', 'localtime'))) AS INTEGER) as dias_restantes
+    FROM ventas v
+    JOIN clientes c ON v.cliente_id = c.id
+    WHERE v.es_credito = 1
+    ORDER BY 
+        CASE 
+            WHEN v.saldo_pendiente > 0 AND date('now', 'localtime') > date(v.fecha_vencimiento) THEN 1
+            WHEN v.saldo_pendiente > 0 THEN 2
+            ELSE 3
+        END,
+        v.fecha_vencimiento ASC
+    """)
+    rows = cursor.fetchall()
+
+    notas = []
+    total_pendientes = 0
+    total_vencidas = 0
+    total_por_vencer = 0
+    monto_total_por_cobrar = 0.0
+    monto_total_vencido = 0.0
+
+    for r in rows:
+        d = dict(r)
+        v_id = d["id"]
+        dias_rest = d.get("dias_restantes")
+        if dias_rest is None:
+            dias_rest = 0
+        d["dias_restantes"] = dias_rest
+
+        saldo = float(d["saldo_pendiente"] or 0)
+
+        if saldo <= 0.01:
+            est = "Liquidada"
+        elif dias_rest < 0:
+            est = "Vencida"
+        elif dias_rest <= 3:
+            est = "Por Vencer"
+        else:
+            est = "Vigente"
+        d["estado_calculado"] = est
+
+        # Artículos de la venta
+        cursor.execute("""
+        SELECT COALESCE(nombre_item, 'Artículo') as nombre, cantidad, precio_final
+        FROM venta_items WHERE venta_id = ?
+        """, (v_id,))
+        its = cursor.fetchall()
+        d["articulos_resumen"] = ", ".join([f"{it['nombre']} (x{it['cantidad']})" for it in its]) if its else "Artículo"
+
+        # Historial de abonos
+        cursor.execute("""
+        SELECT id, monto, fecha, metodo_pago, notas, usuario
+        FROM abonos_ventas_credito WHERE venta_id = ? ORDER BY id ASC
+        """, (v_id,))
+        abonos = [dict(a) for a in cursor.fetchall()]
+        d["abonos"] = abonos
+        d["total_abonado"] = round(sum(float(a["monto"]) for a in abonos), 2)
+
+        if saldo > 0.01:
+            total_pendientes += 1
+            monto_total_por_cobrar += saldo
+            if est == "Vencida":
+                total_vencidas += 1
+                monto_total_vencido += saldo
+            elif est == "Por Vencer":
+                total_por_vencer += 1
+
+        if not estado_filtro or estado_filtro.lower() in ("todos", "todas") or est.lower() == estado_filtro.lower():
+            notas.append(d)
+
+    conn.close()
+
+    return {
+        "total_pendientes": total_pendientes,
+        "total_vencidas": total_vencidas,
+        "total_por_vencer": total_por_vencer,
+        "monto_total_por_cobrar": round(monto_total_por_cobrar, 2),
+        "monto_total_vencido": round(monto_total_vencido, 2),
+        "notas": notas
+    }
+
+def registrar_abono_credito(
+    venta_id: int,
+    monto: float,
+    metodo_pago: str = "Efectivo",
+    notas: Optional[str] = None,
+    usuario: Optional[str] = None
+) -> Dict[str, Any]:
+    if monto <= 0:
+        raise ValueError("El monto del abono debe ser mayor a $0.00.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        _begin_immediate(cursor)
+
+        cursor.execute("SELECT * FROM ventas WHERE id = ?", (venta_id,))
+        v = cursor.fetchone()
+        if not v:
+            raise ValueError("La venta no fue encontrada.")
+        if not v["es_credito"]:
+            raise ValueError("Esta venta no corresponde a una Nota de Crédito.")
+
+        saldo_actual = float(v["saldo_pendiente"] or 0)
+        if saldo_actual <= 0.01:
+            raise ValueError("Esta Nota de Crédito ya se encuentra 100% liquidada.")
+
+        if monto > saldo_actual + 0.05:
+            raise ValueError(f"El monto a abonar (${monto:,.2f}) excede el saldo pendiente (${saldo_actual:,.2f}).")
+
+        nuevo_saldo = max(0.0, round(saldo_actual - monto, 2))
+        nuevo_estado = "Liquidada" if nuevo_saldo <= 0.01 else ("Vencida" if v["estado_credito"] == "Vencida" else "Pendiente")
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        cursor.execute("""
+        INSERT INTO abonos_ventas_credito (venta_id, monto, fecha, metodo_pago, notas, usuario)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, (venta_id, monto, now, metodo_pago, notas or "Abono a cuenta", usuario or "Caja"))
+
+        cursor.execute("""
+        UPDATE ventas 
+        SET saldo_pendiente = ?, estado_credito = ?
+        WHERE id = ?;
+        """, (nuevo_saldo, nuevo_estado, venta_id))
+
+        conn.commit()
+
+        return {
+            "venta_id": venta_id,
+            "monto_abonado": monto,
+            "saldo_anterior": saldo_actual,
+            "nuevo_saldo": nuevo_saldo,
+            "estado": nuevo_estado,
+            "fecha": now
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 # --- MÓDULO DE DEVOLUCIÓN Y GESTIÓN DE GARANTÍAS ---
 

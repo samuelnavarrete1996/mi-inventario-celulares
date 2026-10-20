@@ -156,6 +156,36 @@ def init_db():
         cursor.execute("ALTER TABLE ventas ADD COLUMN monto_garantia REAL NOT NULL DEFAULT 0;")
     if "notas" not in existing_cols:
         cursor.execute("ALTER TABLE ventas ADD COLUMN notas TEXT;")
+    if "es_credito" not in existing_cols:
+        cursor.execute("ALTER TABLE ventas ADD COLUMN es_credito INTEGER NOT NULL DEFAULT 0;")
+    if "plazo_dias" not in existing_cols:
+        cursor.execute("ALTER TABLE ventas ADD COLUMN plazo_dias INTEGER NOT NULL DEFAULT 0;")
+    if "fecha_vencimiento" not in existing_cols:
+        cursor.execute("ALTER TABLE ventas ADD COLUMN fecha_vencimiento TEXT;")
+    if "monto_credito" not in existing_cols:
+        cursor.execute("ALTER TABLE ventas ADD COLUMN monto_credito REAL NOT NULL DEFAULT 0;")
+    if "monto_anticipo" not in existing_cols:
+        cursor.execute("ALTER TABLE ventas ADD COLUMN monto_anticipo REAL NOT NULL DEFAULT 0;")
+    if "saldo_pendiente" not in existing_cols:
+        cursor.execute("ALTER TABLE ventas ADD COLUMN saldo_pendiente REAL NOT NULL DEFAULT 0;")
+    if "estado_credito" not in existing_cols:
+        cursor.execute("ALTER TABLE ventas ADD COLUMN estado_credito TEXT;")
+
+    # Tabla de Abonos de Ventas a Crédito (Notas de Crédito a 15 y 30 días)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS abonos_ventas_credito (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venta_id INTEGER NOT NULL,
+        monto REAL NOT NULL,
+        fecha TEXT NOT NULL,
+        metodo_pago TEXT NOT NULL DEFAULT 'Efectivo',
+        notas TEXT,
+        usuario TEXT,
+        FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_ventas_credito ON ventas(es_credito, estado_credito, fecha_vencimiento);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_abonos_venta_id ON abonos_ventas_credito(venta_id);")
 
     # 4. Tabla Detalle de Venta (Venta Items)
     cursor.execute("""

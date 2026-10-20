@@ -3,7 +3,11 @@
 const POS = {
     debounceTimer: null,
     carrito: [], // Array de { tipo: 'equipo'|'accesorio', id, equipo|accesorio, cantidad, precio_unitario, precio_final, costo_unitario }
-    metodoPago: 'Efectivo', // 'Efectivo', 'Transferencia', 'Combinado', 'Equipo Garantía'
+    metodoPago: 'Efectivo', // 'Efectivo', 'Transferencia', 'Combinado', 'Equipo Garantía', 'Nota de Crédito'
+    plazoCredito: 15,
+    notasCredito: [],
+    filtroEstadoCredito: 'todos',
+    notaActualAbono: null,
     reciboActual: null,
     catalogoTab: 'equipos', // 'equipos' o 'accesorios'
     compatibilidadFiltro: '',
@@ -15,6 +19,8 @@ const POS = {
         this.setupCartListeners();
         this.setupBarcodeScanner();
         this.renderCarrito();
+        this.cargarAlertasCredito();
+        this.actualizarFechaVencimientoPreview();
     },
 
     setupSearch() {
@@ -136,11 +142,13 @@ const POS = {
         const panelTransferencia = document.getElementById('panel-pago-transferencia');
         const panelCombinado = document.getElementById('panel-pago-combinado');
         const panelGarantia = document.getElementById('panel-pago-garantia');
+        const panelCredito = document.getElementById('panel-pago-credito');
 
         if (panelEfectivo) panelEfectivo.classList.toggle('hidden', metodo !== 'Efectivo');
         if (panelTransferencia) panelTransferencia.classList.toggle('hidden', metodo !== 'Transferencia');
         if (panelCombinado) panelCombinado.classList.toggle('hidden', metodo !== 'Combinado');
         if (panelGarantia) panelGarantia.classList.toggle('hidden', metodo !== 'Equipo Garantía');
+        if (panelCredito) panelCredito.classList.toggle('hidden', metodo !== 'Nota de Crédito');
 
         if (metodo === 'Combinado') {
             this.inicializarMontosCombinados();
@@ -150,6 +158,9 @@ const POS = {
         } else if (metodo === 'Equipo Garantía') {
             const elTotalGarantia = document.getElementById('resumen-monto-garantia');
             if (elTotalGarantia) elTotalGarantia.textContent = App.formatCurrency(this.obtenerTotalCarrito());
+        } else if (metodo === 'Nota de Crédito') {
+            this.actualizarFechaVencimientoPreview();
+            this.calcularSaldoCredito();
         }
     },
 
@@ -519,6 +530,8 @@ const POS = {
         } else if (this.metodoPago === 'Equipo Garantía') {
             const elTotalGarantia = document.getElementById('resumen-monto-garantia');
             if (elTotalGarantia) elTotalGarantia.textContent = App.formatCurrency(this.obtenerTotalCarrito());
+        } else if (this.metodoPago === 'Nota de Crédito') {
+            this.calcularSaldoCredito();
         }
     },
 
@@ -803,7 +816,10 @@ const POS = {
         const totalVenta = this.obtenerTotalCarrito();
 
         // Validaciones de pagos
-        let mEf = 0.0, mTr = 0.0, mGt = 0.0;
+        let mEf = 0.0, mTr = 0.0, mGt = 0.0, mAnticipo = 0.0;
+        let esCred = false;
+        let plazo = null;
+        let fechaVenc = null;
 
         if (this.metodoPago === 'Efectivo') {
             mEf = totalVenta;
@@ -811,6 +827,19 @@ const POS = {
             mTr = totalVenta;
         } else if (this.metodoPago === 'Equipo Garantía') {
             mGt = totalVenta;
+        } else if (this.metodoPago === 'Nota de Crédito') {
+            esCred = true;
+            plazo = this.plazoCredito || 15;
+            mAnticipo = parseFloat(document.getElementById('credito-monto-anticipo')?.value) || 0.0;
+            if (mAnticipo > totalVenta) {
+                App.showToast(`El anticipo ($${mAnticipo.toLocaleString('es-MX', {minimumFractionDigits: 2})}) no puede superar el total ($${totalVenta.toLocaleString('es-MX', {minimumFractionDigits: 2})}).`, "error");
+                return;
+            }
+            mEf = mAnticipo;
+            const targetDate = new Date();
+            targetDate.setDate(targetDate.getDate() + plazo);
+            const pad = (n) => String(n).padStart(2, '0');
+            fechaVenc = `${targetDate.getFullYear()}-${pad(targetDate.getMonth() + 1)}-${pad(targetDate.getDate())}`;
         } else if (this.metodoPago === 'Combinado') {
             mEf = parseFloat(document.getElementById('pago-monto-efectivo')?.value) || 0;
             mTr = parseFloat(document.getElementById('pago-monto-transferencia')?.value) || 0;
@@ -842,6 +871,10 @@ const POS = {
                 monto_efectivo: mEf,
                 monto_transferencia: mTr,
                 monto_garantia: mGt,
+                es_credito: esCred,
+                plazo_dias: plazo,
+                fecha_vencimiento: fechaVenc,
+                monto_anticipo: mAnticipo,
                 items: this.carrito.map(it => {
                     if (it.tipo === 'accesorio') {
                         const nombreFinal = (it.accesorio.color && !it.accesorio.nombre.includes(it.accesorio.color))
@@ -886,12 +919,16 @@ const POS = {
             document.getElementById('pos-cliente-telefono').value = '';
             const inputPagaCon = document.getElementById('efectivo-paga-con');
             if (inputPagaCon) inputPagaCon.value = '';
+            const inputAnticipo = document.getElementById('credito-monto-anticipo');
+            if (inputAnticipo) inputAnticipo.value = '';
+            this.calcularSaldoCredito();
 
             // Mostrar Recibo / Ticket
             this.mostrarRecibo(result);
 
-            // Refrescar inventario y estadísticas de cabecera
+            // Refrescar inventario, estadísticas de cabecera y alertas de crédito
             App.updateHeaderStats();
+            this.cargarAlertasCredito();
             if (typeof Accesorios !== 'undefined') Accesorios.cargarAccesorios();
 
         } catch (err) {
@@ -966,9 +1003,47 @@ const POS = {
         document.getElementById('recibo-precio-total').textContent = App.formatCurrency(datosVenta.precio_final);
 
         const containerMetodo = document.getElementById('recibo-desglose-pago');
+        const esCredito = Boolean(datosVenta.es_credito || datosVenta.metodo_pago === 'Nota de Crédito');
+
         if (containerMetodo) {
             const mp = datosVenta.metodo_pago;
-            if (mp === 'Combinado') {
+            if (esCredito) {
+                const total = datosVenta.precio_final || 0;
+                const saldo = datosVenta.saldo_pendiente !== undefined ? datosVenta.saldo_pendiente : 0;
+                const anticipo = datosVenta.monto_anticipo !== undefined ? datosVenta.monto_anticipo : (total - saldo);
+                const venc = datosVenta.fecha_vencimiento ? App.formatDate(datosVenta.fecha_vencimiento) : 'A definir';
+                const plazo = datosVenta.plazo_dias || 15;
+                const esLiquidada = saldo <= 0.01;
+
+                containerMetodo.innerHTML = `
+                    <div class="p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs space-y-2">
+                        <div class="flex justify-between items-center font-bold text-purple-950">
+                            <span class="flex items-center gap-1.5 text-sm"><span>📝</span> NOTA DE CRÉDITO (${plazo} DÍAS)</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${esLiquidada ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-purple-200 text-purple-900 border border-purple-300'}">
+                                ${esLiquidada ? 'LIQUIDADA' : 'PENDIENTE'}
+                            </span>
+                        </div>
+                        <div class="border-t border-purple-200/80 pt-1.5 space-y-1 text-slate-700 text-xs">
+                            <div class="flex justify-between">
+                                <span>Total de la Compra:</span>
+                                <span class="font-bold text-slate-900">${App.formatCurrency(total)}</span>
+                            </div>
+                            <div class="flex justify-between text-slate-600">
+                                <span>Anticipo / Pagos realizados:</span>
+                                <span class="font-semibold text-emerald-700">${App.formatCurrency(total - saldo)}</span>
+                            </div>
+                            <div class="flex justify-between items-baseline pt-1 border-t border-purple-200 font-bold">
+                                <span class="text-purple-950 font-black">SALDO PENDIENTE:</span>
+                                <span class="text-base font-black ${esLiquidada ? 'text-emerald-600' : 'text-purple-900'}">${App.formatCurrency(saldo)}</span>
+                            </div>
+                            <div class="flex justify-between text-[11px] text-purple-800 pt-0.5 font-semibold">
+                                <span>Fecha Límite de Pago:</span>
+                                <span class="font-bold font-mono">${venc}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (mp === 'Combinado') {
                 containerMetodo.innerHTML = `
                     <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-1">
                         <div class="font-bold text-slate-700 flex justify-between">
@@ -1004,7 +1079,13 @@ const POS = {
 
         const garantiaEl = document.getElementById('recibo-garantia-texto');
         if (garantiaEl) {
-            garantiaEl.textContent = "Garantía de 30 días válida únicamente con este comprobante original o número registrado. Aplica en placa base y componentes lógicos de fábrica (no cubre humedad, sobrecargas eléctricas, golpes o intervenciones ajenas).";
+            if (esCredito) {
+                const venc = datosVenta.fecha_vencimiento ? App.formatDate(datosVenta.fecha_vencimiento) : 'A definir';
+                const saldo = datosVenta.saldo_pendiente !== undefined ? datosVenta.saldo_pendiente : 0;
+                garantiaEl.innerHTML = `<strong>PAGARÉ / COMPROMISO DE PAGO:</strong> Reconozco deber y me obligo a pagar incondicionalmente a la orden de Samuel Navarrete la cantidad de <strong>${App.formatCurrency(saldo)}</strong> a más tardar el día <strong>${venc}</strong>. Garantía de 30 días condicionada a la liquidación puntual.`;
+            } else {
+                garantiaEl.textContent = "Garantía de 30 días válida únicamente con este comprobante original o número registrado. Aplica en placa base y componentes lógicos de fábrica (no cubre humedad, sobrecargas eléctricas, golpes o intervenciones ajenas).";
+            }
         }
 
         const modal = document.getElementById('modal-recibo-venta');
@@ -1050,6 +1131,34 @@ const POS = {
             itemsTexto = `• 📱 *${v.modelo}* ${v.capacidad_gb || ''}GB (${v.color || ''})
   IMEI: \`${v.imei || 'N/A'}\`
   Precio: $${(v.precio_final || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+        }
+
+        if (v.es_credito || v.metodo_pago === 'Nota de Crédito') {
+            const saldo = v.saldo_pendiente !== undefined ? v.saldo_pendiente : 0;
+            const total = v.precio_final || 0;
+            const abonado = Math.max(0, total - saldo);
+            const venc = v.fecha_vencimiento ? App.formatDate(v.fecha_vencimiento) : 'A definir';
+            const msgCredito = `¡Hola, *${v.cliente_nombre}*! 👋
+Te compartimos el comprobante oficial de tu *NOTA DE CRÉDITO* de *Mi Inventario Celulares*:
+
+📝 *NOTA DE CRÉDITO #${folio}*
+━━━━━━━━━━━━━━━━━━━━
+🗓️ *Fecha:* ${fecha}
+⏳ *Plazo:* ${v.plazo_dias || 15} Días
+📅 *Fecha Límite de Pago:* ${venc}
+━━━━━━━━━━━━━━━━━━━━
+*Artículos:*
+${itemsTexto}
+━━━━━━━━━━━━━━━━━━━━
+💰 *Total de Compra:* $${total.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+💵 *Anticipo / Abonado:* $${abonado.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+⚠️ *SALDO PENDIENTE:* $${saldo.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+━━━━━━━━━━━━━━━━━━━━
+¡Agradecemos mucho tu preferencia y compromiso de pago puntual! 🙏`;
+
+            const urlCred = `https://api.whatsapp.com/send?phone=${phoneNum}&text=${encodeURIComponent(msgCredito)}`;
+            window.open(urlCred, '_blank');
+            return;
         }
 
         const mensaje = `¡Hola, *${v.cliente_nombre}*! 👋
@@ -1219,6 +1328,394 @@ Garantía de 30 días válida presentando este comprobante o tu número registra
     seleccionarColorVariante(id) {
         this.cerrarSelectorColor();
         this.agregarAccesorioAlCarrito(id);
+    },
+
+
+    // =========================================================================
+    // MÓDULO DE NOTAS DE CRÉDITO A CLIENTES (15 Y 30 DÍAS) Y ALERTAS POS
+    // =========================================================================
+
+    seleccionarPlazoCredito(dias) {
+        this.plazoCredito = (dias === 30) ? 30 : 15;
+        const btn15 = document.getElementById('btn-plazo-15');
+        const btn30 = document.getElementById('btn-plazo-30');
+
+        if (this.plazoCredito === 15) {
+            if (btn15) {
+                btn15.className = 'py-2 px-3 text-xs font-black rounded-xl border-2 border-purple-600 bg-purple-600 text-white shadow-xs transition-all flex items-center justify-center gap-1.5';
+            }
+            if (btn30) {
+                btn30.className = 'py-2 px-3 text-xs font-black rounded-xl border-2 border-purple-200 bg-white text-purple-700 hover:bg-purple-100/50 shadow-xs transition-all flex items-center justify-center gap-1.5';
+            }
+        } else {
+            if (btn15) {
+                btn15.className = 'py-2 px-3 text-xs font-black rounded-xl border-2 border-purple-200 bg-white text-purple-700 hover:bg-purple-100/50 shadow-xs transition-all flex items-center justify-center gap-1.5';
+            }
+            if (btn30) {
+                btn30.className = 'py-2 px-3 text-xs font-black rounded-xl border-2 border-purple-600 bg-purple-600 text-white shadow-xs transition-all flex items-center justify-center gap-1.5';
+            }
+        }
+
+        this.actualizarFechaVencimientoPreview();
+    },
+
+    actualizarFechaVencimientoPreview() {
+        const badge = document.getElementById('badge-fecha-vencimiento');
+        if (!badge) return;
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + (this.plazoCredito || 15));
+        const pad = (n) => String(n).padStart(2, '0');
+        const fechaStr = `${pad(targetDate.getDate())}/${pad(targetDate.getMonth() + 1)}/${targetDate.getFullYear()}`;
+        badge.textContent = `Vence: ${fechaStr}`;
+    },
+
+    calcularSaldoCredito() {
+        const total = this.obtenerTotalCarrito();
+        const inputAnticipo = document.getElementById('credito-monto-anticipo');
+        let anticipo = parseFloat(inputAnticipo?.value) || 0;
+        if (anticipo < 0) anticipo = 0;
+        if (anticipo > total) {
+            anticipo = total;
+            if (inputAnticipo) inputAnticipo.value = total;
+        }
+        const saldo = Math.max(0, total - anticipo);
+        const elSaldo = document.getElementById('credito-saldo-pendiente');
+        if (elSaldo) elSaldo.textContent = App.formatCurrency(saldo);
+    },
+
+    async cargarAlertasCredito() {
+        try {
+            const res = await fetch('/api/pos/creditos/alertas');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            const totalVencidas = data.total_vencidas || 0;
+            const totalPorVencer = data.total_por_vencer || 0;
+            const totalCriticas = totalVencidas + totalPorVencer;
+
+            const banner = document.getElementById('pos-banner-creditos');
+            const navBadge = document.getElementById('badge-nav-creditos-alerta');
+            const posBadge = document.getElementById('badge-contador-creditos-alerta');
+            const resumenEl = document.getElementById('pos-banner-creditos-resumen');
+            const descEl = document.getElementById('pos-banner-creditos-desc');
+
+            if (totalCriticas > 0) {
+                if (banner) banner.classList.remove('hidden');
+                if (navBadge) navBadge.classList.remove('hidden');
+                if (posBadge) {
+                    posBadge.classList.remove('hidden');
+                    posBadge.textContent = totalCriticas;
+                }
+                if (resumenEl) {
+                    resumenEl.textContent = `${totalVencidas} vencidas • ${totalPorVencer} por vencer`;
+                }
+                if (descEl) {
+                    const monto = App.formatCurrency(data.monto_total_vencido || 0);
+                    descEl.textContent = `Hay ${totalVencidas} notas vencidas (${monto}) y ${totalPorVencer} próximas a vencer en los siguientes 3 días.`;
+                }
+            } else {
+                if (banner) banner.classList.add('hidden');
+                if (navBadge) navBadge.classList.add('hidden');
+                if (posBadge) posBadge.classList.add('hidden');
+            }
+        } catch (e) {
+            console.warn("No se pudieron cargar las alertas de crédito:", e);
+        }
+    },
+
+    cerrarBannerCreditos() {
+        const banner = document.getElementById('pos-banner-creditos');
+        if (banner) banner.classList.add('hidden');
+    },
+
+    abrirModalCreditos() {
+        const modal = document.getElementById('modal-notas-credito');
+        if (modal) modal.classList.remove('hidden');
+        this.cargarNotasCredito();
+    },
+
+    cerrarModalCreditos() {
+        const modal = document.getElementById('modal-notas-credito');
+        if (modal) modal.classList.add('hidden');
+    },
+
+    filtrarNotasCreditoTab(estado, btn) {
+        this.filtroEstadoCredito = estado;
+        document.querySelectorAll('.btn-tab-credito').forEach(b => {
+            b.className = 'btn-tab-credito px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all';
+        });
+        if (btn) {
+            btn.className = 'btn-tab-credito px-3 py-1.5 rounded-xl bg-purple-600 text-white shadow-2xs transition-all';
+        }
+        this.cargarNotasCredito();
+    },
+
+    async cargarNotasCredito() {
+        const container = document.getElementById('contenedor-lista-creditos');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="py-12 text-center text-slate-400">
+                <svg class="animate-spin h-6 w-6 text-purple-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="text-xs font-semibold">Cargando notas de crédito...</p>
+            </div>
+        `;
+
+        try {
+            const url = `/api/pos/creditos?estado=${encodeURIComponent(this.filtroEstadoCredito)}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Error al consultar notas de crédito");
+            const data = await res.json();
+
+            this.notasCredito = data.notas || [];
+
+            // Actualizar resumen numérico
+            const elPorCobrar = document.getElementById('creditos-resumen-por-cobrar');
+            const elPendientes = document.getElementById('creditos-resumen-pendientes');
+            const elVencido = document.getElementById('creditos-resumen-vencido');
+            const elVencidasCount = document.getElementById('creditos-resumen-vencidas-count');
+            const elPorVencerCount = document.getElementById('creditos-resumen-por-vencer-count');
+
+            if (elPorCobrar) elPorCobrar.textContent = App.formatCurrency(data.monto_total_por_cobrar || 0);
+            if (elPendientes) elPendientes.textContent = `${data.total_pendientes || 0} notas pendientes`;
+            if (elVencido) elVencido.textContent = App.formatCurrency(data.monto_total_vencido || 0);
+            if (elVencidasCount) elVencidasCount.textContent = `${data.total_vencidas || 0} notas vencidas`;
+            if (elPorVencerCount) elPorVencerCount.textContent = data.total_por_vencer || 0;
+
+            if (this.notasCredito.length === 0) {
+                container.innerHTML = `
+                    <div class="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <div class="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center mx-auto mb-2 text-xl">
+                            📝
+                        </div>
+                        <h4 class="font-bold text-slate-700 text-sm">No se encontraron notas de crédito</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">No hay registros con el filtro seleccionado.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = this.notasCredito.map(n => {
+                const est = n.estado_calculado;
+                const dias = n.dias_restantes;
+                const saldo = n.saldo_pendiente || 0;
+                const esLiquidada = saldo <= 0.01;
+
+                let badgeEstado = '';
+                if (est === 'Vencida') {
+                    badgeEstado = `<span class="px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-700 border border-rose-300">⚠️ Vencida hace ${Math.abs(dias)} días</span>`;
+                } else if (est === 'Por Vencer') {
+                    badgeEstado = `<span class="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300">⏳ Vence en ${dias} día${dias !== 1 ? 's' : ''}</span>`;
+                } else if (est === 'Liquidada') {
+                    badgeEstado = `<span class="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">🎉 Liquidada</span>`;
+                } else {
+                    badgeEstado = `<span class="px-2.5 py-1 rounded-full text-xs font-black bg-purple-100 text-purple-800 border border-purple-200">📅 Vigente (${dias} días)</span>`;
+                }
+
+                return `
+                <div class="bg-white rounded-2xl border ${est === 'Vencida' ? 'border-rose-300 bg-rose-50/20' : (est === 'Por Vencer' ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200')} p-4 shadow-2xs hover:shadow-sm transition-all space-y-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                        <div class="flex items-center gap-2.5">
+                            <span class="font-mono text-xs font-black bg-slate-100 text-slate-800 px-2 py-1 rounded-lg">#${String(n.id).padStart(5, '0')}</span>
+                            <div>
+                                <h4 class="font-black text-slate-900 text-sm leading-tight">${App.escapeHtml(n.cliente_nombre)}</h4>
+                                <span class="font-mono text-xs text-slate-500 font-semibold">📱 ${App.escapeHtml(n.cliente_telefono)}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200">Plazo: ${n.plazo_dias} Días</span>
+                            ${badgeEstado}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                        <div class="bg-slate-50 p-2.5 rounded-xl">
+                            <span class="text-[10px] font-bold text-slate-400 block uppercase">Artículos</span>
+                            <span class="font-semibold text-slate-800 line-clamp-1 block mt-0.5" title="${App.escapeHtml(n.articulos_resumen)}">
+                                ${App.escapeHtml(n.articulos_resumen)}
+                            </span>
+                        </div>
+                        <div class="bg-slate-50 p-2.5 rounded-xl">
+                            <span class="text-[10px] font-bold text-slate-400 block uppercase">Fechas</span>
+                            <span class="text-slate-600 block mt-0.5">Venta: ${App.formatDate(n.fecha_venta)}</span>
+                            <span class="font-bold text-purple-900 block font-mono">Vence: ${n.fecha_vencimiento ? App.formatDate(n.fecha_vencimiento) : 'N/A'}</span>
+                        </div>
+                        <div class="bg-slate-50 p-2.5 rounded-xl">
+                            <div class="flex justify-between items-baseline">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase">Saldo Pendiente</span>
+                                <span class="text-base font-black ${esLiquidada ? 'text-emerald-600' : 'text-rose-600'}">
+                                    ${App.formatCurrency(saldo)}
+                                </span>
+                            </div>
+                            <span class="text-[10px] text-slate-400 block">Total: ${App.formatCurrency(n.total_venta)} • Abonado: ${App.formatCurrency(n.total_abonado || 0)}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
+                        <button type="button" onclick="POS.verReciboPorId(${n.id})" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1">
+                            <span>📄</span> Nota
+                        </button>
+                        <button type="button" onclick="POS.enviarWhatsAppCobranza(${n.id})" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1">
+                            <span>💬</span> Cobro WhatsApp
+                        </button>
+                        ${!esLiquidada ? `
+                        <button type="button" onclick="POS.abrirModalAbono(${n.id})" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-xs font-black rounded-xl shadow-2xs transition-all flex items-center gap-1">
+                            <span>💵</span> Abonar / Liquidar
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+        } catch (e) {
+            container.innerHTML = `
+                <div class="p-6 text-center text-rose-600 text-xs font-bold">
+                    Error cargando notas de crédito: ${e.message}
+                </div>
+            `;
+        }
+    },
+
+    async verReciboPorId(ventaId) {
+        try {
+            const res = await fetch(`/api/pos/recibo/${ventaId}`);
+            if (!res.ok) throw new Error("No se pudo obtener la nota");
+            const data = await res.json();
+            this.mostrarRecibo(data);
+        } catch (e) {
+            App.showToast(e.message, "error");
+        }
+    },
+
+    enviarWhatsAppCobranza(notaId) {
+        const nota = this.notasCredito.find(n => n.id === notaId);
+        if (!nota) return;
+        const tel = (nota.cliente_telefono || '').replace(/\D/g, '');
+        if (!tel) {
+            App.showToast("El cliente no tiene teléfono válido registrado.", "error");
+            return;
+        }
+        const phoneNum = tel.length === 10 ? `52${tel}` : tel;
+        const folio = String(nota.id).padStart(5, '0');
+        const dias = nota.dias_restantes;
+        const saldo = nota.saldo_pendiente || 0;
+        const venc = nota.fecha_vencimiento ? App.formatDate(nota.fecha_vencimiento) : 'N/A';
+
+        let recordatorio = '';
+        if (dias < 0) {
+            recordatorio = `⚠️ Le recordamos atentamente que su Nota de Crédito venció hace *${Math.abs(dias)} días* (${venc}). Le solicitamos pasar a tienda o reportar su pago por este medio a la brevedad.`;
+        } else if (dias === 0) {
+            recordatorio = `⏳ Le recordamos cordialmente que el día de *HOY* vence el plazo de su Nota de Crédito por *${App.formatCurrency(saldo)}*.`;
+        } else {
+            recordatorio = `⏳ Le recordamos cordialmente que en *${dias} días* (${venc}) vence el plazo de su Nota de Crédito por *${App.formatCurrency(saldo)}*.`;
+        }
+
+        const msg = `Hola, estimado(a) *${nota.cliente_nombre}* 👋
+Le saludamos de *Mi Inventario Celulares*.
+
+${recordatorio}
+
+📋 *DETALLE DE LA NOTA DE CRÉDITO #${folio}*
+━━━━━━━━━━━━━━━━━━━━
+• Artículos: ${nota.articulos_resumen}
+• Total Original: $${(nota.total_venta || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}
+• Anticipo / Pagos: $${(nota.total_abonado || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}
+• Saldo Pendiente: *$${saldo.toLocaleString('es-MX', {minimumFractionDigits: 2})}*
+• Fecha Límite: ${venc}
+━━━━━━━━━━━━━━━━━━━━
+Agradecemos mucho su atención y preferencia. ¡Quedamos a su orden! 🙏`;
+
+        window.open(`https://api.whatsapp.com/send?phone=${phoneNum}&text=${encodeURIComponent(msg)}`, '_blank');
+    },
+
+    abrirModalAbono(notaId) {
+        const nota = this.notasCredito.find(n => n.id === notaId);
+        if (!nota) return;
+        this.notaActualAbono = nota;
+
+        document.getElementById('abono-venta-id').value = nota.id;
+        document.getElementById('abono-modal-titulo').textContent = `Abono a Nota #${String(nota.id).padStart(5, '0')}`;
+        document.getElementById('abono-modal-subtitulo').textContent = `Cliente: ${nota.cliente_nombre} (${nota.cliente_telefono})`;
+        document.getElementById('abono-saldo-actual').textContent = App.formatCurrency(nota.saldo_pendiente);
+        document.getElementById('abono-total-nota').textContent = App.formatCurrency(nota.total_venta);
+
+        const inputMonto = document.getElementById('abono-monto');
+        if (inputMonto) {
+            inputMonto.value = nota.saldo_pendiente;
+            inputMonto.max = nota.saldo_pendiente;
+        }
+
+        const modal = document.getElementById('modal-abono-credito');
+        if (modal) modal.classList.remove('hidden');
+    },
+
+    cerrarModalAbono() {
+        const modal = document.getElementById('modal-abono-credito');
+        if (modal) modal.classList.add('hidden');
+        this.notaActualAbono = null;
+    },
+
+    setMontoAbonoTotal() {
+        if (!this.notaActualAbono) return;
+        const input = document.getElementById('abono-monto');
+        if (input) input.value = this.notaActualAbono.saldo_pendiente;
+    },
+
+    setMontoAbonoMitad() {
+        if (!this.notaActualAbono) return;
+        const input = document.getElementById('abono-monto');
+        if (input) input.value = (this.notaActualAbono.saldo_pendiente / 2).toFixed(2);
+    },
+
+    async guardarAbono(e) {
+        if (e) e.preventDefault();
+        const ventaId = document.getElementById('abono-venta-id')?.value;
+        const monto = parseFloat(document.getElementById('abono-monto')?.value) || 0;
+        const metodo = document.getElementById('abono-metodo-pago')?.value || 'Efectivo';
+        const notas = document.getElementById('abono-notas')?.value.trim();
+
+        if (!ventaId || monto <= 0) {
+            App.showToast("Ingresa un monto válido mayor a $0.00", "error");
+            return;
+        }
+
+        const btn = document.getElementById('btn-guardar-abono');
+        const originalText = btn.innerHTML;
+
+        try {
+            btn.disabled = true;
+            btn.innerHTML = 'Guardando...';
+
+            const res = await fetch(`/api/pos/creditos/${ventaId}/abono`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    monto: monto,
+                    metodo_pago: metodo,
+                    notas: notas || undefined
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || "Error al registrar el abono");
+            }
+
+            App.showToast(`¡Abono de $${monto.toLocaleString('es-MX', {minimumFractionDigits: 2})} registrado! Nuevo saldo: $${data.nuevo_saldo.toLocaleString('es-MX', {minimumFractionDigits: 2})}`, "success");
+            this.cerrarModalAbono();
+            await this.cargarNotasCredito();
+            await this.cargarAlertasCredito();
+
+        } catch (err) {
+            App.showToast(err.message, "error");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     },
 
     obtenerHexColor(nombreColor) {

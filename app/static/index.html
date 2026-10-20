@@ -79,9 +79,10 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                             <span>Inventario</span>
                         </button>
-                        <button data-tab="pos" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
+                        <button data-tab="pos" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all relative">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                             <span>POS / Venta</span>
+                            <span id="badge-nav-creditos-alerta" class="hidden w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white animate-pulse"></span>
                         </button>
                         <button data-tab="accesorios" class="nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
@@ -348,6 +349,31 @@
         <!-- ============================================================== -->
         <section id="view-pos" class="tab-view hidden space-y-6">
             
+            <!-- BANNER DE ALERTAS DE NOTAS DE CRÉDITO EN EL POS (15 Y 30 DÍAS) -->
+            <div id="pos-banner-creditos" class="hidden bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 text-white rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-xl shrink-0">
+                        🔔
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black uppercase tracking-wider bg-white/25 px-2 py-0.5 rounded-full">Alerta de Crédito</span>
+                            <span id="pos-banner-creditos-resumen" class="text-xs font-bold text-amber-100"></span>
+                        </div>
+                        <h4 id="pos-banner-creditos-titulo" class="font-black text-sm sm:text-base leading-tight mt-0.5">Tienes notas de crédito vencidas o por vencer</h4>
+                        <p id="pos-banner-creditos-desc" class="text-xs text-white/90 mt-0.5">Revisa el listado de clientes para gestionar cobranza o registrar abonos.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" onclick="POS.abrirModalCreditos()" class="px-4 py-2 bg-white hover:bg-slate-100 active:bg-slate-200 text-rose-700 font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5">
+                        <span>📝</span> Ver Notas de Crédito
+                    </button>
+                    <button type="button" onclick="POS.cerrarBannerCreditos()" class="p-2 text-white/80 hover:text-white rounded-xl hover:bg-white/10 transition-colors" title="Ocultar aviso">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 
                 <!-- COLUMNA IZQUIERDA: Catálogo de Teléfonos Disponibles (7 columnas) -->
@@ -364,7 +390,13 @@
                                     🎧 Accesorios
                                 </button>
                             </div>
-                            <span class="text-xs text-slate-400 hidden sm:inline">Agrega al carrito con 1 toque</span>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="POS.abrirModalCreditos()" class="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 text-purple-700 border border-purple-200 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Ver catálogo de notas de crédito a 15 y 30 días">
+                                    <span>📝</span> <span>Notas de Crédito</span>
+                                    <span id="badge-contador-creditos-alerta" class="hidden px-1.5 py-0.2 bg-rose-600 text-white text-[10px] font-black rounded-full">0</span>
+                                </button>
+                                <span class="text-xs text-slate-400 hidden sm:inline">Agrega al carrito con 1 toque</span>
+                            </div>
                         </div>
 
                         <div class="relative flex items-center">
@@ -528,7 +560,7 @@
                                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Forma de Pago *</label>
                                 
                                 <!-- Botones de Selector de Pago -->
-                                <div class="grid grid-cols-4 gap-1.5">
+                                <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                                     <button type="button" data-metodo="Efectivo" class="payment-method-btn px-2 py-2 text-xs font-bold rounded-xl border border-blue-600 bg-blue-600 text-white shadow-xs transition-all flex flex-col items-center gap-1">
                                         <span>💵</span>
                                         <span>Efectivo</span>
@@ -544,6 +576,10 @@
                                     <button type="button" data-metodo="Equipo Garantía" class="payment-method-btn px-2 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all flex flex-col items-center gap-1" title="Teléfono entregado en garantía cubre la compra">
                                         <span>🛡️</span>
                                         <span>Eq. Garantía</span>
+                                    </button>
+                                    <button type="button" data-metodo="Nota de Crédito" class="payment-method-btn px-2 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all flex flex-col items-center gap-1" title="Venta a crédito a 15 o 30 días">
+                                        <span>📝</span>
+                                        <span>Nota Crédito</span>
                                     </button>
                                 </div>
 
@@ -609,6 +645,41 @@
                                     <div class="pt-2 border-t border-amber-200/80 flex justify-between items-center text-[11px] text-amber-900">
                                         <span>Total Asignado: <strong id="txt-monto-asignado">$0.00</strong></span>
                                         <span class="text-amber-700 italic">Debe igualar el total</span>
+                                    </div>
+                                </div>
+
+                                <!-- Panel Específico: NOTA DE CRÉDITO (15 Y 30 DÍAS) -->
+                                <div id="panel-pago-credito" class="hidden bg-purple-50/80 p-3.5 rounded-xl border border-purple-200 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>📝</span> Plazo de la Nota de Crédito
+                                        </span>
+                                        <span id="badge-fecha-vencimiento" class="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">Vence: --</span>
+                                    </div>
+
+                                    <!-- Selector de 15 vs 30 días con 1 clic -->
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button type="button" id="btn-plazo-15" onclick="POS.seleccionarPlazoCredito(15)" class="py-2 px-3 text-xs font-black rounded-xl border-2 border-purple-600 bg-purple-600 text-white shadow-xs transition-all flex items-center justify-center gap-1.5">
+                                            <span>⚡</span> 15 Días
+                                        </button>
+                                        <button type="button" id="btn-plazo-30" onclick="POS.seleccionarPlazoCredito(30)" class="py-2 px-3 text-xs font-black rounded-xl border-2 border-purple-200 bg-white text-purple-700 hover:bg-purple-100/50 shadow-xs transition-all flex items-center justify-center gap-1.5">
+                                            <span>📅</span> 30 Días
+                                        </button>
+                                    </div>
+
+                                    <!-- Anticipo inicial y saldo pendiente -->
+                                    <div class="space-y-2 pt-1 border-t border-purple-200/60 text-xs">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-purple-900 font-semibold">💵 Anticipo inicial (Opcional):</span>
+                                            <div class="relative w-32">
+                                                <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-purple-400 font-bold">$</span>
+                                                <input type="number" step="any" min="0" id="credito-monto-anticipo" oninput="POS.calcularSaldoCredito()" placeholder="0.00" class="w-full pl-6 pr-2 py-1 text-right font-bold bg-white border border-purple-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500">
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center justify-between text-xs pt-1 border-t border-purple-200/40">
+                                            <span class="text-purple-950 font-bold">Saldo que queda a crédito:</span>
+                                            <span id="credito-saldo-pendiente" class="text-sm font-black text-purple-900">$0.00</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1379,6 +1450,152 @@
                     Cerrar
                 </button>
             </div>
+        </div>
+    </div>
+
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: GESTIÓN DE NOTAS DE CRÉDITO (15 Y 30 DÍAS)    -->
+    <!-- ==================================================== -->
+    <div id="modal-notas-credito" class="modal-sheet-mobile hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 relative my-auto animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            
+            <!-- Encabezado del Modal -->
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-xl shrink-0">
+                        📝
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-lg font-black text-slate-900">Control de Notas de Crédito</h3>
+                            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">15 y 30 Días</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Monitoreo de vencimientos, cobranza por WhatsApp y registro de abonos.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="POS.cerrarModalCreditos()" class="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Resumen Financiero de Créditos -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 py-4 shrink-0">
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Por Cobrar Total</span>
+                    <span id="creditos-resumen-por-cobrar" class="text-lg font-black text-slate-900 block mt-0.5">$0.00</span>
+                    <span id="creditos-resumen-pendientes" class="text-[10px] text-slate-400 font-semibold block">0 notas pendientes</span>
+                </div>
+                <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                    <span class="text-[11px] font-bold text-rose-700 uppercase tracking-wider block">Monto Vencido ⚠️</span>
+                    <span id="creditos-resumen-vencido" class="text-lg font-black text-rose-600 block mt-0.5">$0.00</span>
+                    <span id="creditos-resumen-vencidas-count" class="text-[10px] text-rose-500 font-semibold block">0 notas vencidas</span>
+                </div>
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <span class="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">Por Vencer (≤3d)</span>
+                    <span id="creditos-resumen-por-vencer-count" class="text-lg font-black text-amber-700 block mt-0.5">0</span>
+                    <span class="text-[10px] text-amber-600 font-semibold block">Próximas a vencer</span>
+                </div>
+                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <span class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Acción Rápida</span>
+                    <button type="button" onclick="POS.cargarNotasCredito()" class="mt-1 w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-2xs transition-all flex items-center justify-center gap-1">
+                        <span>🔄</span> Refrescar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filtros por Estado -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-2 shrink-0 border-b border-slate-100 text-xs font-bold">
+                <button type="button" onclick="POS.filtrarNotasCreditoTab('todos', this)" class="btn-tab-credito px-3 py-1.5 rounded-xl bg-purple-600 text-white shadow-2xs transition-all">Todas</button>
+                <button type="button" onclick="POS.filtrarNotasCreditoTab('Vencida', this)" class="btn-tab-credito px-3 py-1.5 rounded-xl bg-slate-100 text-rose-700 hover:bg-rose-50 transition-all">⚠️ Vencidas</button>
+                <button type="button" onclick="POS.filtrarNotasCreditoTab('Por Vencer', this)" class="btn-tab-credito px-3 py-1.5 rounded-xl bg-slate-100 text-amber-700 hover:bg-amber-50 transition-all">⏳ Por Vencer</button>
+                <button type="button" onclick="POS.filtrarNotasCreditoTab('Vigente', this)" class="btn-tab-credito px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all">✅ Vigentes</button>
+                <button type="button" onclick="POS.filtrarNotasCreditoTab('Liquidada', this)" class="btn-tab-credito px-3 py-1.5 rounded-xl bg-slate-100 text-emerald-700 hover:bg-emerald-50 transition-all">🎉 Liquidadas</button>
+            </div>
+
+            <!-- Contenedor Listado de Notas con Scroll -->
+            <div id="contenedor-lista-creditos" class="flex-1 overflow-y-auto py-3 space-y-3 min-h-[220px]">
+                <!-- Cards de notas dinámicas -->
+            </div>
+
+            <!-- Footer con Botón Cerrar -->
+            <div class="pt-3 border-t border-slate-100 flex justify-end shrink-0">
+                <button type="button" onclick="POS.cerrarModalCreditos()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================== -->
+    <!-- MODAL: REGISTRAR ABONO A NOTA DE CRÉDITO             -->
+    <!-- ==================================================== -->
+    <div id="modal-abono-credito" class="modal-sheet-mobile hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200">
+            <button type="button" onclick="POS.cerrarModalAbono()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                ✕
+            </button>
+            <div class="mb-4 pb-3 border-b border-slate-100">
+                <span class="text-xs font-bold text-purple-600 uppercase tracking-wider">Abono a Cuenta</span>
+                <h3 id="abono-modal-titulo" class="text-lg font-black text-slate-900 mt-0.5">Registrar Abono</h3>
+                <p id="abono-modal-subtitulo" class="text-xs text-slate-500 mt-1">Nota de Crédito</p>
+            </div>
+
+            <form id="form-abono-credito" onsubmit="POS.guardarAbono(event)" class="space-y-4">
+                <input type="hidden" id="abono-venta-id">
+                
+                <div class="bg-purple-50/70 p-3 rounded-xl border border-purple-200 space-y-1.5 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-purple-900 font-medium">Saldo Pendiente Actual:</span>
+                        <span id="abono-saldo-actual" class="font-black text-purple-900 text-sm">$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-[11px] text-purple-700">
+                        <span>Total de la Nota:</span>
+                        <span id="abono-total-nota">$0.00</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Monto a Abonar ($) *</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold">$</span>
+                        <input type="number" step="any" min="0.01" id="abono-monto" required placeholder="0.00" class="w-full pl-7 pr-3 py-2.5 text-base font-black bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="POS.setMontoAbonoTotal()" class="py-1.5 px-2 bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs font-bold rounded-lg transition-all text-center">
+                        ⚡ Liquidar Todo
+                    </button>
+                    <button type="button" onclick="POS.setMontoAbonoMitad()" class="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-all text-center">
+                        ½ Abonar Mitad
+                    </button>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Forma de Pago del Abono</label>
+                    <select id="abono-metodo-pago" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-1 focus:ring-purple-500 font-bold text-slate-800">
+                        <option value="Efectivo">💵 Efectivo</option>
+                        <option value="Transferencia">📱 Transferencia (SPEI)</option>
+                        <option value="Tarjeta">💳 Tarjeta</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Nota o Comentario (Opcional)</label>
+                    <input type="text" id="abono-notas" placeholder="Ej. Abono parcial en mostrador" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-1 focus:ring-purple-500">
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                    <button type="submit" id="btn-guardar-abono" class="flex-1 py-3 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5">
+                        <span>💾</span> Guardar Abono
+                    </button>
+                    <button type="button" onclick="POS.cerrarModalAbono()" class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -1,6 +1,7 @@
 import math
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
 
 def _check_finite_float(val: Optional[float], field_label: str) -> Optional[float]:
     if val is not None and (math.isnan(val) or math.isinf(val)):
@@ -236,12 +237,18 @@ class VentaCreate(BaseModel):
     
     # Soporte para carrito de múltiples items
     items: Optional[List[ItemCarrito]] = None
+
+    # Nota de Crédito (15 o 30 días)
+    es_credito: bool = False
+    plazo_dias: Optional[int] = Field(None, description="Plazo de crédito: 15 o 30 días")
+    fecha_vencimiento: Optional[str] = Field(None, max_length=20, description="Fecha de vencimiento (YYYY-MM-DD)")
+    monto_anticipo: float = Field(0.0, ge=0, description="Monto del anticipo inicial")
     
     # Retrocompatibilidad con venta de un solo equipo
     equipo_id: Optional[int] = None
     precio_final: Optional[float] = None
 
-    @field_validator('monto_efectivo', 'monto_transferencia', 'monto_tarjeta', 'monto_garantia', 'precio_final')
+    @field_validator('monto_efectivo', 'monto_transferencia', 'monto_tarjeta', 'monto_garantia', 'precio_final', 'monto_anticipo')
     def validate_montos_venta(cls, v):
         return _check_finite_float(v, "monto de pago")
 
@@ -259,6 +266,18 @@ class VentaCreate(BaseModel):
         if mp.lower() in ("equipo garantia", "equipo garantía", "garantia", "garantía"):
             mp = "Equipo Garantía"
             self.metodo_pago = mp
+        elif mp.lower() in ("nota de credito", "nota de crédito", "credito", "crédito") or self.es_credito:
+            mp = "Nota de Crédito"
+            self.metodo_pago = mp
+            self.es_credito = True
+            if self.plazo_dias is not None and self.plazo_dias not in (15, 30):
+                raise ValueError("El plazo de crédito debe ser de 15 o 30 días.")
+            if not self.plazo_dias:
+                self.plazo_dias = 15
+            if not self.fecha_vencimiento:
+                self.fecha_vencimiento = (datetime.now() + timedelta(days=self.plazo_dias)).strftime("%Y-%m-%d")
+            if self.monto_anticipo > total_venta:
+                raise ValueError("El anticipo no puede ser mayor al total de la venta.")
 
         if mp == "Efectivo":
             if (self.monto_efectivo + self.monto_transferencia + self.monto_garantia) == 0:
@@ -269,6 +288,8 @@ class VentaCreate(BaseModel):
         elif mp == "Equipo Garantía":
             if (self.monto_efectivo + self.monto_transferencia + self.monto_garantia) == 0:
                 self.monto_garantia = total_venta
+        elif mp == "Nota de Crédito":
+            self.monto_efectivo = self.monto_anticipo
         elif mp == "Combinado":
             total_pagos = round(self.monto_efectivo + self.monto_transferencia + self.monto_tarjeta + self.monto_garantia, 2)
             if abs(total_pagos - total_venta) > 0.05:
@@ -319,6 +340,16 @@ class VentaDetalleResponse(BaseModel):
     tipo_venta: str = "celulares"
     resumen_modelos: str = ""
     
+    # Nota de Crédito (15 y 30 días)
+    es_credito: bool = False
+    plazo_dias: int = 0
+    fecha_vencimiento: Optional[str] = None
+    monto_credito: float = 0.0
+    monto_anticipo: float = 0.0
+    saldo_pendiente: float = 0.0
+    estado_credito: Optional[str] = None
+    abonos: List[Dict[str, Any]] = []
+
     # Retrocompatibilidad
     equipo_id: Optional[int] = None
     modelo: Optional[str] = None
@@ -327,6 +358,16 @@ class VentaDetalleResponse(BaseModel):
     imei: Optional[str] = None
     grado: Optional[str] = None
     costo_compra: Optional[float] = None
+
+class AbonoCreditoCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    monto: float = Field(..., gt=0, description="Monto del abono")
+    metodo_pago: str = Field("Efectivo", max_length=50, description="Efectivo o Transferencia")
+    notas: Optional[str] = Field(None, max_length=300)
+
+    @field_validator('monto')
+    def validate_monto_abono(cls, v):
+        return _check_finite_float(v, "monto")
 
 # --- MODELOS DE GARANTÍA ---
 
