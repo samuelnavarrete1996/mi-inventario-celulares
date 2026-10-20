@@ -311,6 +311,12 @@ class VentaDetalleResponse(BaseModel):
     cliente_telefono: str
     items: List[VentaItemResponse] = []
     total_equipos: int = 1
+    total_accesorios: int = 0
+    ganancia_celulares: Optional[float] = None
+    ganancia_accesorios: Optional[float] = None
+    venta_celulares: float = 0.0
+    venta_accesorios: float = 0.0
+    tipo_venta: str = "celulares"
     resumen_modelos: str = ""
     
     # Retrocompatibilidad

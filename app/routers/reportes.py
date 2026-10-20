@@ -15,15 +15,26 @@ def obtener_metricas_dashboard(user: dict = Depends(get_current_user)) -> Dict[s
     """
     metrics = crud.get_dashboard_metrics()
     if not is_user_dueno(user):
-        metrics["total_ganancias_mes"] = None
-        metrics["total_ventas_mes"] = None
-        metrics["equipos_vendidos_mes"] = None
-        metrics["cantidad_equipos_vendidos"] = None
-        metrics["capital_inventario"] = None
-        metrics["valor_venta_inventario"] = None
-        metrics["margen_promedio_mes"] = None
-        metrics["ventas_por_dia"] = []
-        metrics["desglose_metodos_pago"] = {}
+        campos_a_ocultar = [
+            "total_ganancias_mes", "total_ventas_mes", "equipos_vendidos_mes",
+            "cantidad_equipos_vendidos", "capital_inventario", "valor_venta_inventario",
+            "capital_inventario_total", "margen_promedio_mes", "ventas_por_dia",
+            "desglose_metodos_pago", "celulares_ventas_mes", "celulares_ganancias_mes",
+            "celulares_unidades_mes", "celulares_margen_pct", "celulares_capital_inventario",
+            "celulares_valor_venta_inventario", "celulares_top_vendidos",
+            "accesorios_ventas_mes", "accesorios_ganancias_mes", "accesorios_unidades_mes",
+            "accesorios_margen_pct", "accesorios_capital_inventario",
+            "accesorios_valor_venta_inventario", "accesorios_top_vendidos"
+        ]
+        for k in campos_a_ocultar:
+            if k == "ventas_por_dia":
+                metrics[k] = []
+            elif k == "desglose_metodos_pago":
+                metrics[k] = {}
+            elif k in ("celulares_top_vendidos", "accesorios_top_vendidos"):
+                metrics[k] = []
+            else:
+                metrics[k] = None
     return sanitizar_datos_sensibles(metrics, user)
 
 @router.get("/ventas", response_model=List[VentaDetalleResponse])
@@ -31,11 +42,12 @@ def historial_ventas(
     limit: int = Query(200, ge=1, le=1000),
     fecha_inicio: Optional[str] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
     fecha_fin: Optional[str] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    tipo: Optional[str] = Query("todos", description="Filtro por tipo: todos, celulares, accesorios"),
     user: dict = Depends(require_role("dueno"))
 ):
     """
     Historial detallado de ventas con cálculo de margen de ganancia real,
-    datos del cliente y especificaciones del equipo.
+    desglose por celulares y accesorios, datos del cliente y forma de pago.
     Requiere obligatoriamente rol de Dueño.
     """
-    return crud.get_historial_ventas(limit=limit, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    return crud.get_historial_ventas(limit=limit, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, tipo=tipo)

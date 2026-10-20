@@ -778,87 +778,230 @@
         <!-- ========================================== -->
         <!-- PESTAÑA 4: MÓDULO DE REPORTES Y DASHBOARD -->
         <!-- ========================================== -->
-        <section id="view-reportes" class="tab-view hidden space-y-8">
+                <section id="view-reportes" class="tab-view hidden space-y-8">
             
-            <!-- Encabezado del Dashboard -->
+            <!-- Encabezado del Dashboard con Selector de Analítica -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <span class="text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-full">Inteligencia Financiera</span>
                     <h2 class="text-2xl font-extrabold text-slate-900 mt-1">
                         Reporte y Ganancias: <span id="dash-mes-titulo" class="text-blue-600">Mes Actual</span>
                     </h2>
-                    <p class="text-sm text-slate-500">Métricas acumuladas del mes en curso y rendimiento del inventario.</p>
+                    <p class="text-sm text-slate-500">Métricas analíticas separadas para Celulares y Accesorios en el mes en curso.</p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="Reportes.cargarDashboard(); Reportes.cargarHistorialVentas();" class="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-2xs flex items-center gap-2 transition-all">
+
+                <div class="flex items-center gap-2 flex-wrap">
+                    <!-- Selector de Pestaña de Analítica -->
+                    <div class="inline-flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200">
+                        <button type="button" onclick="Reportes.cambiarVistaDashboard('todos')" id="btn-vista-dash-todos" class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-white text-blue-700 shadow-2xs transition-all flex items-center gap-1.5">
+                            <span>📊</span>
+                            <span>Ver Todo</span>
+                        </button>
+                        <button type="button" onclick="Reportes.cambiarVistaDashboard('celulares')" id="btn-vista-dash-celulares" class="px-3.5 py-1.5 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5">
+                            <span>📱</span>
+                            <span>Celulares</span>
+                        </button>
+                        <button type="button" onclick="Reportes.cambiarVistaDashboard('accesorios')" id="btn-vista-dash-accesorios" class="px-3.5 py-1.5 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5">
+                            <span>🎧</span>
+                            <span>Accesorios</span>
+                        </button>
+                    </div>
+
+                    <button onclick="Reportes.cargarDashboard(); Reportes.cargarHistorialVentas();" class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all" title="Recargar datos">
                         <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                        Refrescar Datos
+                        <span>Refrescar</span>
                     </button>
                 </div>
             </div>
 
-            <!-- TARJETAS DE KPIS PRINCIPALES -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                
-                <!-- KPI 1: Ganancias del Mes -->
-                <div class="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-6 text-white shadow-lg shadow-emerald-600/20 relative overflow-hidden">
-                    <div class="absolute -right-4 -bottom-4 opacity-15">
-                        <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.36 4.18 3.85c-.01 1.85-1.38 2.91-3.12 3.22z"/></svg>
+            <!-- ============================================================== -->
+            <!-- 📱 SECCIÓN 1: ANALÍTICA Y GANANCIAS DE CELULARES                -->
+            <!-- ============================================================== -->
+            <div id="panel-dash-celulares" class="space-y-4">
+                <div class="flex items-center justify-between border-b border-blue-100 pb-2.5">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-blue-100 text-blue-700 rounded-xl text-lg">📱</span>
+                        <div>
+                            <h3 class="font-extrabold text-slate-900 text-base">Analítica de Celulares (Smartphones)</h3>
+                            <p class="text-xs text-slate-500">Métricas exclusivas de teléfonos móviles con IMEI</p>
+                        </div>
                     </div>
-                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-100 block mb-1">Total Ganancias (Mes)</span>
-                    <div id="dash-ganancias-mes" class="text-3xl font-black tracking-tight mt-1">$0.00</div>
-                    <div class="mt-4 flex items-center text-xs text-emerald-100 font-medium">
-                        <span class="bg-emerald-500/30 px-2 py-0.5 rounded-md mr-1.5">Suma de margen_ganancia</span>
-                    </div>
+                    <span class="text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full">Línea Telefonía</span>
                 </div>
 
-                <!-- KPI 2: Total Facturado -->
-                <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Ventas (Mes)</span>
-                        <span class="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                        </span>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- KPI Cel 1: Ganancias Celulares -->
+                    <div class="bg-gradient-to-br from-blue-600 to-indigo-800 rounded-2xl p-5 text-white shadow-md shadow-blue-500/20 relative overflow-hidden">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-blue-200 block mb-1">Ganancia Neta Celulares</span>
+                        <div id="dash-cel-ganancias" class="text-3xl font-black tracking-tight mt-0.5">$0.00</div>
+                        <div class="mt-3 text-xs text-blue-100 flex items-center justify-between">
+                            <span>Margen prom: <strong id="dash-cel-margen-pct">0%</strong></span>
+                            <span class="bg-blue-500/30 px-2 py-0.5 rounded text-[10px]">Mes actual</span>
+                        </div>
                     </div>
-                    <div id="dash-ventas-mes" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
-                    <p class="text-xs text-slate-500 mt-2">Monto bruto cobrado</p>
-                </div>
 
-                <!-- KPI 3: Teléfonos Vendidos -->
-                <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Teléfonos Vendidos</span>
-                        <span class="p-2 bg-purple-50 text-purple-600 rounded-xl">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                        </span>
+                    <!-- KPI Cel 2: Ventas Totales Celulares -->
+                    <div class="bg-white rounded-2xl border border-blue-100 p-5 shadow-xs hover:border-blue-300 transition-all">
+                        <div class="flex justify-between items-start mb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Venta Facturada Celulares</span>
+                            <span class="p-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs">💵</span>
+                        </div>
+                        <div id="dash-cel-ventas" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                        <p class="text-xs text-slate-500 mt-2">
+                            Total entregados: <strong id="dash-cel-unidades" class="text-blue-600">0 equipos</strong>
+                        </p>
                     </div>
-                    <div id="dash-unidades-mes" class="text-2xl font-black text-slate-900 tracking-tight">0 equipos</div>
-                    <p class="text-xs text-purple-600 font-semibold mt-2">
-                        Margen prom: <span id="dash-margen-pct">0%</span>
-                    </p>
-                </div>
 
-                <!-- KPI 4: Capital en Inventario Activo -->
-                <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Inventario en Tienda</span>
-                        <span class="p-2 bg-amber-50 text-amber-600 rounded-xl">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-                        </span>
+                    <!-- KPI Cel 3: Inventario en Tienda (Capital Invertido) -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                        <div class="flex justify-between items-start mb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Capital en Celulares</span>
+                            <span class="p-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs">📦</span>
+                        </div>
+                        <div id="dash-cel-capital" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                        <p class="text-xs text-slate-500 mt-2">
+                            <strong id="dash-cel-stock" class="text-slate-700">0</strong> equipos disponibles
+                        </p>
                     </div>
-                    <div id="dash-capital-inventario" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
-                    <p class="text-xs text-slate-500 mt-2">
-                        <span id="dash-stock-disponible" class="font-bold text-slate-700">0</span> disponibles actualmente
-                    </p>
+
+                    <!-- KPI Cel 4: Valor Venta Proyectado -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                        <div class="flex justify-between items-start mb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Valor Venta Celulares</span>
+                            <span class="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs">🏷️</span>
+                        </div>
+                        <div id="dash-cel-valor" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                        <p class="text-xs text-slate-500 mt-2">
+                            Precio de venta en tienda
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Gráfico de Ventas y Ganancias -->
-            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <div class="flex justify-between items-center mb-6">
+            <!-- ============================================================== -->
+            <!-- 🎧 SECCIÓN 2: ANALÍTICA Y GANANCIAS DE ACCESORIOS               -->
+            <!-- ============================================================== -->
+            <div id="panel-dash-accesorios" class="space-y-4">
+                <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 bg-purple-100 text-purple-700 rounded-xl text-lg">🎧</span>
+                        <div>
+                            <h3 class="font-extrabold text-slate-900 text-base">Analítica de Accesorios y Servicios</h3>
+                            <p class="text-xs text-slate-500">Métricas exclusivas de termos, ventosas, micas, fundas y reparaciones</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1 rounded-full">Línea Accesorios</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- KPI Acc 1: Ganancias Accesorios -->
+                    <div class="bg-gradient-to-br from-purple-600 to-fuchsia-800 rounded-2xl p-5 text-white shadow-md shadow-purple-500/20 relative overflow-hidden">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-purple-200 block mb-1">Ganancia Neta Accesorios</span>
+                        <div id="dash-acc-ganancias" class="text-3xl font-black tracking-tight mt-0.5">$0.00</div>
+                        <div class="mt-3 text-xs text-purple-100 flex items-center justify-between">
+                            <span>Margen prom: <strong id="dash-acc-margen-pct">0%</strong></span>
+                            <span class="bg-purple-500/30 px-2 py-0.5 rounded text-[10px]">Mes actual</span>
+                        </div>
+                    </div>
+
+                    <!-- KPI Acc 2: Ventas Totales Accesorios -->
+                    <div class="bg-white rounded-2xl border border-purple-100 p-5 shadow-xs hover:border-purple-300 transition-all">
+                        <div class="flex justify-between items-start mb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Venta Facturada Accesorios</span>
+                            <span class="p-1.5 bg-purple-50 text-purple-600 rounded-lg text-xs">🛍️</span>
+                        </div>
+                        <div id="dash-acc-ventas" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                        <p class="text-xs text-slate-500 mt-2">
+                            Piezas vendidas: <strong id="dash-acc-unidades" class="text-purple-600">0 piezas</strong>
+                        </p>
+                    </div>
+
+                    <!-- KPI Acc 3: Inventario en Tienda (Capital Invertido) -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                        <div class="flex justify-between items-start mb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Capital en Accesorios</span>
+                            <span class="p-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs">📦</span>
+                        </div>
+                        <div id="dash-acc-capital" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                        <p class="text-xs text-slate-500 mt-2">
+                            <strong id="dash-acc-stock" class="text-slate-700">0</strong> piezas en stock físico
+                        </p>
+                    </div>
+
+                    <!-- KPI Acc 4: Valor Venta Proyectado -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                        <div class="flex justify-between items-start mb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Valor Venta Accesorios</span>
+                            <span class="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs">🏷️</span>
+                        </div>
+                        <div id="dash-acc-valor" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                        <p class="text-xs text-slate-500 mt-2">
+                            Precio de venta al público
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================== -->
+            <!-- 💰 RESUMEN CONSOLIDADO DEL NEGOCIO (AMBOS)                      -->
+            <!-- ============================================================== -->
+            <div id="panel-dash-consolidado" class="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-5 text-white shadow-lg border border-slate-700/60">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/80 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-xl">📊</span>
+                        <div>
+                            <h4 class="font-bold text-sm text-white">Resumen Global Consolidado (Celulares + Accesorios)</h4>
+                            <p class="text-xs text-slate-400">Balance financiero unificado de la sucursal en el mes</p>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-300 font-medium bg-white/10 px-3 py-1 rounded-full">
+                        Margen Global Promedio: <strong id="dash-margen-pct" class="text-emerald-400">0%</strong>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
                     <div>
-                        <h3 class="font-bold text-slate-800 text-base">Tendencia de Ventas y Ganancias Diarias</h3>
-                        <p class="text-xs text-slate-400">Comparativa de ingresos totales vs ganancia neta</p>
+                        <span class="text-[11px] font-medium text-slate-400 block">Total Ganancias Mes</span>
+                        <div id="dash-ganancias-mes" class="text-2xl font-black text-emerald-400">$0.00</div>
+                        <span class="text-[10px] text-slate-400">Celulares + Accesorios</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] font-medium text-slate-400 block">Total Facturado Mes</span>
+                        <div id="dash-ventas-mes" class="text-2xl font-black text-white">$0.00</div>
+                        <span class="text-[10px] text-slate-400">Ingresos brutos</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] font-medium text-slate-400 block">Teléfonos Comercializados</span>
+                        <div id="dash-unidades-mes" class="text-2xl font-black text-blue-400">0 equipos</div>
+                        <span class="text-[10px] text-slate-400"><span id="dash-stock-disponible">0</span> en stock</span>
+                    </div>
+                    <div>
+                        <span class="text-[11px] font-medium text-slate-400 block">Capital Total en Tienda</span>
+                        <div id="dash-capital-inventario" class="text-2xl font-black text-amber-400">$0.00</div>
+                        <span class="text-[10px] text-slate-400">Valor venta: <span id="dash-valor-venta-inventario">$0.00</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráfico Comparativo de Ventas y Ganancias -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base">Tendencia Diaria de Ventas y Ganancias</h3>
+                        <p class="text-xs text-slate-400">Desglose comparativo por día de celulares vs accesorios</p>
+                    </div>
+
+                    <!-- Selector de Dataset del Gráfico -->
+                    <div class="inline-flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200 text-xs">
+                        <button type="button" onclick="Reportes.cambiarModoGrafico('ambos')" id="btn-chart-ambos" class="px-3 py-1 font-bold rounded-lg bg-white text-slate-800 shadow-2xs transition-all">
+                            📊 Comparativa
+                        </button>
+                        <button type="button" onclick="Reportes.cambiarModoGrafico('celulares')" id="btn-chart-celulares" class="px-3 py-1 font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                            📱 Solo Celulares
+                        </button>
+                        <button type="button" onclick="Reportes.cambiarModoGrafico('accesorios')" id="btn-chart-accesorios" class="px-3 py-1 font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                            🎧 Solo Accesorios
+                        </button>
                     </div>
                 </div>
                 <div class="relative h-72 w-full">
@@ -866,16 +1009,32 @@
                 </div>
             </div>
 
-            <!-- HISTORIAL DE TODAS LAS VENTAS -->
+            <!-- ============================================================== -->
+            <!-- HISTORIAL DE TODAS LAS VENTAS CON FILTRO CELULARES/ACCESORIOS   -->
+            <!-- ============================================================== -->
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h3 class="font-bold text-slate-800 text-base">Historial de Ventas</h3>
-                        <p class="text-xs text-slate-400">Registro con desglose de equipos, forma de pago y margen real obtenido</p>
+                        <h3 class="font-bold text-slate-800 text-base">Historial Detallado de Ventas</h3>
+                        <p class="text-xs text-slate-400">Registro individual con desglose por categoría, pago y margen obtenido</p>
                     </div>
 
-                    <!-- Filtros por Fecha -->
+                    <!-- Filtros por Tipo y Fecha -->
                     <div class="flex items-center gap-2 flex-wrap">
+                        <!-- Filtro de Tipo de Venta -->
+                        <div class="inline-flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200 text-xs">
+                            <button type="button" onclick="Reportes.filtrarPorTipoVenta('todos')" id="btn-filtro-tipo-todos" class="btn-tipo-venta px-3 py-1 font-bold rounded-lg bg-white text-slate-800 shadow-2xs">
+                                Todos (<span id="count-ventas-todos">0</span>)
+                            </button>
+                            <button type="button" onclick="Reportes.filtrarPorTipoVenta('celulares')" id="btn-filtro-tipo-celulares" class="btn-tipo-venta px-3 py-1 font-bold rounded-lg text-slate-600 hover:text-slate-900">
+                                📱 Celulares (<span id="count-ventas-celulares">0</span>)
+                            </button>
+                            <button type="button" onclick="Reportes.filtrarPorTipoVenta('accesorios')" id="btn-filtro-tipo-accesorios" class="btn-tipo-venta px-3 py-1 font-bold rounded-lg text-slate-600 hover:text-slate-900">
+                                🎧 Accesorios (<span id="count-ventas-accesorios">0</span>)
+                            </button>
+                        </div>
+
+                        <!-- Fechas -->
                         <div class="flex items-center gap-1.5 text-xs">
                             <span class="text-slate-500 font-medium">Desde:</span>
                             <input type="date" id="reporte-fecha-inicio" class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none">
@@ -893,18 +1052,32 @@
                     </div>
                 </div>
 
+                <!-- Resumen Dinámico del Filtro Actual -->
+                <div class="bg-slate-50 px-6 py-2.5 border-b border-slate-200/60 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2">
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <span>Ventas filtradas: <strong id="lbl-filtro-total-ventas" class="text-slate-900">$0.00</strong></span>
+                        <span class="text-slate-300">|</span>
+                        <span>📱 Ganancia Celulares: <strong id="lbl-filtro-ganancia-cel" class="text-blue-700">+$0.00</strong></span>
+                        <span class="text-slate-300">|</span>
+                        <span>🎧 Ganancia Accesorios: <strong id="lbl-filtro-ganancia-acc" class="text-purple-700">+$0.00</strong></span>
+                    </div>
+                    <div>
+                        Ganancia Neta Total: <strong id="lbl-filtro-ganancia-total" class="text-emerald-700 font-bold text-sm">+$0.00</strong>
+                    </div>
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-sm">
                         <thead>
                             <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
                                 <th class="py-3 px-4">Folio</th>
-                                <th class="py-3 px-4">Fecha Venta</th>
+                                <th class="py-3 px-4">Fecha</th>
                                 <th class="py-3 px-4">Cliente</th>
-                                <th class="py-3 px-4">Equipos Vendidos</th>
+                                <th class="py-3 px-4">Línea / Artículos Vendidos</th>
                                 <th class="py-3 px-4">Forma de Pago</th>
                                 <th class="py-3 px-4">Total Cobrado</th>
                                 <th class="py-3 px-4">Margen Ganancia</th>
-                                <th class="py-3 px-4 text-right">Recibo</th>
+                                <th class="py-3 px-4 text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-historial-ventas">
@@ -913,7 +1086,7 @@
                     </table>
 
                     <div id="ventas-empty-state" class="hidden py-10 text-center">
-                        <p class="text-slate-400 text-sm">No se encontraron ventas para el periodo seleccionado.</p>
+                        <p class="text-slate-400 text-sm">No se encontraron ventas para el periodo o filtro seleccionado.</p>
                     </div>
                 </div>
             </div>
@@ -2416,7 +2589,7 @@
     <script src="/static/js/accesorios.js?v=20261019_v18"></script>
     <script src="/static/js/caja.js?v=20261019_v18"></script>
     <script src="/static/js/garantias.js?v=20261019_v18"></script>
-    <script src="/static/js/reportes.js?v=20261019_v18"></script>
+    <script src="/static/js/reportes.js?v=20261019_v19"></script>
     <script src="/static/js/reparaciones.js?v=20261019_v18"></script>
     <script src="/static/js/etiquetas_scanner.js?v=20261019_v18"></script>
 </body>

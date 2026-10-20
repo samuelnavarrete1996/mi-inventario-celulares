@@ -388,6 +388,13 @@ CAMPOS_FINANCIEROS_SENSIBLES = {
     "utilidad_neta",
     "utilidad_reparacion",
     "costo_reemplazo",
+    "ganancia_celulares",
+    "ganancia_accesorios",
+    "celulares_ganancias_mes",
+    "accesorios_ganancias_mes",
+    "celulares_capital_inventario",
+    "accesorios_capital_inventario",
+    "capital_inventario_total",
 }
 
 def sanitizar_datos_sensibles(data: Any, user: Optional[dict]) -> Any:

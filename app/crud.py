@@ -536,7 +536,7 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
 
     return venta_dict
 
-def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, fecha_fin: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, fecha_fin: Optional[str] = None, tipo: Optional[str] = "todos") -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -586,32 +586,106 @@ def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, f
             vi.id,
             vi.venta_id,
             vi.equipo_id,
+            vi.accesorio_id,
+            COALESCE(vi.tipo_item, CASE WHEN vi.equipo_id IS NOT NULL THEN 'equipo' ELSE 'accesorio' END) as tipo_item,
+            COALESCE(vi.nombre_item, e.modelo, a.nombre, 'Artículo') as nombre_item,
+            COALESCE(vi.cantidad, 1) as cantidad,
             vi.precio_final,
             vi.costo_compra,
             vi.margen_ganancia,
-            e.modelo,
+            COALESCE(e.modelo, a.nombre, vi.nombre_item, 'Artículo') as modelo,
             e.capacidad_gb,
             e.color,
             e.imei,
             e.grado
         FROM venta_items vi
-        JOIN equipos e ON vi.equipo_id = e.id
+        LEFT JOIN equipos e ON vi.equipo_id = e.id
+        LEFT JOIN accesorios a ON vi.accesorio_id = a.id
         WHERE vi.venta_id = ?
+        ORDER BY vi.id ASC
         """, (v_id,))
         items = [dict(r) for r in cursor.fetchall()]
 
-        v_dict["items"] = items
-        v_dict["total_equipos"] = len(items)
-        modelos_nombres = [f"{it['modelo']}" for it in items]
-        v_dict["resumen_modelos"] = ", ".join(modelos_nombres) if modelos_nombres else "Equipo"
+        # Soporte para ventas históricas directas sin venta_items
+        if len(items) == 0 and v_dict.get("equipo_id"):
+            cursor.execute("SELECT * FROM equipos WHERE id = ?", (v_dict["equipo_id"],))
+            eq = cursor.fetchone()
+            if eq:
+                items = [{
+                    "id": 1,
+                    "venta_id": v_id,
+                    "equipo_id": eq["id"],
+                    "accesorio_id": None,
+                    "tipo_item": "equipo",
+                    "nombre_item": eq["modelo"],
+                    "cantidad": 1,
+                    "precio_final": v_dict["precio_final"],
+                    "costo_compra": eq["costo_compra"],
+                    "margen_ganancia": v_dict["margen_ganancia"],
+                    "modelo": eq["modelo"],
+                    "capacidad_gb": eq["capacidad_gb"],
+                    "color": eq["color"],
+                    "imei": eq["imei"],
+                    "grado": eq["grado"]
+                }]
 
-        if items:
-            v_dict["modelo"] = items[0]["modelo"]
-            v_dict["capacidad_gb"] = items[0]["capacidad_gb"]
-            v_dict["color"] = items[0]["color"]
-            v_dict["imei"] = items[0]["imei"]
-            v_dict["grado"] = items[0]["grado"]
+        cel_items = [it for it in items if (it.get("tipo_item") == "equipo" or it.get("equipo_id"))]
+        acc_items = [it for it in items if not (it.get("tipo_item") == "equipo" or it.get("equipo_id"))]
+
+        total_equipos = len(cel_items)
+        total_accesorios = sum(int(it.get("cantidad", 1) or 1) for it in acc_items)
+
+        # Filtro de tipo si se especificó
+        tipo_filtro = (tipo or "todos").lower().strip()
+        if tipo_filtro == "celulares" and total_equipos == 0:
+            continue
+        if tipo_filtro == "accesorios" and total_accesorios == 0:
+            continue
+
+        ganancia_celulares = round(sum(float(it.get("margen_ganancia", 0) or 0) for it in cel_items), 2)
+        ganancia_accesorios = round(sum(float(it.get("margen_ganancia", 0) or 0) for it in acc_items), 2)
+        venta_celulares = round(sum(float(it.get("precio_final", 0) or 0) for it in cel_items), 2)
+        venta_accesorios = round(sum(float(it.get("precio_final", 0) or 0) for it in acc_items), 2)
+
+        if total_equipos > 0 and total_accesorios > 0:
+            tipo_venta = "mixta"
+        elif total_equipos > 0:
+            tipo_venta = "celulares"
+        else:
+            tipo_venta = "accesorios"
+
+        resumen_partes = []
+        if cel_items:
+            nombres_cel = [f"{it['modelo']}" for it in cel_items]
+            resumen_partes.append(", ".join(nombres_cel))
+        if acc_items:
+            nombres_acc = [f"{it['nombre_item']} (x{it.get('cantidad', 1)})" for it in acc_items]
+            resumen_partes.append(", ".join(nombres_acc))
+
+        v_dict["items"] = items
+        v_dict["total_equipos"] = total_equipos
+        v_dict["total_accesorios"] = total_accesorios
+        v_dict["ganancia_celulares"] = ganancia_celulares
+        v_dict["ganancia_accesorios"] = ganancia_accesorios
+        v_dict["venta_celulares"] = venta_celulares
+        v_dict["venta_accesorios"] = venta_accesorios
+        v_dict["tipo_venta"] = tipo_venta
+        v_dict["resumen_modelos"] = " + ".join(resumen_partes) if resumen_partes else "Venta"
+
+        if cel_items:
+            v_dict["modelo"] = cel_items[0]["modelo"]
+            v_dict["capacidad_gb"] = cel_items[0]["capacidad_gb"]
+            v_dict["color"] = cel_items[0]["color"]
+            v_dict["imei"] = cel_items[0]["imei"]
+            v_dict["grado"] = cel_items[0]["grado"]
+            v_dict["costo_compra"] = cel_items[0]["costo_compra"]
+        elif items:
+            v_dict["modelo"] = items[0]["nombre_item"]
             v_dict["costo_compra"] = items[0]["costo_compra"]
+            v_dict["imei"] = None
+            v_dict["grado"] = None
+            v_dict["color"] = None
+            v_dict["capacidad_gb"] = None
 
         resultado.append(v_dict)
 
@@ -815,29 +889,62 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     mes_actual_str = ahora.strftime("%Y-%m")
     nombre_mes = f"{MESES_ES[ahora.month - 1]} {ahora.year}"
 
-    # 1. Ventas y ganancias del mes actual
+    # 1. Métricas de Celulares (Smartphones) en el mes actual
     cursor.execute("""
     SELECT 
-        COALESCE(SUM(v.margen_ganancia), 0) as total_ganancias,
-        COALESCE(SUM(v.precio_final), 0) as total_ventas
-    FROM ventas v
-    WHERE strftime('%Y-%m', v.fecha_venta) = ?
-    """, (mes_actual_str,))
-    stats_mes = cursor.fetchone()
-
-    cursor.execute("""
-    SELECT COUNT(vi.id) as total_equipos
+        COALESCE(SUM(vi.precio_final), 0) as total_ventas,
+        COALESCE(SUM(vi.margen_ganancia), 0) as total_ganancias,
+        COALESCE(SUM(vi.cantidad), 0) as total_unidades
     FROM venta_items vi
     JOIN ventas v ON vi.venta_id = v.id
     WHERE strftime('%Y-%m', v.fecha_venta) = ?
+      AND (vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL)
     """, (mes_actual_str,))
-    eq_vendidos = cursor.fetchone()["total_equipos"]
+    cel_items_row = cursor.fetchone()
 
-    total_ganancias = round(stats_mes["total_ganancias"], 2)
-    total_ventas = round(stats_mes["total_ventas"], 2)
+    # Ventas históricas directas de celulares sin venta_items
+    cursor.execute("""
+    SELECT 
+        COALESCE(SUM(v.precio_final), 0) as total_ventas,
+        COALESCE(SUM(v.margen_ganancia), 0) as total_ganancias,
+        COUNT(v.id) as total_unidades
+    FROM ventas v
+    WHERE strftime('%Y-%m', v.fecha_venta) = ?
+      AND v.id NOT IN (SELECT DISTINCT venta_id FROM venta_items)
+      AND v.equipo_id IS NOT NULL
+    """, (mes_actual_str,))
+    cel_legacy_row = cursor.fetchone()
+
+    cel_ventas = round(float(cel_items_row["total_ventas"]) + float(cel_legacy_row["total_ventas"]), 2)
+    cel_ganancias = round(float(cel_items_row["total_ganancias"]) + float(cel_legacy_row["total_ganancias"]), 2)
+    cel_unidades = int(cel_items_row["total_unidades"]) + int(cel_legacy_row["total_unidades"])
+    cel_margen_pct = round((cel_ganancias / cel_ventas * 100), 1) if cel_ventas > 0 else 0.0
+
+    # 2. Métricas de Accesorios y Servicios en el mes actual
+    cursor.execute("""
+    SELECT 
+        COALESCE(SUM(vi.precio_final), 0) as total_ventas,
+        COALESCE(SUM(vi.margen_ganancia), 0) as total_ganancias,
+        COALESCE(SUM(vi.cantidad), 0) as total_unidades
+    FROM venta_items vi
+    JOIN ventas v ON vi.venta_id = v.id
+    WHERE strftime('%Y-%m', v.fecha_venta) = ?
+      AND (vi.tipo_item != 'equipo' OR vi.accesorio_id IS NOT NULL)
+    """, (mes_actual_str,))
+    acc_items_row = cursor.fetchone()
+
+    acc_ventas = round(float(acc_items_row["total_ventas"]), 2)
+    acc_ganancias = round(float(acc_items_row["total_ganancias"]), 2)
+    acc_unidades = int(acc_items_row["total_unidades"])
+    acc_margen_pct = round((acc_ganancias / acc_ventas * 100), 1) if acc_ventas > 0 else 0.0
+
+    # 3. Totales Consolidados del Mes
+    total_ventas = round(cel_ventas + acc_ventas, 2)
+    total_ganancias = round(cel_ganancias + acc_ganancias, 2)
+    eq_vendidos = cel_unidades
     margen_promedio = round((total_ganancias / total_ventas * 100), 1) if total_ventas > 0 else 0.0
 
-    # 2. Métricas de inventario activo y equipos en garantía
+    # 4. Inventario Activo de Celulares
     cursor.execute("""
     SELECT 
         COUNT(id) as disponibles,
@@ -851,13 +958,33 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     cursor.execute("SELECT COUNT(id) as en_garantia FROM equipos WHERE estado = 'En Garantia'")
     equipos_en_garantia = cursor.fetchone()["en_garantia"]
 
-    # 3. Ventas de los últimos 30 días para gráfico
+    # 5. Inventario Activo de Accesorios
+    cursor.execute("""
+    SELECT 
+        COALESCE(SUM(stock), 0) as total_piezas,
+        COALESCE(SUM(stock * costo_compra), 0) as capital_invertido,
+        COALESCE(SUM(stock * precio_venta), 0) as valor_venta
+    FROM accesorios
+    WHERE es_servicio = 0
+    """)
+    acc_inv_row = cursor.fetchone()
+    acc_stock = int(acc_inv_row["total_piezas"]) if acc_inv_row else 0
+    acc_capital = round(float(acc_inv_row["capital_invertido"] or 0), 2)
+    acc_valor = round(float(acc_inv_row["valor_venta"] or 0), 2)
+
+    # 6. Ventas de los últimos 30 días para gráfico (desglosado por celulares y accesorios)
     cursor.execute("""
     SELECT 
         date(v.fecha_venta) as dia,
-        COUNT(vi.id) as unidades,
-        COALESCE(SUM(v.margen_ganancia), 0) as ganancias,
-        COALESCE(SUM(v.precio_final), 0) as ventas
+        COALESCE(SUM(CASE WHEN vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL THEN vi.precio_final ELSE 0 END), 0) as ventas_celulares,
+        COALESCE(SUM(CASE WHEN vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL THEN vi.margen_ganancia ELSE 0 END), 0) as ganancias_celulares,
+        COALESCE(SUM(CASE WHEN vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL THEN vi.cantidad ELSE 0 END), 0) as unidades_celulares,
+        COALESCE(SUM(CASE WHEN vi.tipo_item != 'equipo' OR vi.accesorio_id IS NOT NULL THEN vi.precio_final ELSE 0 END), 0) as ventas_accesorios,
+        COALESCE(SUM(CASE WHEN vi.tipo_item != 'equipo' OR vi.accesorio_id IS NOT NULL THEN vi.margen_ganancia ELSE 0 END), 0) as ganancias_accesorios,
+        COALESCE(SUM(CASE WHEN vi.tipo_item != 'equipo' OR vi.accesorio_id IS NOT NULL THEN vi.cantidad ELSE 0 END), 0) as unidades_accesorios,
+        COALESCE(SUM(vi.precio_final), 0) as ventas,
+        COALESCE(SUM(vi.margen_ganancia), 0) as ganancias,
+        COUNT(vi.id) as unidades
     FROM ventas v
     LEFT JOIN venta_items vi ON v.id = vi.venta_id
     WHERE date(v.fecha_venta) >= date('now', '-30 days', 'localtime')
@@ -866,7 +993,7 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     """)
     ventas_dias = [dict(r) for r in cursor.fetchall()]
 
-    # 4. Distribución por Grados
+    # 7. Distribución por Grados
     cursor.execute("""
     SELECT grado, COUNT(id) as total
     FROM equipos
@@ -875,7 +1002,7 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     """)
     grados_inv = {r["grado"]: r["total"] for r in cursor.fetchall()}
 
-    # 5. Desglose de ingresos por método de pago en el mes actual
+    # 8. Desglose de ingresos por método de pago en el mes actual
     cursor.execute("""
     SELECT 
         COALESCE(SUM(monto_efectivo), 0) as total_efectivo,
@@ -892,9 +1019,46 @@ def get_dashboard_metrics() -> Dict[str, Any]:
         "Equipo Garantía": round(p_row["total_garantia"], 2)
     }
 
+    # 9. Top Celulares Más Vendidos en el Mes
+    cursor.execute("""
+    SELECT 
+        COALESCE(e.modelo, vi.nombre_item, 'Celular') as nombre,
+        COUNT(vi.id) as unidades,
+        ROUND(SUM(vi.precio_final), 2) as recaudado,
+        ROUND(SUM(vi.margen_ganancia), 2) as ganancia
+    FROM venta_items vi
+    JOIN ventas v ON vi.venta_id = v.id
+    LEFT JOIN equipos e ON vi.equipo_id = e.id
+    WHERE strftime('%Y-%m', v.fecha_venta) = ?
+      AND (vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL)
+    GROUP BY nombre
+    ORDER BY unidades DESC, ganancia DESC
+    LIMIT 5
+    """, (mes_actual_str,))
+    top_celulares = [dict(r) for r in cursor.fetchall()]
+
+    # 10. Top Accesorios Más Vendidos en el Mes
+    cursor.execute("""
+    SELECT 
+        COALESCE(a.nombre, vi.nombre_item, 'Accesorio') as nombre,
+        SUM(vi.cantidad) as unidades,
+        ROUND(SUM(vi.precio_final), 2) as recaudado,
+        ROUND(SUM(vi.margen_ganancia), 2) as ganancia
+    FROM venta_items vi
+    JOIN ventas v ON vi.venta_id = v.id
+    LEFT JOIN accesorios a ON vi.accesorio_id = a.id
+    WHERE strftime('%Y-%m', v.fecha_venta) = ?
+      AND (vi.tipo_item != 'equipo' OR vi.accesorio_id IS NOT NULL)
+    GROUP BY nombre
+    ORDER BY unidades DESC, ganancia DESC
+    LIMIT 5
+    """, (mes_actual_str,))
+    top_accesorios = [dict(r) for r in cursor.fetchall()]
+
     conn.close()
 
     return {
+        # Métricas Consolidadas (Retrocompatibilidad)
         "total_ganancias_mes": total_ganancias,
         "total_ventas_mes": total_ventas,
         "equipos_vendidos_mes": eq_vendidos,
@@ -903,10 +1067,31 @@ def get_dashboard_metrics() -> Dict[str, Any]:
         "equipos_en_garantia": equipos_en_garantia,
         "capital_inventario": round(stats_inv["capital_invertido"], 2),
         "valor_venta_inventario": round(stats_inv["valor_venta"], 2),
+        "capital_inventario_total": round(stats_inv["capital_invertido"] + acc_capital, 2),
         "mes_actual_nombre": nombre_mes,
         "ventas_por_dia": ventas_dias,
         "distribucion_grados": grados_inv,
-        "desglose_metodos_pago": desglose_pagos
+        "desglose_metodos_pago": desglose_pagos,
+
+        # 📱 SECCIÓN 1: ANALÍTICA Y GANANCIAS DE CELULARES
+        "celulares_ventas_mes": cel_ventas,
+        "celulares_ganancias_mes": cel_ganancias,
+        "celulares_unidades_mes": cel_unidades,
+        "celulares_margen_pct": cel_margen_pct,
+        "celulares_stock_disponible": stats_inv["disponibles"],
+        "celulares_capital_inventario": round(stats_inv["capital_invertido"], 2),
+        "celulares_valor_venta_inventario": round(stats_inv["valor_venta"], 2),
+        "celulares_top_vendidos": top_celulares,
+
+        # 🎧 SECCIÓN 2: ANALÍTICA Y GANANCIAS DE ACCESORIOS
+        "accesorios_ventas_mes": acc_ventas,
+        "accesorios_ganancias_mes": acc_ganancias,
+        "accesorios_unidades_mes": acc_unidades,
+        "accesorios_margen_pct": acc_margen_pct,
+        "accesorios_stock_disponible": acc_stock,
+        "accesorios_capital_inventario": acc_capital,
+        "accesorios_valor_venta_inventario": acc_valor,
+        "accesorios_top_vendidos": top_accesorios
     }
 
 # ==============================================================================

@@ -11,7 +11,7 @@ const STATIC_ASSETS = [
   '/static/js/accesorios.js?v=20261019_v18',
   '/static/js/caja.js?v=20261019_v18',
   '/static/js/garantias.js?v=20261019_v18',
-  '/static/js/reportes.js?v=20261019_v18',
+  '/static/js/reportes.js?v=20261019_v19',
   '/static/js/reparaciones.js?v=20261019_v18',
   '/static/js/etiquetas_scanner.js?v=20261019_v18',
   '/static/icons/icon-192.png',
