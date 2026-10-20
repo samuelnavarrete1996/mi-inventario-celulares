@@ -13,7 +13,7 @@ _TEST_DB_PATH = os.path.join(tempfile.gettempdir(), f"pytest_isolated_inventario
 os.environ["TURSO_DATABASE_URL"] = ""
 os.environ["TURSO_AUTH_TOKEN"] = ""
 os.environ["DATABASE_PATH"] = _TEST_DB_PATH
-os.environ["ADMIN_DELETE_PASSWORD"] = "erYHE7yse"
+os.environ["ADMIN_DELETE_PASSWORD"] = "samuelykim."
 os.environ["SEED_DEMO_DATA"] = "1"
 
 @pytest.fixture(scope="session", autouse=True)

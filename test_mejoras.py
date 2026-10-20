@@ -1,6 +1,6 @@
 import os
 if "ADMIN_DELETE_PASSWORD" not in os.environ:
-    os.environ["ADMIN_DELETE_PASSWORD"] = "erYHE7yse"
+    os.environ["ADMIN_DELETE_PASSWORD"] = "samuelykim."
 
 import pytest
 import time
@@ -216,7 +216,7 @@ async def test_antiguedad_stock_calculada():
 @pytest.mark.anyio
 async def test_backup_export_json_y_db():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+        admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
         login_res = await ac.post("/api/auth/login", json={"username": "admin", "password": admin_pwd})
         assert login_res.status_code == 200
 

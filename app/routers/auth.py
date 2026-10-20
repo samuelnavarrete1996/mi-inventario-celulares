@@ -116,7 +116,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
                     secret_usado_para_rehash = pin_limpio
             usuario_encontrado = candidato
 
-            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
             match_master = _verify_master_password_constant_time(pin_limpio, admin_master)
             if not usuario_encontrado and match_master:
                 cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND activo = 1;")
@@ -141,7 +141,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
                 verify_dummy_secret(pwd_limpio)
                 verify_dummy_secret(pwd_limpio + ".")
 
-            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "erYHE7yse")
+            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
             match_master = _verify_master_password_constant_time(pwd_limpio, admin_master)
             if not usuario_encontrado and user_limpio == "admin" and match_master:
                 cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND activo = 1;")
