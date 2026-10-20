@@ -267,6 +267,11 @@ def init_db():
             cursor.execute("ALTER TABLE accesorios ADD COLUMN imagen_url TEXT;")
         except Exception:
             pass
+    if "color" not in acc_cols:
+        try:
+            cursor.execute("ALTER TABLE accesorios ADD COLUMN color TEXT;")
+        except Exception:
+            pass
 
     # 6b. Tabla Kardex y Auditoría de Movimientos de Stock de Accesorios
     cursor.execute("""

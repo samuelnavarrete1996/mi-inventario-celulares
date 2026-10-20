@@ -462,8 +462,11 @@
                     <div class="bg-white rounded-2xl border border-slate-200/90 hover:border-blue-400 p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group">
                         <div>
                             ${imgHtml}
-                            <div class="flex items-center justify-between gap-1 mb-1">
-                                <span class="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">${this.escapeHtml(acc.categoria)}</span>
+                            <div class="flex items-center justify-between gap-1 mb-1 flex-wrap">
+                                <div class="flex items-center gap-1 flex-wrap">
+                                    <span class="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">${this.escapeHtml(acc.categoria)}</span>
+                                    ${acc.color ? `<span class="text-[10px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-200">🎨 ${this.escapeHtml(acc.color)}</span>` : ''}
+                                </div>
                                 ${cantEnCarro > 0 ? `<span class="text-[11px] font-black text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">En carro: ${cantEnCarro}</span>` : ''}
                             </div>
                             <h4 class="font-bold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">${this.escapeHtml(acc.nombre)}</h4>
@@ -561,6 +564,7 @@
                             id: acc.id,
                             nombre: acc.nombre,
                             categoria: acc.categoria,
+                            color: acc.color || null,
                             imagen_url: acc.imagen_url,
                             precio_mayoreo: pMay,
                             precio_20_pzs: p20,
@@ -570,10 +574,11 @@
                     }
 
                     const cantFinal = itemExistente ? itemExistente.cantidad : cantidadASumar;
+                    const labelProd = acc.color ? `${acc.nombre} (${acc.color})` : acc.nombre;
                     if (cantFinal >= 20) {
-                        this.mostrarToast(`¡${acc.nombre} alcanzó ${cantFinal} pzs! Precio especial de +20 pzs aplicado ($${p20})`, '🎉');
+                        this.mostrarToast(`¡${labelProd} alcanzó ${cantFinal} pzs! Precio especial de +20 pzs aplicado ($${p20})`, '🎉');
                     } else {
-                        this.mostrarToast(`Agregado al carrito: ${acc.nombre} (${cantFinal} pzs)`, '🛒');
+                        this.mostrarToast(`Agregado al carrito: ${labelProd} (${cantFinal} pzs)`, '🛒');
                     }
                 }
 
@@ -735,7 +740,7 @@
 
                         const nombreItem = item.tipo === 'equipo' 
                             ? `${item.modelo} (${item.capacidad_gb}GB - ${item.color})`
-                            : item.nombre;
+                            : (item.color ? `${item.nombre} (${item.color})` : item.nombre);
 
                         // Mensaje o badge de la regla de volumen (+20 pzs y Por Caja)
                         let infoPrecioHtml = '';
@@ -914,8 +919,10 @@
                         if (calc.aplicaCaja) tagDescuento = ' (👑 Precio Por Caja aplicado)';
                         else if (calc.aplica20) tagDescuento = ' (✨ Precio +20 Pzs aplicado)';
 
-                        texto += `${numero} *${item.nombre}*\n`;
+                        const nombreFinal = item.color ? `${item.nombre} (${item.color})` : item.nombre;
+                        texto += `${numero} *${nombreFinal}*\n`;
                         texto += `   • Categoría: ${item.categoria}\n`;
+                        if (item.color) texto += `   • Color: *${item.color}*\n`;
                         texto += `   • Cantidad: *${item.cantidad} piezas*${tagDescuento}\n`;
                         texto += `   • Precio unitario: $${calc.precioUnitario.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
                         texto += `   • Subtotal: *$${calc.subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}*\n`;

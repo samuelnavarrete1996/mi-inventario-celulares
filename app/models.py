@@ -107,6 +107,7 @@ class AccesorioCreate(BaseModel):
     precio_20_pzs: Optional[float] = Field(0.0, ge=0, description="Precio para más de 20 piezas")
     precio_caja: Optional[float] = Field(0.0, ge=0, description="Precio por caja cerrada")
     imagen_url: Optional[str] = Field(None, max_length=500, description="URL o ruta de la fotografía del producto")
+    color: Optional[str] = Field(None, max_length=50, description="Color o variante del accesorio")
     stock: int = Field(0, ge=0, le=1000000, description="Cantidad en stock")
     es_servicio: bool = Field(False, description="True si es servicio/mano de obra")
 
@@ -125,6 +126,7 @@ class AccesorioUpdate(BaseModel):
     precio_20_pzs: Optional[float] = Field(None, ge=0)
     precio_caja: Optional[float] = Field(None, ge=0)
     imagen_url: Optional[str] = Field(None, max_length=500)
+    color: Optional[str] = Field(None, max_length=50)
     stock: Optional[int] = Field(None, ge=0, le=1000000)
     es_servicio: Optional[bool] = None
 
@@ -143,6 +145,7 @@ class AccesorioResponse(BaseModel):
     precio_20_pzs: Optional[float] = 0.0
     precio_caja: Optional[float] = 0.0
     imagen_url: Optional[str] = None
+    color: Optional[str] = None
     stock: int
     es_servicio: int
     fecha_registro: str

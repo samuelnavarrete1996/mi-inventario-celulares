@@ -287,11 +287,15 @@ def registrar_venta_carrito(
                 total_precio_final += precio_item
                 total_margen_ganancia += margen_item
 
+                acc_color = acc["color"] if "color" in acc.keys() and acc["color"] else None
+                nombre_con_color = f"{acc['nombre']} ({acc_color})" if acc_color else acc["nombre"]
+                nombre_final = getattr(item, "nombre_item", None) or nombre_con_color
+
                 detalles_items.append({
                     "tipo_item": "servicio" if acc["es_servicio"] else "accesorio",
                     "equipo_id": None,
                     "accesorio_id": item.accesorio_id,
-                    "nombre_item": acc["nombre"],
+                    "nombre_item": nombre_final,
                     "cantidad": cant,
                     "precio_final": precio_item,
                     "costo_compra": costo_total,
@@ -940,8 +944,8 @@ def get_accesorios(
 
     if search:
         s = f"%{search.strip()}%"
-        query += " AND (nombre LIKE ? OR categoria LIKE ? OR codigo_barras LIKE ?)"
-        params.extend([s, s, s])
+        query += " AND (nombre LIKE ? OR categoria LIKE ? OR codigo_barras LIKE ? OR color LIKE ?)"
+        params.extend([s, s, s, s])
 
     query += " ORDER BY id DESC"
     cursor.execute(query, params)
@@ -968,14 +972,15 @@ def create_accesorio(
     precio_mayoreo: float = 0.0,
     precio_20_pzs: float = 0.0,
     precio_caja: float = 0.0,
-    imagen_url: Optional[str] = None
+    imagen_url: Optional[str] = None,
+    color: Optional[str] = None
 ) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-    INSERT INTO accesorios (nombre, categoria, codigo_barras, costo_compra, precio_venta, precio_mayoreo, precio_20_pzs, precio_caja, imagen_url, stock, es_servicio, fecha_registro)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO accesorios (nombre, categoria, codigo_barras, costo_compra, precio_venta, precio_mayoreo, precio_20_pzs, precio_caja, imagen_url, color, stock, es_servicio, fecha_registro)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         nombre.strip(),
         categoria.strip(),
@@ -986,6 +991,7 @@ def create_accesorio(
         round(precio_20_pzs or precio_mayoreo or precio_venta, 2),
         round(precio_caja or costo_compra, 2),
         imagen_url.strip() if imagen_url else None,
+        color.strip() if color else None,
         stock if not es_servicio else 999,
         1 if es_servicio else 0,
         now
@@ -997,7 +1003,7 @@ def create_accesorio(
 
 COLUMNAS_PERMITIDAS_ACCESORIO = (
     "nombre", "categoria", "codigo_barras", "costo_compra", "precio_venta",
-    "precio_mayoreo", "precio_20_pzs", "precio_caja", "imagen_url", "stock", "es_servicio"
+    "precio_mayoreo", "precio_20_pzs", "precio_caja", "imagen_url", "color", "stock", "es_servicio"
 )
 
 def update_accesorio(acc_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, Any]]:

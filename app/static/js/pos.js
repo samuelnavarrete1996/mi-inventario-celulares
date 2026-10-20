@@ -310,7 +310,8 @@ const POS = {
             });
         }
 
-        App.showToast(`Accesorio agregado: ${accesorio.nombre}`, "success");
+        const colorTxt = accesorio.color ? ` (${accesorio.color})` : '';
+        App.showToast(`Accesorio agregado: ${accesorio.nombre}${colorTxt}`, "success");
         this.renderCarrito();
     },
 
@@ -411,12 +412,13 @@ const POS = {
                     <div class="p-3 bg-white rounded-xl border border-blue-200/80 shadow-2xs hover:border-blue-300 transition-all space-y-2">
                         <div class="flex justify-between items-start gap-2">
                             <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-1.5">
+                                <div class="flex items-center gap-1.5 flex-wrap">
                                     <span class="text-sm">🎧</span>
                                     <h5 class="font-bold text-slate-800 text-sm truncate">${App.escapeHtml(acc.nombre)}</h5>
                                 </div>
-                                <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                                     <span class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium">${App.escapeHtml(acc.categoria)}</span>
+                                    ${acc.color ? `<span class="bg-violet-100 text-violet-800 px-1.5 py-0.5 rounded text-[10px] font-bold border border-violet-200">🎨 ${App.escapeHtml(acc.color)}</span>` : ''}
                                     ${acc.codigo_barras ? `<span>•</span><span class="font-mono text-[10px] text-slate-500">${App.escapeHtml(acc.codigo_barras)}</span>` : ''}
                                     <span>•</span>
                                     <span class="text-[10px] text-slate-500">Stock: ${acc.stock}</span>
@@ -651,16 +653,25 @@ const POS = {
             container.innerHTML = items.map(acc => {
                 const itemEnCarro = this.carrito.find(it => it.tipo === 'accesorio' && it.id === acc.id);
                 const stockTxt = acc.es_servicio ? 'Servicio' : `${acc.stock} disponibles`;
+                const hermanosConColor = items.filter(x => x.nombre.trim().toLowerCase() === acc.nombre.trim().toLowerCase() && x.color);
+                const tieneMasColores = hermanosConColor.length > 1;
 
                 return `
                 <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between group">
                     <div>
-                        <div class="flex justify-between items-start gap-1 mb-1.5">
-                            <span class="text-[10px] uppercase font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">${App.escapeHtml(acc.categoria)}</span>
+                        <div class="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
+                            <div class="flex items-center gap-1 flex-wrap">
+                                <span class="text-[10px] uppercase font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">${App.escapeHtml(acc.categoria)}</span>
+                                ${acc.color ? `<span class="text-[10px] uppercase font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-200">🎨 ${App.escapeHtml(acc.color)}</span>` : ''}
+                            </div>
                             <span class="text-xs ${acc.stock <= 3 && !acc.es_servicio ? 'text-rose-600 font-bold' : 'text-slate-500 font-medium'}">${stockTxt}</span>
                         </div>
                         <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors mb-0.5">${App.escapeHtml(acc.nombre)}</h4>
                         ${acc.codigo_barras ? `<p class="font-mono text-[11px] text-slate-400">SKU: ${App.escapeHtml(acc.codigo_barras)}</p>` : ''}
+                        ${tieneMasColores ? `
+                        <button type="button" onclick="POS.abrirSelectorColor('${App.escapeHtml(acc.nombre).replace(/'/g, "\\'")}')" class="mt-1 text-[11px] font-bold text-violet-600 hover:text-violet-800 flex items-center gap-1 cursor-pointer">
+                            <span>🎨 Ver todos los colores (${hermanosConColor.length})</span>
+                        </button>` : ''}
                     </div>
 
                     <div class="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between gap-2">
@@ -833,10 +844,13 @@ const POS = {
                 monto_garantia: mGt,
                 items: this.carrito.map(it => {
                     if (it.tipo === 'accesorio') {
+                        const nombreFinal = it.accesorio.color 
+                            ? `${it.accesorio.nombre} (${it.accesorio.color})` 
+                            : it.accesorio.nombre;
                         return {
                             tipo_item: 'accesorio',
                             accesorio_id: it.id,
-                            nombre_item: it.accesorio.nombre,
+                            nombre_item: nombreFinal,
                             cantidad: it.cantidad,
                             precio_final: it.precio_final
                         };
@@ -1136,6 +1150,92 @@ Garantía de 30 días válida presentando este comprobante o tu número registra
         } catch (e) {
             console.error("Error al procesar escáner:", e);
         }
+    },
+
+    // --- SELECTOR DE COLOR PARA ACCESORIOS CON VARIANTES ---
+    async abrirSelectorColor(nombreBase) {
+        try {
+            let variantes = [];
+            if (typeof Accesorios !== 'undefined' && Accesorios.items && Accesorios.items.length > 0) {
+                variantes = Accesorios.items.filter(x => x.nombre.trim().toLowerCase() === nombreBase.trim().toLowerCase());
+            }
+            if (variantes.length === 0) {
+                const res = await fetch(`/api/accesorios?search=${encodeURIComponent(nombreBase)}`);
+                if (res.ok) {
+                    const todos = await res.json();
+                    variantes = todos.filter(x => x.nombre.trim().toLowerCase() === nombreBase.trim().toLowerCase());
+                }
+            }
+
+            if (variantes.length <= 1) {
+                if (variantes.length === 1) this.agregarAccesorioAlCarrito(variantes[0]);
+                return;
+            }
+
+            const titulo = document.getElementById('modal-color-acc-titulo');
+            const grid = document.getElementById('modal-color-acc-grid');
+            const modal = document.getElementById('modal-seleccionar-color-acc');
+            if (!modal || !grid) return;
+
+            if (titulo) titulo.textContent = nombreBase;
+
+            grid.innerHTML = variantes.map(v => {
+                const sinStock = v.stock <= 0 && !v.es_servicio;
+                const colorLabel = v.color || 'Estándar';
+                const stockLabel = v.es_servicio ? 'Servicio' : `${v.stock} disp.`;
+                const badgeClass = sinStock 
+                    ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                    : (v.stock < 3 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200');
+
+                return `
+                <button type="button" 
+                    onclick="POS.seleccionarColorVariante(${v.id})"
+                    class="p-3 rounded-xl border border-slate-200 hover:border-violet-500 hover:bg-violet-50/50 transition-all flex items-center justify-between text-left group cursor-pointer ${sinStock ? 'opacity-70 bg-slate-50' : 'bg-white shadow-2xs'}">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="w-3.5 h-3.5 rounded-full border border-slate-300 shadow-2xs flex-shrink-0" style="background-color: ${POS.obtenerHexColor(colorLabel)};"></span>
+                        <div class="min-w-0">
+                            <span class="block font-bold text-slate-800 text-xs truncate group-hover:text-violet-700">🎨 ${App.escapeHtml(colorLabel)}</span>
+                            <span class="text-[10px] text-slate-500 font-medium">${App.formatCurrency(v.precio_venta)}</span>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass} flex-shrink-0">
+                        ${stockLabel}
+                    </span>
+                </button>
+                `;
+            }).join('');
+
+            modal.classList.remove('hidden');
+        } catch (e) {
+            console.error("Error abriendo selector de color:", e);
+        }
+    },
+
+    cerrarSelectorColor() {
+        const modal = document.getElementById('modal-seleccionar-color-acc');
+        if (modal) modal.classList.add('hidden');
+    },
+
+    seleccionarColorVariante(id) {
+        this.cerrarSelectorColor();
+        this.agregarAccesorioAlCarrito(id);
+    },
+
+    obtenerHexColor(nombreColor) {
+        if (!nombreColor) return '#94a3b8';
+        const n = nombreColor.toLowerCase();
+        if (n.includes('rosa')) return '#f472b6';
+        if (n.includes('negro')) return '#1e293b';
+        if (n.includes('blanco')) return '#f8fafc';
+        if (n.includes('azul')) return '#38bdf8';
+        if (n.includes('verde')) return '#4ade80';
+        if (n.includes('lila') || n.includes('lavanda') || n.includes('morado')) return '#c084fc';
+        if (n.includes('crema') || n.includes('beige')) return '#fef08a';
+        if (n.includes('rojo')) return '#f87171';
+        if (n.includes('gris') || n.includes('plata')) return '#cbd5e1';
+        if (n.includes('dorado') || n.includes('oro')) return '#fde047';
+        if (n.includes('naranja')) return '#fb923c';
+        return '#8b5cf6';
     }
 };
 

@@ -170,7 +170,8 @@ def crear_accesorio(datos: AccesorioCreate, user: dict = Depends(require_role("d
             precio_mayoreo=datos.precio_mayoreo or datos.precio_venta,
             precio_20_pzs=datos.precio_20_pzs or datos.precio_mayoreo or datos.precio_venta,
             precio_caja=datos.precio_caja or datos.costo_compra,
-            imagen_url=datos.imagen_url
+            imagen_url=datos.imagen_url,
+            color=datos.color
         )
         return sanitizar_datos_sensibles(nuevo, user)
     except ValueError as e:

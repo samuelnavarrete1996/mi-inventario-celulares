@@ -139,7 +139,10 @@ const Accesorios = {
                     <div class="flex items-center gap-3">
                         ${imgHtml}
                         <div>
-                            <div class="leading-snug">${App.escapeHtml(acc.nombre)}</div>
+                            <div class="leading-snug flex items-center gap-1.5 flex-wrap">
+                                <span class="font-bold text-slate-800">${App.escapeHtml(acc.nombre)}</span>
+                                ${acc.color ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-violet-100 text-violet-800 border border-violet-200">🎨 ${App.escapeHtml(acc.color)}</span>` : ''}
+                            </div>
                             <span class="text-xs text-slate-400 font-normal">${App.escapeHtml(acc.categoria)}</span>
                         </div>
                     </div>
@@ -183,6 +186,8 @@ const Accesorios = {
         if (document.getElementById('input-acc-costo')) document.getElementById('input-acc-costo').value = '0.00';
         if (document.getElementById('input-acc-20-pzs')) document.getElementById('input-acc-20-pzs').value = '';
         if (document.getElementById('input-acc-caja')) document.getElementById('input-acc-caja').value = '';
+        if (document.getElementById('input-acc-color')) document.getElementById('input-acc-color').value = '';
+        if (document.getElementById('input-acc-codigo')) document.getElementById('input-acc-codigo').value = '';
         document.getElementById('modal-accesorio-titulo').textContent = 'Nuevo Accesorio / Servicio';
         document.getElementById('modal-accesorio').classList.remove('hidden');
     },
@@ -198,6 +203,8 @@ const Accesorios = {
         document.getElementById('input-acc-id').value = item.id;
         document.getElementById('input-acc-nombre').value = item.nombre;
         document.getElementById('input-acc-categoria').value = item.categoria;
+        if (document.getElementById('input-acc-color')) document.getElementById('input-acc-color').value = item.color || '';
+        if (document.getElementById('input-acc-codigo')) document.getElementById('input-acc-codigo').value = item.codigo_barras || '';
         document.getElementById('input-acc-costo').value = item.costo_compra;
         document.getElementById('input-acc-precio').value = item.precio_mayoreo || item.precio_venta;
         if (document.getElementById('input-acc-20-pzs')) {
@@ -217,6 +224,8 @@ const Accesorios = {
         const id = document.getElementById('input-acc-id').value;
         const nombre = document.getElementById('input-acc-nombre').value.trim();
         const categoria = document.getElementById('input-acc-categoria').value;
+        const color = document.getElementById('input-acc-color')?.value?.trim() || null;
+        const codigo_barras = document.getElementById('input-acc-codigo')?.value?.trim() || null;
         const precio_mayoreo = parseFloat(document.getElementById('input-acc-precio').value) || 0;
         const precio_20_pzs = parseFloat(document.getElementById('input-acc-20-pzs')?.value) || precio_mayoreo;
         const precio_caja = parseFloat(document.getElementById('input-acc-caja')?.value) || 0;
@@ -237,6 +246,8 @@ const Accesorios = {
         const data = { 
             nombre, 
             categoria, 
+            color,
+            codigo_barras,
             costo_compra, 
             precio_venta, 
             precio_mayoreo, 

@@ -1,19 +1,19 @@
 // service-worker.js - PWA Offline Support & Cache Management
-const CACHE_NAME = 'mi-inventario-v16';
+const CACHE_NAME = 'mi-inventario-v17';
 const STATIC_ASSETS = [
   '/',
   '/catalogo',
   '/manifest.json',
-  '/static/css/custom.css?v=20261019_v16',
-  '/static/js/app.js?v=20261019_v16',
-  '/static/js/inventario.js?v=20261019_v16',
-  '/static/js/pos.js?v=20261019_v16',
-  '/static/js/accesorios.js?v=20261019_v16',
-  '/static/js/caja.js?v=20261019_v16',
-  '/static/js/garantias.js?v=20261019_v16',
-  '/static/js/reportes.js?v=20261019_v16',
-  '/static/js/reparaciones.js?v=20261019_v16',
-  '/static/js/etiquetas_scanner.js?v=20261019_v16',
+  '/static/css/custom.css?v=20261019_v17',
+  '/static/js/app.js?v=20261019_v17',
+  '/static/js/inventario.js?v=20261019_v17',
+  '/static/js/pos.js?v=20261019_v17',
+  '/static/js/accesorios.js?v=20261019_v17',
+  '/static/js/caja.js?v=20261019_v17',
+  '/static/js/garantias.js?v=20261019_v17',
+  '/static/js/reportes.js?v=20261019_v17',
+  '/static/js/reparaciones.js?v=20261019_v17',
+  '/static/js/etiquetas_scanner.js?v=20261019_v17',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
 ];

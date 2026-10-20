@@ -280,13 +280,14 @@ def generar_plantilla_stock_accesorios_excel() -> bytes:
     ws.title = "Carga Stock Accesorios"
 
     # Encabezados
-    headers = ["ID", "Nombre del Accesorio", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
+    headers = ["ID", "Nombre del Accesorio", "Color", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
     ws.append(headers)
 
     for a in accesorios_fisicos:
         ws.append([
             a["id"],
             a["nombre"],
+            a.get("color") or "",
             a["categoria"],
             int(a.get("stock", 0) or 0),
             int(a.get("stock", 0) or 0), # Prellenado con stock actual para fácil edición
@@ -302,19 +303,19 @@ def generar_plantilla_stock_accesorios_excel() -> bytes:
     for col_idx in range(1, len(headers) + 1):
         cell = ws.cell(row=1, column=col_idx)
         cell.font = header_font
-        cell.fill = nuevo_stock_fill if col_idx == 5 else header_fill
+        cell.fill = nuevo_stock_fill if col_idx == 6 else header_fill
         cell.alignment = alignment_center
 
     # Resaltar la columna NUEVO STOCK en las filas de datos con fondo suave
     editable_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
     for r in range(2, len(accesorios_fisicos) + 2):
-        cell_stock = ws.cell(row=r, column=5)
+        cell_stock = ws.cell(row=r, column=6)
         cell_stock.fill = editable_fill
         cell_stock.alignment = alignment_center
         cell_stock.font = Font(name="Calibri", size=11, bold=True)
 
     # Anchos de columna
-    anchos = [8, 48, 24, 14, 18, 20]
+    anchos = [8, 44, 18, 22, 14, 18, 20]
     for col_idx, ancho in enumerate(anchos, start=1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = ancho
 
@@ -324,7 +325,7 @@ def generar_plantilla_stock_accesorios_excel() -> bytes:
 
 
 def generar_plantilla_stock_accesorios_csv() -> bytes:
-    """Genera un archivo CSV profesional optimizado al 100% para Google Sheets con el catálogo completo de accesorios."""
+    """Genera un archivo CSV profesional optimizado al 100% para Google Sheets con el catálogo completo de accesorios y colores."""
     from app import crud
     accesorios = crud.get_accesorios()
     accesorios_fisicos = [a for a in accesorios if not a.get("es_servicio")]
@@ -333,13 +334,14 @@ def generar_plantilla_stock_accesorios_csv() -> bytes:
     writer = csv.writer(output, lineterminator='\r\n')
 
     # Encabezados compatibles con Google Sheets
-    headers = ["ID", "Nombre del Accesorio", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
+    headers = ["ID", "Nombre del Accesorio", "Color", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
     writer.writerow(headers)
 
     for a in accesorios_fisicos:
         writer.writerow([
             a["id"],
             a["nombre"],
+            a.get("color") or "",
             a["categoria"],
             int(a.get("stock", 0) or 0),
             int(a.get("stock", 0) or 0),
