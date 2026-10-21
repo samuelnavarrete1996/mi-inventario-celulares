@@ -33,6 +33,12 @@ def run():
 
     if args.database_url:
         os.environ["DATABASE_URL"] = args.database_url.strip()
+        database.DATABASE_URL = args.database_url.strip()
+        try:
+            from app.postgres_client import reset_postgres_engine
+            reset_postgres_engine()
+        except Exception:
+            pass
 
     is_pg = database.is_postgres_enabled()
     is_turso = database.is_turso_enabled()

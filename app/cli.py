@@ -90,8 +90,8 @@ def crear_tienda(
         # 5. Insertar Tenant
         cur.execute("""
             INSERT INTO tenants (nombre_comercial, slug, email_contacto, telefono, plan, activo, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, 1, ?);
-        """, (nombre, slug, email or "", telefono or "", plan or "pro", now))
+            VALUES (?, ?, ?, ?, ?, ?, ?);
+        """, (nombre, slug, email or "", telefono or "", plan or "pro", True, now))
         tenant_id = cur.lastrowid
         if not tenant_id:
             cur.execute("SELECT id FROM tenants WHERE slug = ? LIMIT 1;", (slug,))
@@ -104,11 +104,11 @@ def crear_tienda(
         # 6. Insertar Sucursal Matriz
         cur.execute("""
             INSERT INTO sucursales (tenant_id, nombre_sucursal, direccion, telefono, es_matriz, fecha_registro)
-            VALUES (?, ?, ?, ?, 1, ?);
-        """, (tenant_id, direccion or "Matriz Centro", direccion or "Matriz Principal", telefono or "", now))
+            VALUES (?, ?, ?, ?, ?, ?);
+        """, (tenant_id, direccion or "Matriz Centro", direccion or "Matriz Principal", telefono or "", True, now))
         sucursal_id = cur.lastrowid
         if not sucursal_id:
-            cur.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (tenant_id,))
+            cur.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = ? LIMIT 1;", (tenant_id, True))
             row = cur.fetchone()
             sucursal_id = row["id"] if row else None
 
@@ -124,8 +124,8 @@ def crear_tienda(
         pin_hash, salt = hash_secret(password)
         cur.execute("""
             INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
-            VALUES (?, ?, ?, ?, 'dueno', 1, ?, ?, ?);
-        """, (f"Dueño - {nombre}", admin, pin_hash, salt, now, tenant_id, sucursal_id))
+            VALUES (?, ?, ?, ?, 'dueno', ?, ?, ?, ?);
+        """, (f"Dueño - {nombre}", admin, pin_hash, salt, True, now, tenant_id, sucursal_id))
         user_id = cur.lastrowid
         if not user_id:
             cur.execute("SELECT id FROM usuarios WHERE username = ? LIMIT 1;", (admin,))

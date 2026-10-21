@@ -88,10 +88,295 @@ def get_db_connection():
         pass
     return conn
 
+def _init_postgres_db(conn, cursor):
+    """
+    Crea automáticamente todas las tablas maestras y transaccionales para PostgreSQL
+    (compatible con Supabase, Render y AWS RDS).
+    Garantiza que todas las tablas y columnas existan antes de ejecutar cualquier consulta.
+    """
+    stmts = [
+        # Extensiones recomendadas
+        'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";',
+        'CREATE EXTENSION IF NOT EXISTS "pgcrypto";',
+
+        # 1. Tablas Maestras Multi-Tenant
+        """CREATE TABLE IF NOT EXISTS tenants (
+            id SERIAL PRIMARY KEY,
+            nombre_comercial VARCHAR(150) NOT NULL,
+            slug VARCHAR(60) UNIQUE NOT NULL,
+            email_contacto VARCHAR(120),
+            telefono VARCHAR(30),
+            plan VARCHAR(50) NOT NULL DEFAULT 'basico',
+            activo BOOLEAN NOT NULL DEFAULT TRUE,
+            fecha_creacion TEXT NOT NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);",
+        "CREATE INDEX IF NOT EXISTS idx_tenants_activo ON tenants(activo);",
+
+        """CREATE TABLE IF NOT EXISTS sucursales (
+            id SERIAL PRIMARY KEY,
+            tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+            nombre_sucursal VARCHAR(100) NOT NULL,
+            direccion VARCHAR(255),
+            telefono VARCHAR(30),
+            es_matriz BOOLEAN NOT NULL DEFAULT TRUE,
+            fecha_registro TEXT NOT NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_sucursales_tenant ON sucursales(tenant_id);",
+
+        """CREATE TABLE IF NOT EXISTS configuracion_tienda (
+            id SERIAL PRIMARY KEY,
+            tenant_id INTEGER NOT NULL UNIQUE REFERENCES tenants(id) ON DELETE CASCADE,
+            logo_url VARCHAR(500),
+            encabezado_ticket VARCHAR(300),
+            pie_ticket_garantia VARCHAR(500),
+            whatsapp_notificaciones VARCHAR(30),
+            fecha_actualizacion TEXT NOT NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_config_tienda_tenant ON configuracion_tienda(tenant_id);",
+
+        # 2. Clientes
+        """CREATE TABLE IF NOT EXISTS clientes (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(150) NOT NULL,
+            telefono VARCHAR(30) NOT NULL,
+            fecha_registro TEXT NOT NULL,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_clientes_tenant ON clientes(tenant_id);",
+
+        # 3. Equipos
+        """CREATE TABLE IF NOT EXISTS equipos (
+            id SERIAL PRIMARY KEY,
+            modelo VARCHAR(150) NOT NULL,
+            capacidad_gb INTEGER NOT NULL,
+            color VARCHAR(60) NOT NULL,
+            imei VARCHAR(40) UNIQUE NOT NULL,
+            grado VARCHAR(10) NOT NULL,
+            costo_compra DOUBLE PRECISION NOT NULL,
+            precio_venta DOUBLE PRECISION NOT NULL,
+            estado VARCHAR(40) NOT NULL DEFAULT 'Disponible',
+            fecha_registro TEXT NOT NULL,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_equipos_tenant_sucursal ON equipos(tenant_id, sucursal_id);",
+
+        # 4. Ventas
+        """CREATE TABLE IF NOT EXISTS ventas (
+            id SERIAL PRIMARY KEY,
+            equipo_id INTEGER,
+            cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
+            precio_final DOUBLE PRECISION NOT NULL,
+            margen_ganancia DOUBLE PRECISION NOT NULL,
+            fecha_venta TEXT NOT NULL,
+            metodo_pago VARCHAR(50) NOT NULL DEFAULT 'Efectivo',
+            monto_efectivo DOUBLE PRECISION NOT NULL DEFAULT 0,
+            monto_transferencia DOUBLE PRECISION NOT NULL DEFAULT 0,
+            monto_tarjeta DOUBLE PRECISION NOT NULL DEFAULT 0,
+            monto_garantia DOUBLE PRECISION NOT NULL DEFAULT 0,
+            notas TEXT,
+            es_credito BOOLEAN NOT NULL DEFAULT FALSE,
+            plazo_dias INTEGER NOT NULL DEFAULT 0,
+            fecha_vencimiento TEXT,
+            monto_credito DOUBLE PRECISION NOT NULL DEFAULT 0,
+            monto_anticipo DOUBLE PRECISION NOT NULL DEFAULT 0,
+            saldo_pendiente DOUBLE PRECISION NOT NULL DEFAULT 0,
+            estado_credito VARCHAR(40),
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_ventas_tenant_sucursal ON ventas(tenant_id, sucursal_id);",
+
+        # 5. Abonos Ventas Crédito
+        """CREATE TABLE IF NOT EXISTS abonos_ventas_credito (
+            id SERIAL PRIMARY KEY,
+            venta_id INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+            monto DOUBLE PRECISION NOT NULL,
+            fecha TEXT NOT NULL,
+            metodo_pago VARCHAR(50) NOT NULL DEFAULT 'Efectivo',
+            notas TEXT,
+            usuario VARCHAR(100),
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_abonos_venta_id ON abonos_ventas_credito(venta_id);",
+
+        # 6. Venta Items
+        """CREATE TABLE IF NOT EXISTS venta_items (
+            id SERIAL PRIMARY KEY,
+            venta_id INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+            equipo_id INTEGER REFERENCES equipos(id) ON DELETE SET NULL,
+            accesorio_id INTEGER,
+            tipo_item VARCHAR(40) NOT NULL DEFAULT 'equipo',
+            nombre_item VARCHAR(150),
+            cantidad INTEGER NOT NULL DEFAULT 1,
+            precio_final DOUBLE PRECISION NOT NULL,
+            costo_compra DOUBLE PRECISION NOT NULL,
+            margen_ganancia DOUBLE PRECISION NOT NULL,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_venta_items_venta ON venta_items(venta_id);",
+
+        # 7. Garantías
+        """CREATE TABLE IF NOT EXISTS garantias (
+            id SERIAL PRIMARY KEY,
+            venta_id INTEGER NOT NULL REFERENCES ventas(id) ON DELETE RESTRICT,
+            equipo_id INTEGER NOT NULL REFERENCES equipos(id) ON DELETE RESTRICT,
+            cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
+            fecha_devolucion TEXT NOT NULL,
+            motivo TEXT NOT NULL,
+            falla_descripcion TEXT,
+            estado_equipo_recibido VARCHAR(40) NOT NULL DEFAULT 'En Garantia',
+            solucion VARCHAR(40) NOT NULL DEFAULT 'Reemplazo',
+            equipo_reemplazo_id INTEGER REFERENCES equipos(id) ON DELETE SET NULL,
+            monto_cubierto DOUBLE PRECISION NOT NULL DEFAULT 0,
+            notas TEXT,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_garantias_tenant ON garantias(tenant_id);",
+
+        # 8. Accesorios
+        """CREATE TABLE IF NOT EXISTS accesorios (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(150) NOT NULL,
+            categoria VARCHAR(60) NOT NULL DEFAULT 'Accesorio',
+            codigo_barras VARCHAR(60),
+            costo_compra DOUBLE PRECISION NOT NULL DEFAULT 0,
+            precio_venta DOUBLE PRECISION NOT NULL DEFAULT 0,
+            precio_mayoreo DOUBLE PRECISION NOT NULL DEFAULT 0,
+            stock INTEGER NOT NULL DEFAULT 0,
+            es_servicio BOOLEAN NOT NULL DEFAULT FALSE,
+            fecha_registro TEXT NOT NULL,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_accesorios_tenant_sucursal ON accesorios(tenant_id, sucursal_id);",
+
+        # 9. Cortes de Caja
+        """CREATE TABLE IF NOT EXISTS cortes_caja (
+            id SERIAL PRIMARY KEY,
+            fecha_hora TEXT NOT NULL,
+            total_ventas DOUBLE PRECISION NOT NULL,
+            monto_efectivo DOUBLE PRECISION NOT NULL,
+            monto_transferencia DOUBLE PRECISION NOT NULL,
+            monto_tarjeta DOUBLE PRECISION NOT NULL,
+            efectivo_esperado DOUBLE PRECISION NOT NULL,
+            efectivo_real DOUBLE PRECISION NOT NULL,
+            diferencia DOUBLE PRECISION NOT NULL,
+            usuario VARCHAR(100) NOT NULL,
+            notas TEXT,
+            equipos_vendidos INTEGER NOT NULL DEFAULT 0,
+            accesorios_vendidos INTEGER NOT NULL DEFAULT 0,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_cortes_caja_tenant_sucursal ON cortes_caja(tenant_id, sucursal_id);",
+
+        # 10. Vista caja_cortes
+        "CREATE OR REPLACE VIEW caja_cortes AS SELECT * FROM cortes_caja;",
+
+        # 11. Reparaciones
+        """CREATE TABLE IF NOT EXISTS reparaciones (
+            id SERIAL PRIMARY KEY,
+            folio VARCHAR(40) UNIQUE NOT NULL,
+            cliente_nombre VARCHAR(150) NOT NULL,
+            cliente_telefono VARCHAR(40) NOT NULL,
+            dispositivo_modelo VARCHAR(150) NOT NULL,
+            color VARCHAR(60),
+            imei_serie VARCHAR(60),
+            codigo_patron VARCHAR(100),
+            falla_reportada TEXT NOT NULL,
+            diagnostico_tecnico TEXT,
+            condicion_recepcion TEXT,
+            costo_refaccion DOUBLE PRECISION NOT NULL DEFAULT 0,
+            precio_servicio DOUBLE PRECISION NOT NULL DEFAULT 0,
+            anticipo DOUBLE PRECISION NOT NULL DEFAULT 0,
+            saldo_pendiente DOUBLE PRECISION NOT NULL DEFAULT 0,
+            estado VARCHAR(40) NOT NULL DEFAULT 'Recibido',
+            tecnico_responsable VARCHAR(100) DEFAULT 'Samuel N.',
+            notas TEXT,
+            fecha_ingreso TEXT NOT NULL,
+            fecha_prometida TEXT,
+            fecha_entrega TEXT,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_reparaciones_tenant_sucursal ON reparaciones(tenant_id, sucursal_id);",
+
+        # 12. Usuarios
+        """CREATE TABLE IF NOT EXISTS usuarios (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(150) NOT NULL,
+            username VARCHAR(60) UNIQUE NOT NULL,
+            pin_hash VARCHAR(255) NOT NULL,
+            salt VARCHAR(100) NOT NULL,
+            rol VARCHAR(40) NOT NULL DEFAULT 'vendedor',
+            activo BOOLEAN NOT NULL DEFAULT TRUE,
+            fecha_creacion TEXT NOT NULL,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_usuarios_tenant_sucursal ON usuarios(tenant_id, sucursal_id);",
+
+        # 13. Historiales
+        """CREATE TABLE IF NOT EXISTS garantias_historial (
+            id SERIAL PRIMARY KEY,
+            garantia_id INTEGER REFERENCES garantias(id) ON DELETE CASCADE,
+            estado_anterior VARCHAR(50),
+            estado_nuevo VARCHAR(50),
+            fecha_cambio TEXT NOT NULL,
+            usuario VARCHAR(100),
+            observaciones TEXT
+        );""",
+
+        """CREATE TABLE IF NOT EXISTS historial_ventas_cambios (
+            id SERIAL PRIMARY KEY,
+            venta_id INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
+            campo_modificado VARCHAR(100) NOT NULL,
+            valor_anterior TEXT,
+            valor_nuevo TEXT,
+            usuario VARCHAR(100) NOT NULL,
+            fecha_modificacion TEXT NOT NULL,
+            motivo TEXT
+        );"""
+    ]
+
+    for stmt in stmts:
+        cursor.execute(stmt)
+
+    # Añadir columnas tenant_id / sucursal_id si no existen en caso de tablas existentes
+    column_checks = [
+        ("equipos", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("equipos", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+        ("ventas", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("ventas", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+        ("reparaciones", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("reparaciones", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+        ("accesorios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("accesorios", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+        ("cortes_caja", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("cortes_caja", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+        ("clientes", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("usuarios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("usuarios", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+    ]
+    for tbl, col, col_def in column_checks:
+        cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};")
+
+
 def init_db():
     """Crea las tablas, índices y migraciones si no existen."""
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Si estamos en PostgreSQL (Supabase / Render), ejecutar esquema nativo de PostgreSQL
+    if is_postgres_enabled():
+        _init_postgres_db(conn, cursor)
+        conn.commit()
+        conn.close()
+        init_demo_tenant_if_empty()
+        return
 
     # ==========================================================================
     # 0. TABLAS MAESTRAS MULTI-TENANT SAAS (Tenants, Sucursales, Configuración)
@@ -543,7 +828,7 @@ def init_demo_tenant_if_empty():
                 "contacto@democelulares.com",
                 "5512345678",
                 "pro",
-                1,
+                True,
                 now
             ))
             tenant_id = cursor.lastrowid
@@ -552,7 +837,7 @@ def init_demo_tenant_if_empty():
                 tenant_id = cursor.fetchone()["id"]
 
         # 2. Verificar o crear Sucursal Matriz
-        cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (tenant_id,))
+        cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = ? LIMIT 1;", (tenant_id, True))
         row_suc = cursor.fetchone()
         if row_suc:
             sucursal_id = row_suc["id"] if isinstance(row_suc, dict) or hasattr(row_suc, '__getitem__') else row_suc[0]
@@ -565,7 +850,7 @@ def init_demo_tenant_if_empty():
                 "Sucursal Matriz Centro",
                 "Av. Principal #100, Col. Centro",
                 "5512345678",
-                1,
+                True,
                 now
             ))
             sucursal_id = cursor.lastrowid

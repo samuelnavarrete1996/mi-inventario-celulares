@@ -279,6 +279,17 @@ class PostgresConnection:
         self.close()
 
 
+def reset_postgres_engine():
+    """Descarta el pool actual para permitir reconexión tras cambiar DATABASE_URL."""
+    global _pg_engine
+    if _pg_engine is not None:
+        try:
+            _pg_engine.dispose()
+        except Exception:
+            pass
+        _pg_engine = None
+
+
 def get_postgres_engine():
     """Inicializa y retorna el motor SQLAlchemy con connection pooling configurado."""
     global _pg_engine
