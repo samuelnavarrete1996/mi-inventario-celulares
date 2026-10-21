@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from app.database import init_db, seed_demo_data_if_empty
 from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup, reparaciones, catalogo, auth, configuracion
 
@@ -119,13 +119,18 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # Montar directorio estático
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-@app.get("/")
-def serve_index():
+@app.api_route("/", methods=["GET", "HEAD"])
+def serve_index(request: Request):
     """Sirve la interfaz gráfica principal con headers anti-caché para actualizaciones inmediatas."""
     index_path = os.path.join(STATIC_DIR, "index.html")
+    headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+    if request.method == "HEAD":
+        return Response(status_code=status.HTTP_200_OK, media_type="text/html", headers=headers)
+    if not os.path.exists(index_path):
+        return Response("OK", status_code=status.HTTP_200_OK, media_type="text/html", headers=headers)
     return FileResponse(
         index_path,
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+        headers=headers
     )
 
 @app.get("/manifest.json")
@@ -150,12 +155,14 @@ def serve_service_worker():
         }
     )
 
-@app.get("/health")
-def health_check():
+@app.api_route("/health", methods=["GET", "HEAD"])
+def health_check(request: Request):
+    if request.method == "HEAD":
+        return Response(status_code=status.HTTP_200_OK, media_type="application/json")
     return {"status": "ok", "app": "Mi Inventario Samuel Navarrete", "version": "2.1.0"}
 
-@app.get("/healthz")
-def healthz_check():
+@app.api_route("/healthz", methods=["GET", "HEAD"])
+def healthz_check(request: Request):
     """Endpoint de verificación de salud para Render, balanceadores y monitoreo cloud."""
     from app.database import is_postgres_enabled, get_db_connection
     engine = "postgresql" if is_postgres_enabled() else "sqlite"
@@ -167,9 +174,13 @@ def healthz_check():
             cur.fetchone()
         finally:
             conn.close()
+        if request.method == "HEAD":
+            return Response(status_code=status.HTTP_200_OK, media_type="application/json")
         return {"status": "ok", "database": "connected", "engine": engine}
     except Exception as e:
         logger.error("Health check error: %s", repr(e))
+        if request.method == "HEAD":
+            return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"status": "error", "database": "disconnected", "engine": engine, "detail": str(e)}

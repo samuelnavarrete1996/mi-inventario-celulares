@@ -27,14 +27,26 @@ def clean_rate_limits():
 
 @pytest.mark.anyio
 async def test_endpoint_healthz_despliegue():
-    """El endpoint /healthz debe responder HTTP 200 y reportar el estado de la BD y motor activo."""
+    """El endpoint /healthz debe responder HTTP 200 tanto con GET como con HEAD."""
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Prueba GET /healthz
         res = await client.get("/healthz")
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "ok"
         assert data["database"] == "connected"
         assert data["engine"] in ("postgresql", "sqlite")
+
+        # Prueba HEAD /healthz (requerido por monitores y balanceadores cloud como Render)
+        res_head = await client.head("/healthz")
+        assert res_head.status_code == 200
+
+        # Prueba GET / y HEAD /
+        res_root_get = await client.get("/")
+        assert res_root_get.status_code == 200
+
+        res_root_head = await client.head("/")
+        assert res_root_head.status_code == 200
 
 
 @pytest.mark.anyio
