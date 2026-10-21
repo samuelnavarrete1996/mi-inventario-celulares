@@ -198,11 +198,15 @@ def procesar_archivo_excel_o_csv(contenido_bytes: bytes, filename: str) -> Dict[
         "errores": errores
     }
 
-def guardar_equipos_importados(equipos: List[EquipoCreate]) -> List[Dict[str, Any]]:
-    """Inserta en lote los equipos validados."""
+def guardar_equipos_importados(
+    equipos: List[EquipoCreate],
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Inserta en lote los equipos validados dentro del tenant del usuario."""
     guardados = []
     for eq in equipos:
-        nuevo = crud.create_equipo(eq)
+        nuevo = crud.create_equipo(eq, tenant_id=tenant_id, sucursal_id=sucursal_id)
         guardados.append(nuevo)
     return guardados
 
@@ -351,7 +355,12 @@ def generar_plantilla_stock_accesorios_csv() -> bytes:
     return output.getvalue().encode('utf-8-sig')
 
 
-def importar_stock_accesorios_excel(contenido_bytes: bytes, filename: str = "", usuario: str = "Admin") -> Dict[str, Any]:
+def importar_stock_accesorios_excel(
+    contenido_bytes: bytes,
+    filename: str = "",
+    usuario: str = "Admin",
+    tenant_id: Optional[int] = None
+) -> Dict[str, Any]:
     """Procesa el archivo de stock de accesorios (compatible con Google Sheets .csv y Excel .xlsx) y actualiza masivamente registrando Kardex."""
     from app import crud
 
@@ -443,7 +452,8 @@ def importar_stock_accesorios_excel(contenido_bytes: bytes, filename: str = "", 
     res = crud.actualizar_stock_masivo(
         items=items_to_update,
         motivo_general="Importación masiva desde Google Sheets / Excel",
-        usuario=usuario
+        usuario=usuario,
+        tenant_id=tenant_id
     )
     res["errores_filas"] = errores
     return res

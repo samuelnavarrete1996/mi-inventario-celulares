@@ -141,8 +141,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'usuarios' AND column_name = 'tenant_id') THEN
         ALTER TABLE usuarios ADD COLUMN tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'usuarios' AND column_name = 'sucursal_id') THEN
+        ALTER TABLE usuarios ADD COLUMN sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL;
+    END IF;
 END $$;
-CREATE INDEX IF NOT EXISTS idx_usuarios_tenant ON usuarios(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_usuarios_tenant_sucursal ON usuarios(tenant_id, sucursal_id);
 
 -- ==============================================================================
 -- 4. INICIALIZACIÓN DE TENANT POR DEFECTO Y BACKFILL DE DATOS EXISTENTES
@@ -190,7 +193,7 @@ BEGIN
         UPDATE accesorios SET tenant_id = v_tenant_id, sucursal_id = v_sucursal_id WHERE tenant_id IS NULL;
         UPDATE cortes_caja SET tenant_id = v_tenant_id, sucursal_id = v_sucursal_id WHERE tenant_id IS NULL;
         UPDATE clientes SET tenant_id = v_tenant_id WHERE tenant_id IS NULL;
-        UPDATE usuarios SET tenant_id = v_tenant_id WHERE tenant_id IS NULL;
+        UPDATE usuarios SET tenant_id = v_tenant_id, sucursal_id = v_sucursal_id WHERE tenant_id IS NULL;
     END IF;
 END $$;
 

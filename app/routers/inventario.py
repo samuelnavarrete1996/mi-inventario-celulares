@@ -14,8 +14,10 @@ from app.security import (
     get_current_user,
     require_role,
     is_user_dueno,
-    sanitizar_datos_sensibles
+    sanitizar_datos_sensibles,
+    get_current_tenant
 )
+from app.dependencies import TenantContext
 
 router = APIRouter(prefix="/api/equipos", tags=["Inventario"])
 
@@ -37,20 +39,21 @@ def listar_equipos(
     solo_disponibles: bool = Query(True, description="Mostrar solo equipos con estado 'Disponible'"),
     search: Optional[str] = Query(None, max_length=100, description="Búsqueda por modelo, IMEI o color"),
     grado: Optional[str] = Query(None, max_length=5, description="Filtrar por grado: A, B o C"),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """Obtiene la lista de equipos en inventario. Oculta costos confidenciales si no es dueño."""
-    equipos = crud.get_equipos(solo_disponibles=solo_disponibles, search=search, grado=grado)
-    return sanitizar_datos_sensibles(equipos, user)
+    equipos = crud.get_equipos(solo_disponibles=solo_disponibles, search=search, grado=grado, tenant_id=tenant.tenant_id)
+    return sanitizar_datos_sensibles(equipos, tenant.user)
 
 @router.post("", response_model=EquipoResponse, status_code=status.HTTP_201_CREATED)
 def registrar_equipo(
     equipo: EquipoCreate,
+    tenant: TenantContext = Depends(get_current_tenant),
     user: dict = Depends(require_role("dueno"))
 ):
     """Registra un nuevo teléfono en el inventario. Exclusivo para rol Dueño."""
     try:
-        nuevo = crud.create_equipo(equipo)
+        nuevo = crud.create_equipo(equipo, tenant_id=tenant.tenant_id, sucursal_id=tenant.sucursal_id)
         return sanitizar_datos_sensibles(nuevo, user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -91,6 +94,7 @@ def descargar_plantilla_sheets(user: dict = Depends(require_role("dueno"))):
 @router.post("/importar-excel")
 async def importar_equipos_excel(
     file: UploadFile = File(...),
+    tenant: TenantContext = Depends(get_current_tenant),
     user: dict = Depends(require_role("dueno"))
 ):
     """Sube y procesa una hoja de Excel (.xlsx) o CSV con celulares. Exclusivo para rol Dueño."""
@@ -105,7 +109,7 @@ async def importar_equipos_excel(
         validos = resultado["validos"]
         errores = resultado["errores"]
 
-        guardados = guardar_equipos_importados(validos) if validos else []
+        guardados = guardar_equipos_importados(validos, tenant_id=tenant.tenant_id, sucursal_id=tenant.sucursal_id) if validos else []
 
         return {
             "mensaje": f"Se importaron {len(guardados)} teléfonos exitosamente.",
@@ -125,23 +129,24 @@ async def importar_equipos_excel(
 @router.get("/{equipo_id}", response_model=EquipoResponse)
 def obtener_equipo(
     equipo_id: int,
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """Obtiene los detalles de un equipo por su ID. Oculta costos confidenciales si no es dueño."""
-    equipo = crud.get_equipo_by_id(equipo_id)
+    equipo = crud.get_equipo_by_id(equipo_id, tenant_id=tenant.tenant_id)
     if not equipo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipo no encontrado.")
-    return sanitizar_datos_sensibles(equipo, user)
+    return sanitizar_datos_sensibles(equipo, tenant.user)
 
 @router.put("/{equipo_id}", response_model=EquipoResponse)
 def actualizar_equipo(
     equipo_id: int,
     datos: EquipoUpdate,
+    tenant: TenantContext = Depends(get_current_tenant),
     user: dict = Depends(require_role("dueno"))
 ):
     """Actualiza datos de un equipo. Exclusivo para rol Dueño y con respuesta sanitizada."""
     try:
-        actualizado = crud.update_equipo(equipo_id, datos)
+        actualizado = crud.update_equipo(equipo_id, datos, tenant_id=tenant.tenant_id)
         if not actualizado:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipo no encontrado.")
         return sanitizar_datos_sensibles(actualizado, user)
@@ -156,13 +161,14 @@ def actualizar_equipo(
 def eliminar_equipo(
     equipo_id: int,
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
     Elimina un equipo si aún no ha sido vendido.
     Requiere sesión activa de Dueño o cabecera 'X-Admin-Password' con contraseña válida.
     No se permite el envío de contraseñas por URL (query parameters) por seguridad.
     """
+    user = tenant.user
     if not (is_user_dueno(user) or verify_delete_password(x_admin_password)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -170,7 +176,7 @@ def eliminar_equipo(
         )
 
     try:
-        exito = crud.delete_equipo(equipo_id)
+        exito = crud.delete_equipo(equipo_id, tenant_id=tenant.tenant_id)
         if not exito:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Equipo no encontrado.")
         return {"mensaje": "Equipo eliminado exitosamente."}

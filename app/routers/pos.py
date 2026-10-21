@@ -2,32 +2,32 @@ from fastapi import APIRouter, HTTPException, Query, status, Depends
 from typing import List, Optional, Dict, Any
 from app import crud
 from app.models import VentaCreate, VentaDetalleResponse, EquipoResponse, AbonoCreditoCreate
-from app.security import get_current_user, sanitizar_datos_sensibles
+from app.security import get_current_user, sanitizar_datos_sensibles, get_current_tenant
+from app.dependencies import TenantContext
 
 router = APIRouter(prefix="/api/pos", tags=["Punto de Venta"])
 
 @router.get("/buscar", response_model=List[EquipoResponse])
 def buscar_equipos_disponibles(
     q: Optional[str] = Query(None, description="Búsqueda en tiempo real por IMEI o Modelo"),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
     Buscador en tiempo real para el POS:
-    Retorna únicamente equipos con estado 'Disponible'. Oculta costos si no es Dueño.
-    Requiere sesión activa.
+    Retorna únicamente equipos con estado 'Disponible' del tenant en sesión. Oculta costos si no es Dueño.
     """
-    equipos = crud.get_equipos(solo_disponibles=True, search=q)
-    return sanitizar_datos_sensibles(equipos, user)
+    equipos = crud.get_equipos(solo_disponibles=True, search=q, tenant_id=tenant.tenant_id)
+    return sanitizar_datos_sensibles(equipos, tenant.user)
 
 @router.post("/vender", response_model=VentaDetalleResponse, status_code=status.HTTP_201_CREATED)
 def realizar_venta(
     venta: VentaCreate,
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
     Procesa la venta en el POS validando montos no negativos y recalculando totales en BD.
+    Inyecta automáticamente el tenant_id y sucursal_id del usuario en sesión.
     Soporta ventas de contado y ventas a crédito ("Nota de Crédito" a 15 o 30 días).
-    Exige usuario autenticado y oculta ganancias si es vendedor.
     """
     if not venta.items:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El carrito de venta no puede estar vacío.")
@@ -50,9 +50,11 @@ def realizar_venta(
             es_credito=getattr(venta, 'es_credito', False),
             plazo_dias=getattr(venta, 'plazo_dias', None),
             fecha_vencimiento=getattr(venta, 'fecha_vencimiento', None),
-            monto_anticipo=getattr(venta, 'monto_anticipo', 0.0) or 0.0
+            monto_anticipo=getattr(venta, 'monto_anticipo', 0.0) or 0.0,
+            tenant_id=tenant.tenant_id,
+            sucursal_id=tenant.sucursal_id
         )
-        return sanitizar_datos_sensibles(resultado, user)
+        return sanitizar_datos_sensibles(resultado, tenant.user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
@@ -61,37 +63,37 @@ def realizar_venta(
 @router.get("/recibo/{venta_id}", response_model=VentaDetalleResponse)
 def obtener_recibo(
     venta_id: int,
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """Obtiene los datos de una venta para generar el recibo, exigiendo sesión activa y ocultando márgenes."""
-    recibo = crud.get_venta_detalle(venta_id)
+    recibo = crud.get_venta_detalle(venta_id, tenant_id=tenant.tenant_id)
     if not recibo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venta no encontrada.")
-    return sanitizar_datos_sensibles(recibo, user)
+    return sanitizar_datos_sensibles(recibo, tenant.user)
 
 @router.get("/creditos")
 def listar_notas_credito(
     estado: Optional[str] = Query(None, description="Filtro por estado: Pendiente, Vencida, Por Vencer, Liquidada o Todos"),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
-    Lista las notas de crédito otorgadas a clientes (15 y 30 días) con resumen de saldos y vencimientos.
+    Lista las notas de crédito otorgadas a clientes (15 y 30 días) con resumen de saldos y vencimientos del tenant en sesión.
     """
     try:
-        data = crud.get_notas_credito(estado_filtro=estado)
-        return sanitizar_datos_sensibles(data, user)
+        data = crud.get_notas_credito(estado_filtro=estado, tenant_id=tenant.tenant_id)
+        return sanitizar_datos_sensibles(data, tenant.user)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al obtener notas de crédito: {str(e)}")
 
 @router.get("/creditos/alertas")
 def obtener_alertas_credito(
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
-    Devuelve resumen liviano de notas de crédito vencidas y por vencer para alertas visuales en el POS.
+    Devuelve resumen liviano de notas de crédito vencidas y por vencer para alertas visuales en el POS del tenant en sesión.
     """
     try:
-        data = crud.get_notas_credito()
+        data = crud.get_notas_credito(tenant_id=tenant.tenant_id)
         return {
             "total_vencidas": data.get("total_vencidas", 0),
             "total_por_vencer": data.get("total_por_vencer", 0),
@@ -101,7 +103,7 @@ def obtener_alertas_credito(
             "alertas": [
                 n for n in data.get("notas", [])
                 if n.get("estado_calculado") in ("Vencida", "Por Vencer")
-            ][:10]  # Primeras 10 alertas más críticas para mostrar en el POS
+            ][:10]
         }
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al obtener alertas de crédito: {str(e)}")
@@ -110,23 +112,27 @@ def obtener_alertas_credito(
 def abonar_a_nota_credito(
     venta_id: int,
     abono: AbonoCreditoCreate,
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
-    Registra un abono a una nota de crédito existente.
+    Registra un abono a una nota de crédito existente. Valida pertenencia al tenant.
     """
     try:
-        usuario_nombre = user.get("sub") or user.get("nombre") or "Cajero"
+        usuario_nombre = tenant.user.get("sub") or tenant.user.get("nombre") or "Cajero"
         resultado = crud.registrar_abono_credito(
             venta_id=venta_id,
             monto=abono.monto,
             metodo_pago=abono.metodo_pago,
             notas=abono.notas,
-            usuario=usuario_nombre
+            usuario=usuario_nombre,
+            tenant_id=tenant.tenant_id
         )
         return resultado
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        msg = str(e)
+        if "no fue encontrada o no pertenece" in msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al registrar abono: {str(e)}")
 

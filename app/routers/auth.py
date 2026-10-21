@@ -36,6 +36,9 @@ class UserInfoResponse(BaseModel):
     username: str
     nombre: str
     rol: str
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
+    tenant_slug: Optional[str] = None
 
 class AuthStateResponse(BaseModel):
     authenticated: bool
@@ -160,11 +163,56 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
 
     reset_login_attempts(client_ip)
 
+    tenant_id = usuario_encontrado.get("tenant_id")
+    sucursal_id = usuario_encontrado.get("sucursal_id")
+    tenant_slug = None
+
+    conn_tenant = get_db_connection()
+    c_t = conn_tenant.cursor()
+    try:
+        if not tenant_id:
+            c_t.execute("SELECT id, slug, activo FROM tenants WHERE slug = 'demo-celulares' LIMIT 1;")
+            t_row = c_t.fetchone()
+            if t_row:
+                tenant_id = t_row["id"]
+                tenant_slug = t_row["slug"]
+                c_t.execute("UPDATE usuarios SET tenant_id = ? WHERE id = ?;", (tenant_id, usuario_encontrado["id"]))
+                conn_tenant.commit()
+        else:
+            c_t.execute("SELECT id, slug, activo FROM tenants WHERE id = ? LIMIT 1;", (tenant_id,))
+            t_row = c_t.fetchone()
+            if t_row:
+                es_activo = bool(t_row["activo"])
+                if not es_activo:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Acceso denegado: La cuenta de su empresa se encuentra inactiva o suspendida."
+                    )
+                tenant_slug = t_row["slug"]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Acceso denegado: El tenant asociado no existe."
+                )
+
+        if tenant_id and not sucursal_id:
+            c_t.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (tenant_id,))
+            s_row = c_t.fetchone()
+            if s_row:
+                sucursal_id = s_row["id"]
+                c_t.execute("UPDATE usuarios SET sucursal_id = ? WHERE id = ?;", (sucursal_id, usuario_encontrado["id"]))
+                conn_tenant.commit()
+    finally:
+        conn_tenant.close()
+
     token = create_access_token(
         user_id=usuario_encontrado["id"],
         username=usuario_encontrado["username"],
         rol=usuario_encontrado["rol"],
-        nombre=usuario_encontrado["nombre"]
+        nombre=usuario_encontrado["nombre"],
+        tenant_id=tenant_id,
+        sucursal_id=sucursal_id,
+        tenant_slug=tenant_slug
     )
 
     is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
@@ -182,11 +230,16 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
         "id": usuario_encontrado["id"],
         "username": usuario_encontrado["username"],
         "nombre": usuario_encontrado["nombre"],
-        "rol": usuario_encontrado["rol"]
+        "rol": usuario_encontrado["rol"],
+        "tenant_id": tenant_id,
+        "sucursal_id": sucursal_id,
+        "tenant_slug": tenant_slug
     }
 
     return {
         "success": True,
+        "token": token,
+        "access_token": token,
         "user": user_info,
         "mensaje": f"Bienvenido, {usuario_encontrado['nombre']}."
     }

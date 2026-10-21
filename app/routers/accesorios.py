@@ -5,7 +5,8 @@ from app.models import (
     AccesorioCreate, AccesorioUpdate, AccesorioResponse,
     AccesorioAjusteStockRequest, AccesorioActualizacionMasivaRequest, MovimientoStockResponse
 )
-from app.security import get_current_user, require_role, sanitizar_datos_sensibles
+from app.security import get_current_user, require_role, sanitizar_datos_sensibles, get_current_tenant
+from app.dependencies import TenantContext
 from app.excel_importer import (
     generar_plantilla_stock_accesorios_excel,
     generar_plantilla_stock_accesorios_csv,
@@ -20,12 +21,12 @@ def listar_accesorios(
     solo_con_stock: bool = Query(False, description="Mostrar solo items con stock disponible o servicios"),
     search: Optional[str] = Query(None, max_length=100, description="Búsqueda por nombre"),
     q: Optional[str] = Query(None, max_length=100, description="Alias de búsqueda por código o nombre"),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
-    """Obtiene el catálogo de accesorios y servicios/reparaciones. Oculta costos si no es dueño."""
+    """Obtiene el catálogo de accesorios y servicios/reparaciones del tenant en sesión. Oculta costos si no es dueño."""
     termino = search if search is not None else q
-    items = crud.get_accesorios(categoria=categoria, solo_con_stock=solo_con_stock, search=termino)
-    return sanitizar_datos_sensibles(items, user)
+    items = crud.get_accesorios(categoria=categoria, solo_con_stock=solo_con_stock, search=termino, tenant_id=tenant.tenant_id)
+    return sanitizar_datos_sensibles(items, tenant.user)
 
 # --- CARGA MASIVA Y EXCEL (PILAR 1) ---
 
@@ -70,6 +71,7 @@ def descargar_plantilla_stock_sheets(user: dict = Depends(require_role("dueno"))
 async def importar_stock_excel(
     archivo: Optional[UploadFile] = File(None),
     file: Optional[UploadFile] = File(None),
+    tenant: TenantContext = Depends(get_current_tenant),
     user: dict = Depends(require_role("dueno"))
 ):
     """Procesa el archivo de Google Sheets (.csv) o Excel (.xlsx) cargado con nuevo stock y actualiza registrando Kardex."""
@@ -85,7 +87,13 @@ async def importar_stock_excel(
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="El archivo supera el límite de 25 MB.")
 
     try:
-        res = importar_stock_accesorios_excel(contenido, filename=target_file.filename, usuario=user.get("nombre") or user.get("username") or "Dueño")
+        res = importar_stock_accesorios_excel(
+            contenido,
+            filename=target_file.filename,
+            usuario=user.get("nombre") or user.get("username") or "Dueño",
+            tenant_id=tenant.tenant_id,
+            sucursal_id=tenant.sucursal_id
+        )
         return res
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -93,13 +101,18 @@ async def importar_stock_excel(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al procesar el archivo: {str(e)}")
 
 @router.post("/actualizacion-masiva-rapida")
-def actualizacion_masiva_rapida(datos: AccesorioActualizacionMasivaRequest, user: dict = Depends(require_role("dueno"))):
+def actualizacion_masiva_rapida(
+    datos: AccesorioActualizacionMasivaRequest,
+    tenant: TenantContext = Depends(get_current_tenant),
+    user: dict = Depends(require_role("dueno"))
+):
     """Actualización masiva directa desde la interfaz interactiva web / tabla rápida."""
     items = [it.model_dump() for it in datos.items]
     res = crud.actualizar_stock_masivo(
         items=items,
         motivo_general=datos.motivo or "Actualización masiva rápida",
-        usuario=user.get("nombre") or user.get("username") or "Dueño"
+        usuario=user.get("nombre") or user.get("username") or "Dueño",
+        tenant_id=tenant.tenant_id
     )
     return res
 
@@ -109,10 +122,11 @@ def actualizacion_masiva_rapida(datos: AccesorioActualizacionMasivaRequest, user
 def obtener_sugerido_reabastecimiento(
     stock_objetivo: int = Query(10, ge=1, le=1000, description="Nivel de stock deseado al reordenar"),
     stock_minimo: int = Query(3, ge=0, le=500, description="Umbral de stock bajo"),
+    tenant: TenantContext = Depends(get_current_tenant),
     user: dict = Depends(require_role("dueno"))
 ):
     """Analiza accesorios con stock bajo o agotados y genera lista de compras sugeridas y formato para WhatsApp."""
-    return crud.generar_sugerido_reabastecimiento(stock_objetivo=stock_objetivo, stock_minimo=stock_minimo)
+    return crud.generar_sugerido_reabastecimiento(stock_objetivo=stock_objetivo, stock_minimo=stock_minimo, tenant_id=tenant.tenant_id)
 
 # --- KARDEX Y AUDITORÍA DE MOVIMIENTOS (PILAR 5) ---
 
@@ -120,13 +134,18 @@ def obtener_sugerido_reabastecimiento(
 def obtener_kardex_general(
     tipo: Optional[str] = Query(None, description="Filtrar por ENTRADA, VENTA, MERMA, AJUSTE, MUESTRA"),
     limit: int = Query(150, ge=1, le=500),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """Obtiene la bitácora de movimientos de stock para auditoría y prevención de robo hormiga."""
-    return crud.get_historial_kardex_accesorios(acc_id=None, tipo=tipo, limit=limit)
+    return crud.get_historial_kardex_accesorios(acc_id=None, tipo=tipo, limit=limit, tenant_id=tenant.tenant_id)
 
 @router.post("/{acc_id}/ajuste-stock", response_model=AccesorioResponse)
-def ajustar_stock_individual(acc_id: int, datos: AccesorioAjusteStockRequest, user: dict = Depends(require_role("dueno"))):
+def ajustar_stock_individual(
+    acc_id: int,
+    datos: AccesorioAjusteStockRequest,
+    tenant: TenantContext = Depends(get_current_tenant),
+    user: dict = Depends(require_role("dueno"))
+):
     """Ajusta el stock de un accesorio con motivo obligatorio para control de mermas y auditoría."""
     try:
         acc = crud.ajustar_stock_accesorio(
@@ -134,30 +153,48 @@ def ajustar_stock_individual(acc_id: int, datos: AccesorioAjusteStockRequest, us
             nuevo_stock=datos.nuevo_stock,
             tipo_movimiento=datos.tipo_movimiento,
             motivo=datos.motivo,
-            usuario=user.get("nombre") or user.get("username") or "Dueño"
+            usuario=user.get("nombre") or user.get("username") or "Dueño",
+            tenant_id=tenant.tenant_id
         )
+        if not acc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
         return sanitizar_datos_sensibles(acc, user)
+    except HTTPException:
+        raise
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        msg = str(e)
+        if "no encontrado o no pertenece" in msg or "no existe" in msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al ajustar el stock: {str(e)}")
 
 @router.get("/{acc_id}/kardex", response_model=List[MovimientoStockResponse])
-def obtener_kardex_accesorio(acc_id: int, user: dict = Depends(get_current_user)):
+def obtener_kardex_accesorio(
+    acc_id: int,
+    tenant: TenantContext = Depends(get_current_tenant)
+):
     """Obtiene la bitácora de movimientos específica de un accesorio."""
-    return crud.get_historial_kardex_accesorios(acc_id=acc_id, limit=50)
+    return crud.get_historial_kardex_accesorios(acc_id=acc_id, limit=50, tenant_id=tenant.tenant_id)
 
 # --- CRUD BÁSICO DE ACCESORIOS ---
 
 @router.get("/{acc_id}", response_model=AccesorioResponse)
-def obtener_accesorio(acc_id: int, user: dict = Depends(get_current_user)):
-    acc = crud.get_accesorio_by_id(acc_id)
+def obtener_accesorio(
+    acc_id: int,
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    acc = crud.get_accesorio_by_id(acc_id, tenant_id=tenant.tenant_id)
     if not acc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
-    return sanitizar_datos_sensibles(acc, user)
+    return sanitizar_datos_sensibles(acc, tenant.user)
 
 @router.post("", response_model=AccesorioResponse, status_code=status.HTTP_201_CREATED)
-def crear_accesorio(datos: AccesorioCreate, user: dict = Depends(require_role("dueno"))):
+def crear_accesorio(
+    datos: AccesorioCreate,
+    tenant: TenantContext = Depends(get_current_tenant),
+    user: dict = Depends(require_role("dueno"))
+):
     try:
         nuevo = crud.create_accesorio(
             nombre=datos.nombre,
@@ -171,7 +208,9 @@ def crear_accesorio(datos: AccesorioCreate, user: dict = Depends(require_role("d
             precio_20_pzs=datos.precio_20_pzs or datos.precio_mayoreo or datos.precio_venta,
             precio_caja=datos.precio_caja or datos.costo_compra,
             imagen_url=datos.imagen_url,
-            color=datos.color
+            color=datos.color,
+            tenant_id=tenant.tenant_id,
+            sucursal_id=tenant.sucursal_id
         )
         return sanitizar_datos_sensibles(nuevo, user)
     except ValueError as e:
@@ -180,9 +219,18 @@ def crear_accesorio(datos: AccesorioCreate, user: dict = Depends(require_role("d
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al registrar el accesorio.")
 
 @router.put("/{acc_id}", response_model=AccesorioResponse)
-def actualizar_accesorio(acc_id: int, datos: AccesorioUpdate, user: dict = Depends(require_role("dueno"))):
+def actualizar_accesorio(
+    acc_id: int,
+    datos: AccesorioUpdate,
+    tenant: TenantContext = Depends(get_current_tenant),
+    user: dict = Depends(require_role("dueno"))
+):
     try:
-        actualizado = crud.update_accesorio(acc_id, datos.model_dump(exclude_unset=True))
+        actualizado = crud.update_accesorio(
+            acc_id,
+            datos.model_dump(exclude_unset=True),
+            tenant_id=tenant.tenant_id
+        )
         if not actualizado:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
         return sanitizar_datos_sensibles(actualizado, user)
@@ -194,8 +242,12 @@ def actualizar_accesorio(acc_id: int, datos: AccesorioUpdate, user: dict = Depen
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al actualizar el accesorio.")
 
 @router.delete("/{acc_id}", status_code=status.HTTP_200_OK)
-def eliminar_accesorio(acc_id: int, user: dict = Depends(require_role("dueno"))):
-    exito = crud.delete_accesorio(acc_id)
+def eliminar_accesorio(
+    acc_id: int,
+    tenant: TenantContext = Depends(get_current_tenant),
+    user: dict = Depends(require_role("dueno"))
+):
+    exito = crud.delete_accesorio(acc_id, tenant_id=tenant.tenant_id)
     if not exito:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
     return {"mensaje": "Accesorio eliminado con éxito"}

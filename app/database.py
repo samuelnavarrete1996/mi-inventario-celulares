@@ -479,7 +479,7 @@ def init_db():
         ("accesorios", True),
         ("cortes_caja", True),
         ("clientes", False),
-        ("usuarios", False),
+        ("usuarios", True),
     ]
 
     for tabla, tiene_sucursal in tablas_multitenant:
@@ -596,7 +596,7 @@ def init_demo_tenant_if_empty():
             ("accesorios", True),
             ("cortes_caja", True),
             ("clientes", False),
-            ("usuarios", False),
+            ("usuarios", True),
         ]
 
         for tabla, tiene_sucursal in tablas_a_migrar:
@@ -632,17 +632,25 @@ def seed_demo_data_if_empty():
     vendedor_pwd = os.environ.get("VENDEDOR_PASSWORD", "piso6bodega606.")
     vendedor_hash, vendedor_salt = hash_secret(vendedor_pwd)
 
+    # Obtener tenant y sucursal demo
+    cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares' LIMIT 1;")
+    row_t = cursor.fetchone()
+    demo_t_id = (row_t["id"] if isinstance(row_t, dict) or hasattr(row_t, '__getitem__') else row_t[0]) if row_t else 1
+    cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (demo_t_id,))
+    row_s = cursor.fetchone()
+    demo_s_id = (row_s["id"] if isinstance(row_s, dict) or hasattr(row_s, '__getitem__') else row_s[0]) if row_s else 1
+
     cursor.execute("SELECT COUNT(*) as count FROM usuarios;")
     user_count = cursor.fetchone()["count"]
 
     if user_count == 0:
         usuarios_init = [
-            ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, "dueno", 1, now),
-            ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, "vendedor", 1, now)
+            ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, "dueno", 1, now, demo_t_id, demo_s_id),
+            ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, "vendedor", 1, now, demo_t_id, demo_s_id)
         ]
         cursor.executemany("""
-        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
         """, usuarios_init)
         conn.commit()
     else:
@@ -651,6 +659,8 @@ def seed_demo_data_if_empty():
             cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'admin';", (admin_hash, admin_salt))
         if "VENDEDOR_PASSWORD" in os.environ:
             cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'vendedor';", (vendedor_hash, vendedor_salt))
+        # Garantizar que usuarios existentes tengan tenant_id y sucursal_id asignados
+        cursor.execute("UPDATE usuarios SET tenant_id = ?, sucursal_id = ? WHERE tenant_id IS NULL;", (demo_t_id, demo_s_id))
         conn.commit()
 
     # 2. Siembra de datos demo (solo en tests o con bandera explícita SEED_DEMO_DATA=1)

@@ -683,3 +683,32 @@ class ConfiguracionTiendaUpdate(BaseModel):
 class ConfiguracionTiendaResponse(ConfiguracionTiendaBase):
     id: int
     fecha_actualizacion: Optional[str] = None
+
+
+# ==============================================================================
+# MODELOS DE USUARIO Y LOGIN MULTI-TENANT
+# ==============================================================================
+
+class UsuarioBase(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=150)
+    username: str = Field(..., min_length=2, max_length=80)
+    rol: str = Field("vendedor", description="Rol de acceso: dueno, vendedor")
+    activo: bool = Field(True, description="Estado del usuario")
+    tenant_id: Optional[int] = Field(None, description="ID del tenant al que pertenece")
+    sucursal_id: Optional[int] = Field(None, description="ID de la sucursal asignada")
+
+class UsuarioCreate(UsuarioBase):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(..., min_length=4, max_length=120)
+
+class UsuarioResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nombre: str
+    username: str
+    rol: str
+    activo: bool = True
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
+    tenant_slug: Optional[str] = None
+

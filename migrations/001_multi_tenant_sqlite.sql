@@ -47,7 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_reparaciones_tenant_sucursal ON reparaciones(tena
 CREATE INDEX IF NOT EXISTS idx_accesorios_tenant_sucursal ON accesorios(tenant_id, sucursal_id);
 CREATE INDEX IF NOT EXISTS idx_cortes_caja_tenant_sucursal ON cortes_caja(tenant_id, sucursal_id);
 CREATE INDEX IF NOT EXISTS idx_clientes_tenant ON clientes(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_usuarios_tenant ON usuarios(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_usuarios_tenant_sucursal ON usuarios(tenant_id, sucursal_id);
 
 -- Vista de compatibilidad caja_cortes
 CREATE VIEW IF NOT EXISTS caja_cortes AS SELECT * FROM cortes_caja;
@@ -69,4 +69,4 @@ UPDATE reparaciones SET tenant_id = 1, sucursal_id = 1 WHERE tenant_id IS NULL;
 UPDATE accesorios SET tenant_id = 1, sucursal_id = 1 WHERE tenant_id IS NULL;
 UPDATE cortes_caja SET tenant_id = 1, sucursal_id = 1 WHERE tenant_id IS NULL;
 UPDATE clientes SET tenant_id = 1 WHERE tenant_id IS NULL;
-UPDATE usuarios SET tenant_id = 1 WHERE tenant_id IS NULL;
+UPDATE usuarios SET tenant_id = 1, sucursal_id = 1 WHERE tenant_id IS NULL;

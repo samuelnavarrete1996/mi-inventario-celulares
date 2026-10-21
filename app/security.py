@@ -343,14 +343,27 @@ def is_token_jti_revoked(jti: Optional[str]) -> bool:
         conn.close()
 
 
-def create_access_token(user_id: int, username: str, rol: str, nombre: str, ttl_hours: int = 14) -> str:
-    """Crea un token JWT firmado con expiración e identificador único (jti)."""
+def create_access_token(
+    user_id: int,
+    username: str,
+    rol: str,
+    nombre: str,
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None,
+    tenant_slug: Optional[str] = None,
+    ttl_hours: int = 14
+) -> str:
+    """Crea un token JWT firmado con expiración e identificador único (jti) y contexto multi-tenant."""
     now = int(time.time())
     payload = {
         "sub": str(user_id),
+        "user_id": user_id,
         "username": username,
         "rol": rol,
         "nombre": nombre,
+        "tenant_id": tenant_id,
+        "sucursal_id": sucursal_id,
+        "tenant_slug": tenant_slug,
         "exp": now + (ttl_hours * 3600),
         "iat": now,
         "jti": secrets.token_hex(12),
@@ -440,10 +453,14 @@ def get_current_user_optional(request: Request) -> Optional[dict]:
         return None
 
     return {
-        "id": int(payload["sub"]),
+        "id": int(payload.get("user_id") or payload["sub"]),
+        "user_id": int(payload.get("user_id") or payload["sub"]),
         "username": payload.get("username"),
         "rol": payload.get("rol"),
         "nombre": payload.get("nombre"),
+        "tenant_id": payload.get("tenant_id"),
+        "sucursal_id": payload.get("sucursal_id"),
+        "tenant_slug": payload.get("tenant_slug"),
     }
 
 def get_current_user(request: Request) -> dict:
@@ -473,3 +490,10 @@ def require_role(*allowed_roles: str):
 def is_user_dueno(user: Optional[dict]) -> bool:
     """Verifica si el diccionario de usuario corresponde al rol de dueño."""
     return bool(user and user.get("rol") == "dueno")
+
+
+def get_current_tenant(user: dict = Depends(get_current_user)):
+    """Re-exporta la dependencia get_current_tenant para inyección de aislamiento multi-tenant."""
+    from app.dependencies import get_current_tenant as _get_current_tenant
+    return _get_current_tenant(user)
+

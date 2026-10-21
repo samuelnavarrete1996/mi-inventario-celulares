@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from app.database import get_db_connection
 from app.models import EquipoCreate, EquipoUpdate, ItemCarrito, GarantiaCreate
 
@@ -15,6 +15,22 @@ def _begin_immediate(cursor) -> None:
         cursor.execute("BEGIN IMMEDIATE;")
     except Exception:
         cursor.execute("BEGIN TRANSACTION;")
+
+def _get_default_tenant_and_sucursal() -> Tuple[int, int]:
+    """Obtiene tenant y sucursal por defecto para fallback seguro en tests o llamadas sin contexto explícito."""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares' LIMIT 1;")
+        r_t = c.fetchone()
+        t_id = (r_t["id"] if isinstance(r_t, dict) or hasattr(r_t, '__getitem__') else r_t[0]) if r_t else 1
+        c.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (t_id,))
+        r_s = c.fetchone()
+        s_id = (r_s["id"] if isinstance(r_s, dict) or hasattr(r_s, '__getitem__') else r_s[0]) if r_s else 1
+        conn.close()
+        return int(t_id), int(s_id)
+    except Exception:
+        return 1, 1
 
 def format_equipo_dict(row: sqlite3.Row) -> Dict[str, Any]:
     """Convierte un row de equipo a dict y añade cálculos de margen proyectado y días en almacén."""
@@ -47,13 +63,22 @@ def format_equipo_dict(row: sqlite3.Row) -> Dict[str, Any]:
 
     return d
 
-def get_equipos(solo_disponibles: bool = True, search: Optional[str] = None, grado: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Obtiene equipos con filtros opcionales."""
+def get_equipos(
+    solo_disponibles: bool = True,
+    search: Optional[str] = None,
+    grado: Optional[str] = None,
+    tenant_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Obtiene equipos con filtros opcionales y aislamiento multi-tenant estricto."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     query = "SELECT * FROM equipos WHERE 1=1"
     params = []
+
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
 
     if solo_disponibles:
         query += " AND estado = 'Disponible'"
@@ -74,37 +99,67 @@ def get_equipos(solo_disponibles: bool = True, search: Optional[str] = None, gra
 
     return [format_equipo_dict(r) for r in rows]
 
-def get_equipo_by_id(equipo_id: int) -> Optional[Dict[str, Any]]:
+def get_equipo_by_id(equipo_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene un equipo por su ID validando obligatoriamente el tenant_id si se proporciona."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM equipos WHERE id = ? AND tenant_id = ?", (equipo_id, tenant_id))
+    else:
+        cursor.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,))
     row = cursor.fetchone()
     conn.close()
     return format_equipo_dict(row) if row else None
 
-def get_equipo_by_imei(imei: str) -> Optional[Dict[str, Any]]:
+def get_equipo_by_imei(imei: str, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Busca un equipo por IMEI dentro del tenant actual."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM equipos WHERE imei = ?", (imei.strip(),))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM equipos WHERE imei = ? AND tenant_id = ?", (imei.strip(), tenant_id))
+    else:
+        cursor.execute("SELECT * FROM equipos WHERE imei = ?", (imei.strip(),))
     row = cursor.fetchone()
     conn.close()
     return format_equipo_dict(row) if row else None
 
-def create_equipo(data: EquipoCreate) -> Dict[str, Any]:
+def create_equipo(
+    data: EquipoCreate,
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Registra un nuevo teléfono inyectando automáticamente el tenant_id y sucursal_id
+    del usuario en sesión para prevenir manipulación por parte del cliente.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    if tenant_id is None:
+        def_t, def_s = _get_default_tenant_and_sucursal()
+        final_tenant_id = getattr(data, 'tenant_id', None) or def_t
+        final_sucursal_id = getattr(data, 'sucursal_id', None) or def_s
+    else:
+        final_tenant_id = tenant_id
+        final_sucursal_id = sucursal_id or getattr(data, 'sucursal_id', None)
 
     try:
         _begin_immediate(cursor)
-        cursor.execute("SELECT id FROM equipos WHERE imei = ?", (data.imei.strip(),))
+        cursor.execute(
+            "SELECT id FROM equipos WHERE imei = ? AND tenant_id = ?",
+            (data.imei.strip(), final_tenant_id)
+        )
         if cursor.fetchone():
             conn.rollback()
-            raise ValueError(f"Ya existe un equipo registrado con el IMEI {data.imei}")
+            raise ValueError(f"Ya existe un equipo registrado con el IMEI {data.imei} en este negocio.")
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute("""
-        INSERT INTO equipos (modelo, capacidad_gb, color, imei, grado, costo_compra, precio_venta, estado, fecha_registro)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'Disponible', ?)
+        INSERT INTO equipos (
+            modelo, capacidad_gb, color, imei, grado, costo_compra,
+            precio_venta, estado, fecha_registro, tenant_id, sucursal_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'Disponible', ?, ?, ?)
         """, (
             data.modelo.strip(),
             data.capacidad_gb,
@@ -113,7 +168,9 @@ def create_equipo(data: EquipoCreate) -> Dict[str, Any]:
             data.grado.upper(),
             round(data.costo_compra, 2),
             round(data.precio_venta, 2),
-            now
+            now,
+            final_tenant_id,
+            final_sucursal_id
         ))
         conn.commit()
         new_id = cursor.lastrowid
@@ -123,13 +180,18 @@ def create_equipo(data: EquipoCreate) -> Dict[str, Any]:
     finally:
         conn.close()
 
-    return get_equipo_by_id(new_id)
+    return get_equipo_by_id(new_id, tenant_id=final_tenant_id)
 
-def update_equipo(equipo_id: int, data: EquipoUpdate) -> Optional[Dict[str, Any]]:
+def update_equipo(
+    equipo_id: int,
+    data: EquipoUpdate,
+    tenant_id: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
+    """Actualiza datos de un equipo validando que pertenezca al tenant del usuario en sesión."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    current = get_equipo_by_id(equipo_id)
+    current = get_equipo_by_id(equipo_id, tenant_id=tenant_id)
     if not current:
         conn.close()
         return None
@@ -146,59 +208,94 @@ def update_equipo(equipo_id: int, data: EquipoUpdate) -> Optional[Dict[str, Any]
         return current
 
     values.append(equipo_id)
-    sql = f"UPDATE equipos SET {', '.join(fields)} WHERE id = ?"
+    if tenant_id is not None:
+        values.append(tenant_id)
+        sql = f"UPDATE equipos SET {', '.join(fields)} WHERE id = ? AND tenant_id = ?"
+    else:
+        sql = f"UPDATE equipos SET {', '.join(fields)} WHERE id = ?"
     cursor.execute(sql, values)
     conn.commit()
     conn.close()
 
-    return get_equipo_by_id(equipo_id)
+    return get_equipo_by_id(equipo_id, tenant_id=tenant_id)
 
-def delete_equipo(equipo_id: int) -> bool:
+def delete_equipo(equipo_id: int, tenant_id: Optional[int] = None) -> bool:
+    """Elimina un equipo si aún no ha sido vendido y pertenece al tenant en sesión."""
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    current = get_equipo_by_id(equipo_id, tenant_id=tenant_id)
+    if not current:
+        conn.close()
+        return False
 
     cursor.execute("SELECT id FROM venta_items WHERE equipo_id = ?", (equipo_id,))
     if cursor.fetchone():
         conn.close()
         raise ValueError("No se puede eliminar un equipo que ya cuenta con un registro de venta histórico.")
 
-    cursor.execute("DELETE FROM equipos WHERE id = ?", (equipo_id,))
+    if tenant_id is not None:
+        cursor.execute("DELETE FROM equipos WHERE id = ? AND tenant_id = ?", (equipo_id, tenant_id))
+    else:
+        cursor.execute("DELETE FROM equipos WHERE id = ?", (equipo_id,))
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()
     return deleted
 
+
 # --- CLIENTES ---
 
-def get_or_create_cliente(nombre: str, telefono: str) -> int:
-    conn = get_db_connection()
-    cursor = conn.cursor()
+def get_or_create_cliente(nombre: str, telefono: str, tenant_id: Optional[int] = None, cursor: Optional[Any] = None) -> int:
+    """Busca o registra un cliente dentro del tenant especificado."""
+    close_conn = False
+    if cursor is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        close_conn = True
+    else:
+        conn = None
 
     clean_tel = telefono.strip()
-    cursor.execute("SELECT id FROM clientes WHERE telefono = ?", (clean_tel,))
+    if tenant_id is not None:
+        cursor.execute("SELECT id FROM clientes WHERE telefono = ? AND tenant_id = ?", (clean_tel, tenant_id))
+    else:
+        cursor.execute("SELECT id FROM clientes WHERE telefono = ?", (clean_tel,))
     row = cursor.fetchone()
 
     if row:
         cliente_id = row["id"]
         cursor.execute("UPDATE clientes SET nombre = ? WHERE id = ?", (nombre.strip(), cliente_id))
-        conn.commit()
-        conn.close()
+        if close_conn and conn:
+            conn.commit()
+            conn.close()
         return cliente_id
     else:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("""
-        INSERT INTO clientes (nombre, telefono, fecha_registro)
-        VALUES (?, ?, ?)
-        """, (nombre.strip(), clean_tel, now))
-        conn.commit()
+        if tenant_id is not None:
+            cursor.execute("""
+            INSERT INTO clientes (nombre, telefono, fecha_registro, tenant_id)
+            VALUES (?, ?, ?, ?)
+            """, (nombre.strip(), clean_tel, now, tenant_id))
+        else:
+            cursor.execute("""
+            INSERT INTO clientes (nombre, telefono, fecha_registro)
+            VALUES (?, ?, ?)
+            """, (nombre.strip(), clean_tel, now))
         cliente_id = cursor.lastrowid
-        conn.close()
+        if close_conn and conn:
+            conn.commit()
+            conn.close()
         return cliente_id
 
-def get_cliente_by_phone(telefono: str) -> Optional[Dict[str, Any]]:
+def get_cliente_by_phone(telefono: str, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene un cliente por teléfono dentro del tenant especificado."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM clientes WHERE telefono = ?", (telefono.strip(),))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM clientes WHERE telefono = ? AND tenant_id = ?", (telefono.strip(), tenant_id))
+    else:
+        cursor.execute("SELECT * FROM clientes WHERE telefono = ?", (telefono.strip(),))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -218,15 +315,25 @@ def registrar_venta_carrito(
     es_credito: bool = False,
     plazo_dias: Optional[int] = None,
     fecha_vencimiento: Optional[str] = None,
-    monto_anticipo: float = 0.0
+    monto_anticipo: float = 0.0,
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Registra una venta con múltiples equipos o accesorios/servicios y métodos de pago:
     Efectivo, Transferencia, Combinado o Equipo Garantía.
-    Protegido con transacción inmediata y actualización atómica Compare-And-Swap contra condiciones de carrera.
+    Inyecta automáticamente tenant_id y sucursal_id y valida propiedad multi-tenant estricta.
     """
     if not items or len(items) == 0:
         raise ValueError("El carrito de compras no contiene artículos.")
+
+    if tenant_id is None:
+        def_t, def_s = _get_default_tenant_and_sucursal()
+        final_tenant_id = def_t
+        final_sucursal_id = def_s
+    else:
+        final_tenant_id = tenant_id
+        final_sucursal_id = sucursal_id
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -234,7 +341,7 @@ def registrar_venta_carrito(
     try:
         _begin_immediate(cursor)
 
-        # 1. Validar equipos y accesorios
+        # 1. Validar equipos y accesorios pertenecientes al tenant
         detalles_items = []
         total_precio_final = 0.0
         total_margen_ganancia = 0.0
@@ -247,10 +354,13 @@ def registrar_venta_carrito(
                     raise ValueError(f"El equipo con ID {item.equipo_id} está duplicado en el carrito.")
                 equipos_ids_usados.append(item.equipo_id)
 
-                cursor.execute("SELECT * FROM equipos WHERE id = ?", (item.equipo_id,))
+                cursor.execute(
+                    "SELECT * FROM equipos WHERE id = ? AND tenant_id = ?",
+                    (item.equipo_id, final_tenant_id)
+                )
                 eq = cursor.fetchone()
                 if not eq:
-                    raise ValueError(f"El equipo con ID {item.equipo_id} no existe.")
+                    raise ValueError(f"El equipo con ID {item.equipo_id} no existe o no pertenece a este negocio.")
                 if eq["estado"] != "Disponible":
                     raise ValueError(f"El equipo '{eq['modelo']}' (IMEI: {eq['imei']}) ya no está disponible (Estado actual: {eq['estado']}).")
 
@@ -273,10 +383,13 @@ def registrar_venta_carrito(
                 })
 
             elif item.accesorio_id:
-                cursor.execute("SELECT * FROM accesorios WHERE id = ?", (item.accesorio_id,))
+                cursor.execute(
+                    "SELECT * FROM accesorios WHERE id = ? AND tenant_id = ?",
+                    (item.accesorio_id, final_tenant_id)
+                )
                 acc = cursor.fetchone()
                 if not acc:
-                    raise ValueError(f"El accesorio/servicio con ID {item.accesorio_id} no existe.")
+                    raise ValueError(f"El accesorio/servicio con ID {item.accesorio_id} no existe o no pertenece a este negocio.")
                 
                 cant = getattr(item, "cantidad", 1) or 1
                 if cant <= 0:
@@ -309,22 +422,10 @@ def registrar_venta_carrito(
             else:
                 raise ValueError("Cada línea del carrito debe especificar un equipo o un accesorio.")
 
-        # 2. Cliente
-        clean_tel = cliente_telefono.strip()
-        cursor.execute("SELECT id FROM clientes WHERE telefono = ?", (clean_tel,))
-        cliente_row = cursor.fetchone()
+        # 2. Cliente scoped al tenant
+        cliente_id = get_or_create_cliente(cliente_nombre, cliente_telefono, tenant_id=final_tenant_id, cursor=cursor)
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        if cliente_row:
-            cliente_id = cliente_row["id"]
-            cursor.execute("UPDATE clientes SET nombre = ? WHERE id = ?", (cliente_nombre.strip(), cliente_id))
-        else:
-            cursor.execute("""
-            INSERT INTO clientes (nombre, telefono, fecha_registro)
-            VALUES (?, ?, ?)
-            """, (cliente_nombre.strip(), clean_tel, now))
-            cliente_id = cursor.lastrowid
 
         total_precio_final = round(total_precio_final, 2)
         total_margen_ganancia = round(total_margen_ganancia, 2)
@@ -378,15 +479,16 @@ def registrar_venta_carrito(
                 if abs(suma_pagos - total_precio_final) > 0.05:
                     raise ValueError(f"En pago combinado, la suma de montos (${suma_pagos:,.2f}) debe coincidir con el total (${total_precio_final:,.2f}).")
 
-        # 4. Insertar Cabecera de Venta
+        # 4. Insertar Cabecera de Venta con tenant_id y sucursal_id
         primer_equipo_id = equipos_ids_usados[0] if equipos_ids_usados else None
         cursor.execute("""
         INSERT INTO ventas (
             equipo_id, cliente_id, precio_final, margen_ganancia, fecha_venta,
             metodo_pago, monto_efectivo, monto_transferencia, monto_tarjeta, monto_garantia, notas,
-            es_credito, plazo_dias, fecha_vencimiento, monto_credito, monto_anticipo, saldo_pendiente, estado_credito
+            es_credito, plazo_dias, fecha_vencimiento, monto_credito, monto_anticipo, saldo_pendiente, estado_credito,
+            tenant_id, sucursal_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             primer_equipo_id, cliente_id, total_precio_final, total_margen_ganancia, now,
             metodo, m_efectivo, m_transf, m_tarjeta, m_garantia, notas,
@@ -396,7 +498,9 @@ def registrar_venta_carrito(
             total_precio_final if es_cred else 0.0,
             anticipo if es_cred else 0.0,
             saldo if es_cred else 0.0,
-            estado_cred if es_cred else None
+            estado_cred if es_cred else None,
+            final_tenant_id,
+            final_sucursal_id
         ))
         venta_id = cursor.lastrowid
 
@@ -410,19 +514,19 @@ def registrar_venta_carrito(
         for det in detalles_items:
             if det["equipo_id"]:
                 cursor.execute(
-                    "UPDATE equipos SET estado = 'Vendido' WHERE id = ? AND estado = 'Disponible'",
-                    (det["equipo_id"],)
+                    "UPDATE equipos SET estado = 'Vendido' WHERE id = ? AND estado = 'Disponible' AND tenant_id = ?",
+                    (det["equipo_id"], final_tenant_id)
                 )
                 if cursor.rowcount == 0:
                     raise ValueError(f"El equipo '{det['nombre_item']}' ya fue vendido en una operación simultánea.")
             elif det["accesorio_id"] and not det.get("es_servicio", False):
-                cursor.execute("SELECT stock FROM accesorios WHERE id = ?", (det["accesorio_id"],))
+                cursor.execute("SELECT stock FROM accesorios WHERE id = ? AND tenant_id = ?", (det["accesorio_id"], final_tenant_id))
                 prev_row = cursor.fetchone()
                 prev_stock = prev_row["stock"] if prev_row else 0
 
                 cursor.execute(
-                    "UPDATE accesorios SET stock = stock - ? WHERE id = ? AND stock >= ?",
-                    (det["cantidad"], det["accesorio_id"], det["cantidad"])
+                    "UPDATE accesorios SET stock = stock - ? WHERE id = ? AND stock >= ? AND tenant_id = ?",
+                    (det["cantidad"], det["accesorio_id"], det["cantidad"], final_tenant_id)
                 )
                 if cursor.rowcount == 0:
                     raise ValueError(f"Stock insuficiente para '{det['nombre_item']}' debido a una venta simultánea.")
@@ -459,7 +563,7 @@ def registrar_venta_carrito(
             ))
 
         conn.commit()
-        return get_venta_detalle(venta_id, conn)
+        return get_venta_detalle(venta_id, conn, tenant_id=final_tenant_id)
 
     except Exception as e:
         conn.rollback()
@@ -467,11 +571,15 @@ def registrar_venta_carrito(
     finally:
         conn.close()
 
-def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = None) -> Optional[Dict[str, Any]]:
+def get_venta_detalle(
+    venta_id: int,
+    conn_ext: Optional[sqlite3.Connection] = None,
+    tenant_id: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
     conn = conn_ext if conn_ext else get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query_v = """
     SELECT 
         v.id,
         v.cliente_id,
@@ -492,12 +600,20 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
         COALESCE(v.monto_anticipo, 0) as monto_anticipo,
         COALESCE(v.saldo_pendiente, 0) as saldo_pendiente,
         v.estado_credito,
+        v.tenant_id,
+        v.sucursal_id,
         c.nombre as cliente_nombre,
         c.telefono as cliente_telefono
     FROM ventas v
     JOIN clientes c ON v.cliente_id = c.id
     WHERE v.id = ?
-    """, (venta_id,))
+    """
+    params_v = [venta_id]
+    if tenant_id is not None:
+        query_v += " AND v.tenant_id = ?"
+        params_v.append(tenant_id)
+
+    cursor.execute(query_v, params_v)
     venta_row = cursor.fetchone()
 
     if not venta_row:
@@ -586,7 +702,13 @@ def get_venta_detalle(venta_id: int, conn_ext: Optional[sqlite3.Connection] = No
 
     return venta_dict
 
-def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, fecha_fin: Optional[str] = None, tipo: Optional[str] = "todos") -> List[Dict[str, Any]]:
+def get_historial_ventas(
+    limit: int = 200,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    tipo: Optional[str] = "todos",
+    tenant_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -611,6 +733,8 @@ def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, f
         COALESCE(v.monto_anticipo, 0) as monto_anticipo,
         COALESCE(v.saldo_pendiente, 0) as saldo_pendiente,
         v.estado_credito,
+        v.tenant_id,
+        v.sucursal_id,
         c.nombre as cliente_nombre,
         c.telefono as cliente_telefono
     FROM ventas v
@@ -618,6 +742,10 @@ def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, f
     WHERE 1=1
     """
     params = []
+
+    if tenant_id is not None:
+        query += " AND v.tenant_id = ?"
+        params.append(tenant_id)
 
     if fecha_inicio:
         query += " AND date(v.fecha_venta) >= date(?)"
@@ -754,25 +882,34 @@ def get_historial_ventas(limit: int = 200, fecha_inicio: Optional[str] = None, f
 # NOTAS DE CRÉDITO A CLIENTES (15 Y 30 DÍAS) Y ALERTAS DE VENCIMIENTO
 # ==============================================================================
 
-def get_notas_credito(estado_filtro: Optional[str] = None) -> Dict[str, Any]:
+def get_notas_credito(
+    estado_filtro: Optional[str] = None,
+    tenant_id: Optional[int] = None
+) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
     # Actualización automática de estado Vencida si pasó la fecha límite
     try:
-        cursor.execute("""
+        upd_sql = """
         UPDATE ventas
         SET estado_credito = 'Vencida'
         WHERE es_credito = 1
           AND saldo_pendiente > 0
           AND date('now', 'localtime') > date(fecha_vencimiento)
-          AND (estado_credito IS NULL OR estado_credito != 'Vencida');
-        """)
+          AND (estado_credito IS NULL OR estado_credito != 'Vencida')
+        """
+        upd_params = []
+        if tenant_id is not None:
+            upd_sql += " AND tenant_id = ?"
+            upd_params.append(tenant_id)
+        upd_sql += ";"
+        cursor.execute(upd_sql, upd_params)
         conn.commit()
     except Exception:
         pass
 
-    cursor.execute("""
+    query_nc = """
     SELECT 
         v.id,
         v.cliente_id,
@@ -783,12 +920,21 @@ def get_notas_credito(estado_filtro: Optional[str] = None) -> Dict[str, Any]:
         COALESCE(v.monto_anticipo, 0) as monto_anticipo,
         COALESCE(v.saldo_pendiente, 0) as saldo_pendiente,
         v.estado_credito,
+        v.tenant_id,
+        v.sucursal_id,
         c.nombre as cliente_nombre,
         c.telefono as cliente_telefono,
         CAST(ROUND(julianday(date(v.fecha_vencimiento)) - julianday(date('now', 'localtime'))) AS INTEGER) as dias_restantes
     FROM ventas v
     JOIN clientes c ON v.cliente_id = c.id
     WHERE v.es_credito = 1
+    """
+    params_nc = []
+    if tenant_id is not None:
+        query_nc += " AND v.tenant_id = ?"
+        params_nc.append(tenant_id)
+
+    query_nc += """
     ORDER BY 
         CASE 
             WHEN v.saldo_pendiente > 0 AND date('now', 'localtime') > date(v.fecha_vencimiento) THEN 1
@@ -796,7 +942,8 @@ def get_notas_credito(estado_filtro: Optional[str] = None) -> Dict[str, Any]:
             ELSE 3
         END,
         v.fecha_vencimiento ASC
-    """)
+    """
+    cursor.execute(query_nc, params_nc)
     rows = cursor.fetchall()
 
     notas = []
@@ -871,7 +1018,8 @@ def registrar_abono_credito(
     monto: float,
     metodo_pago: str = "Efectivo",
     notas: Optional[str] = None,
-    usuario: Optional[str] = None
+    usuario: Optional[str] = None,
+    tenant_id: Optional[int] = None
 ) -> Dict[str, Any]:
     if monto <= 0:
         raise ValueError("El monto del abono debe ser mayor a $0.00.")
@@ -882,10 +1030,13 @@ def registrar_abono_credito(
     try:
         _begin_immediate(cursor)
 
-        cursor.execute("SELECT * FROM ventas WHERE id = ?", (venta_id,))
+        if tenant_id is not None:
+            cursor.execute("SELECT * FROM ventas WHERE id = ? AND tenant_id = ?", (venta_id, tenant_id))
+        else:
+            cursor.execute("SELECT * FROM ventas WHERE id = ?", (venta_id,))
         v = cursor.fetchone()
         if not v:
-            raise ValueError("La venta no fue encontrada.")
+            raise ValueError("La venta no fue encontrada o no pertenece a este negocio.")
         if not v["es_credito"]:
             raise ValueError("Esta venta no corresponde a una Nota de Crédito.")
 
@@ -936,13 +1087,16 @@ DIAS_GARANTIA_POR_GRADO = {
     "C": 15
 }
 
-def buscar_equipo_para_garantia(imei: str) -> Dict[str, Any]:
-    """Busca un equipo vendido por IMEI para verificar si está dentro de su periodo de garantía."""
+def buscar_equipo_para_garantia(imei: str, tenant_id: Optional[int] = None) -> Dict[str, Any]:
+    """Busca un equipo vendido por IMEI para verificar si está dentro de su periodo de garantía y pertenece al tenant."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     clean_imei = imei.strip()
-    cursor.execute("SELECT * FROM equipos WHERE imei = ?", (clean_imei,))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM equipos WHERE imei = ? AND tenant_id = ?", (clean_imei, tenant_id))
+    else:
+        cursor.execute("SELECT * FROM equipos WHERE imei = ?", (clean_imei,))
     equipo = cursor.fetchone()
 
     if not equipo:
@@ -953,11 +1107,12 @@ def buscar_equipo_para_garantia(imei: str) -> Dict[str, Any]:
     eq_id = eq_dict["id"]
 
     # Buscar la venta más reciente donde se vendió este equipo
-    cursor.execute("""
+    q_venta = """
     SELECT 
         v.id as venta_id,
         v.fecha_venta,
         v.cliente_id,
+        v.tenant_id,
         vi.precio_final,
         c.nombre as cliente_nombre,
         c.telefono as cliente_telefono
@@ -965,25 +1120,36 @@ def buscar_equipo_para_garantia(imei: str) -> Dict[str, Any]:
     JOIN ventas v ON vi.venta_id = v.id
     JOIN clientes c ON v.cliente_id = c.id
     WHERE vi.equipo_id = ?
-    ORDER BY v.id DESC LIMIT 1
-    """, (eq_id,))
+    """
+    p_venta = [eq_id]
+    if tenant_id is not None:
+        q_venta += " AND v.tenant_id = ?"
+        p_venta.append(tenant_id)
+    q_venta += " ORDER BY v.id DESC LIMIT 1"
+    cursor.execute(q_venta, p_venta)
     venta = cursor.fetchone()
 
     if not venta:
         # Si fue vendido en formato anterior directo
-        cursor.execute("""
+        q_legacy = """
         SELECT 
             v.id as venta_id,
             v.fecha_venta,
             v.cliente_id,
+            v.tenant_id,
             v.precio_final,
             c.nombre as cliente_nombre,
             c.telefono as cliente_telefono
         FROM ventas v
         JOIN clientes c ON v.cliente_id = c.id
         WHERE v.equipo_id = ?
-        ORDER BY v.id DESC LIMIT 1
-        """, (eq_id,))
+        """
+        p_legacy = [eq_id]
+        if tenant_id is not None:
+            q_legacy += " AND v.tenant_id = ?"
+            p_legacy.append(tenant_id)
+        q_legacy += " ORDER BY v.id DESC LIMIT 1"
+        cursor.execute(q_legacy, p_legacy)
         venta = cursor.fetchone()
 
     if not venta:
@@ -1013,9 +1179,13 @@ def buscar_equipo_para_garantia(imei: str) -> Dict[str, Any]:
         "estado_actual": eq_dict["estado"]
     }
 
-def procesar_devolucion_garantia(data: GarantiaCreate) -> Dict[str, Any]:
+def procesar_devolucion_garantia(
+    data: GarantiaCreate,
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
+) -> Dict[str, Any]:
     """Registra formalmente el regreso de un equipo por garantía y actualiza su estado de forma atómica."""
-    info = buscar_equipo_para_garantia(data.imei)
+    info = buscar_equipo_para_garantia(data.imei, tenant_id=tenant_id)
     eq = info["equipo"]
     venta = info["venta"]
 
@@ -1026,9 +1196,12 @@ def procesar_devolucion_garantia(data: GarantiaCreate) -> Dict[str, Any]:
         _begin_immediate(cursor)
 
         if data.equipo_reemplazo_id is not None:
-            cursor.execute("SELECT id FROM equipos WHERE id = ?", (data.equipo_reemplazo_id,))
+            if tenant_id is not None:
+                cursor.execute("SELECT id FROM equipos WHERE id = ? AND tenant_id = ?", (data.equipo_reemplazo_id, tenant_id))
+            else:
+                cursor.execute("SELECT id FROM equipos WHERE id = ?", (data.equipo_reemplazo_id,))
             if not cursor.fetchone():
-                raise ValueError(f"El equipo de reemplazo con ID {data.equipo_reemplazo_id} no existe.")
+                raise ValueError(f"El equipo de reemplazo con ID {data.equipo_reemplazo_id} no existe o no pertenece a este negocio.")
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         monto_cubierto = data.monto_cubierto if data.monto_cubierto is not None else float(venta["precio_final"])
@@ -1048,7 +1221,10 @@ def procesar_devolucion_garantia(data: GarantiaCreate) -> Dict[str, Any]:
         garantia_id = cursor.lastrowid
 
         # 2. Actualizar estado del equipo devuelto
-        cursor.execute("UPDATE equipos SET estado = ? WHERE id = ?", (data.estado_equipo_recibido, eq["id"]))
+        if tenant_id is not None:
+            cursor.execute("UPDATE equipos SET estado = ? WHERE id = ? AND tenant_id = ?", (data.estado_equipo_recibido, eq["id"], tenant_id))
+        else:
+            cursor.execute("UPDATE equipos SET estado = ? WHERE id = ?", (data.estado_equipo_recibido, eq["id"]))
 
         conn.commit()
 
@@ -1085,11 +1261,11 @@ def procesar_devolucion_garantia(data: GarantiaCreate) -> Dict[str, Any]:
     finally:
         conn.close()
 
-def get_historial_garantias(limit: int = 100) -> List[Dict[str, Any]]:
+def get_historial_garantias(limit: int = 100, tenant_id: Optional[int] = None) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query = """
     SELECT 
         g.*,
         e.modelo,
@@ -1103,8 +1279,16 @@ def get_historial_garantias(limit: int = 100) -> List[Dict[str, Any]]:
     JOIN equipos e ON g.equipo_id = e.id
     JOIN clientes c ON g.cliente_id = c.id
     JOIN ventas v ON g.venta_id = v.id
-    ORDER BY g.id DESC LIMIT ?
-    """, (limit,))
+    WHERE 1=1
+    """
+    params = []
+    if tenant_id is not None:
+        query += " AND (v.tenant_id = ? OR e.tenant_id = ?)"
+        params.extend([tenant_id, tenant_id])
+
+    query += " ORDER BY g.id DESC LIMIT ?"
+    params.append(limit)
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
 
@@ -1117,7 +1301,7 @@ MESES_ES = [
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ]
 
-def get_dashboard_metrics() -> Dict[str, Any]:
+def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -1126,7 +1310,7 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     nombre_mes = f"{MESES_ES[ahora.month - 1]} {ahora.year}"
 
     # 1. Métricas de Celulares (Smartphones) en el mes actual
-    cursor.execute("""
+    q_cel_items = """
     SELECT 
         COALESCE(SUM(vi.precio_final), 0) as total_ventas,
         COALESCE(SUM(vi.margen_ganancia), 0) as total_ganancias,
@@ -1135,11 +1319,16 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     JOIN ventas v ON vi.venta_id = v.id
     WHERE strftime('%Y-%m', v.fecha_venta) = ?
       AND (vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL)
-    """, (mes_actual_str,))
+    """
+    p_cel_items = [mes_actual_str]
+    if tenant_id is not None:
+        q_cel_items += " AND v.tenant_id = ?"
+        p_cel_items.append(tenant_id)
+    cursor.execute(q_cel_items, p_cel_items)
     cel_items_row = cursor.fetchone()
 
     # Ventas históricas directas de celulares sin venta_items
-    cursor.execute("""
+    q_cel_legacy = """
     SELECT 
         COALESCE(SUM(v.precio_final), 0) as total_ventas,
         COALESCE(SUM(v.margen_ganancia), 0) as total_ganancias,
@@ -1148,7 +1337,12 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     WHERE strftime('%Y-%m', v.fecha_venta) = ?
       AND v.id NOT IN (SELECT DISTINCT venta_id FROM venta_items)
       AND v.equipo_id IS NOT NULL
-    """, (mes_actual_str,))
+    """
+    p_cel_legacy = [mes_actual_str]
+    if tenant_id is not None:
+        q_cel_legacy += " AND v.tenant_id = ?"
+        p_cel_legacy.append(tenant_id)
+    cursor.execute(q_cel_legacy, p_cel_legacy)
     cel_legacy_row = cursor.fetchone()
 
     cel_ventas = round(float(cel_items_row["total_ventas"]) + float(cel_legacy_row["total_ventas"]), 2)
@@ -1157,7 +1351,7 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     cel_margen_pct = round((cel_ganancias / cel_ventas * 100), 1) if cel_ventas > 0 else 0.0
 
     # 2. Métricas de Accesorios y Servicios en el mes actual
-    cursor.execute("""
+    q_acc_items = """
     SELECT 
         COALESCE(SUM(vi.precio_final), 0) as total_ventas,
         COALESCE(SUM(vi.margen_ganancia), 0) as total_ganancias,
@@ -1166,7 +1360,12 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     JOIN ventas v ON vi.venta_id = v.id
     WHERE strftime('%Y-%m', v.fecha_venta) = ?
       AND (vi.tipo_item != 'equipo' OR vi.accesorio_id IS NOT NULL)
-    """, (mes_actual_str,))
+    """
+    p_acc_items = [mes_actual_str]
+    if tenant_id is not None:
+        q_acc_items += " AND v.tenant_id = ?"
+        p_acc_items.append(tenant_id)
+    cursor.execute(q_acc_items, p_acc_items)
     acc_items_row = cursor.fetchone()
 
     acc_ventas = round(float(acc_items_row["total_ventas"]), 2)
@@ -1181,35 +1380,50 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     margen_promedio = round((total_ganancias / total_ventas * 100), 1) if total_ventas > 0 else 0.0
 
     # 4. Inventario Activo de Celulares
-    cursor.execute("""
+    q_stats_inv = """
     SELECT 
         COUNT(id) as disponibles,
         COALESCE(SUM(costo_compra), 0) as capital_invertido,
         COALESCE(SUM(precio_venta), 0) as valor_venta
     FROM equipos
     WHERE estado = 'Disponible'
-    """)
+    """
+    p_stats_inv = []
+    if tenant_id is not None:
+        q_stats_inv += " AND tenant_id = ?"
+        p_stats_inv.append(tenant_id)
+    cursor.execute(q_stats_inv, p_stats_inv)
     stats_inv = cursor.fetchone()
 
-    cursor.execute("SELECT COUNT(id) as en_garantia FROM equipos WHERE estado = 'En Garantia'")
+    q_en_garantia = "SELECT COUNT(id) as en_garantia FROM equipos WHERE estado = 'En Garantia'"
+    p_en_garantia = []
+    if tenant_id is not None:
+        q_en_garantia += " AND tenant_id = ?"
+        p_en_garantia.append(tenant_id)
+    cursor.execute(q_en_garantia, p_en_garantia)
     equipos_en_garantia = cursor.fetchone()["en_garantia"]
 
     # 5. Inventario Activo de Accesorios
-    cursor.execute("""
+    q_acc_inv = """
     SELECT 
         COALESCE(SUM(stock), 0) as total_piezas,
         COALESCE(SUM(stock * costo_compra), 0) as capital_invertido,
         COALESCE(SUM(stock * precio_venta), 0) as valor_venta
     FROM accesorios
     WHERE es_servicio = 0
-    """)
+    """
+    p_acc_inv = []
+    if tenant_id is not None:
+        q_acc_inv += " AND tenant_id = ?"
+        p_acc_inv.append(tenant_id)
+    cursor.execute(q_acc_inv, p_acc_inv)
     acc_inv_row = cursor.fetchone()
     acc_stock = int(acc_inv_row["total_piezas"]) if acc_inv_row else 0
     acc_capital = round(float(acc_inv_row["capital_invertido"] or 0), 2)
     acc_valor = round(float(acc_inv_row["valor_venta"] or 0), 2)
 
     # 6. Ventas de los últimos 30 días para gráfico (desglosado por celulares y accesorios)
-    cursor.execute("""
+    q_ventas_dias = """
     SELECT 
         date(v.fecha_venta) as dia,
         COALESCE(SUM(CASE WHEN vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL THEN vi.precio_final ELSE 0 END), 0) as ventas_celulares,
@@ -1224,29 +1438,39 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     FROM ventas v
     LEFT JOIN venta_items vi ON v.id = vi.venta_id
     WHERE date(v.fecha_venta) >= date('now', '-30 days', 'localtime')
-    GROUP BY date(v.fecha_venta)
-    ORDER BY dia ASC
-    """)
+    """
+    p_ventas_dias = []
+    if tenant_id is not None:
+        q_ventas_dias += " AND v.tenant_id = ?"
+        p_ventas_dias.append(tenant_id)
+    q_ventas_dias += " GROUP BY date(v.fecha_venta) ORDER BY dia ASC"
+    cursor.execute(q_ventas_dias, p_ventas_dias)
     ventas_dias = [dict(r) for r in cursor.fetchall()]
 
     # 7. Distribución por Grados
-    cursor.execute("""
-    SELECT grado, COUNT(id) as total
-    FROM equipos
-    WHERE estado = 'Disponible'
-    GROUP BY grado
-    """)
+    q_grados = "SELECT grado, COUNT(id) as total FROM equipos WHERE estado = 'Disponible'"
+    p_grados = []
+    if tenant_id is not None:
+        q_grados += " AND tenant_id = ?"
+        p_grados.append(tenant_id)
+    q_grados += " GROUP BY grado"
+    cursor.execute(q_grados, p_grados)
     grados_inv = {r["grado"]: r["total"] for r in cursor.fetchall()}
 
     # 8. Desglose de ingresos por método de pago en el mes actual
-    cursor.execute("""
+    q_p_row = """
     SELECT 
         COALESCE(SUM(monto_efectivo), 0) as total_efectivo,
         COALESCE(SUM(monto_transferencia), 0) as total_transferencia,
         COALESCE(SUM(monto_garantia), 0) as total_garantia
     FROM ventas
     WHERE strftime('%Y-%m', fecha_venta) = ?
-    """, (mes_actual_str,))
+    """
+    p_p_row = [mes_actual_str]
+    if tenant_id is not None:
+        q_p_row += " AND tenant_id = ?"
+        p_p_row.append(tenant_id)
+    cursor.execute(q_p_row, p_p_row)
     p_row = cursor.fetchone()
 
     desglose_pagos = {
@@ -1256,7 +1480,7 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     }
 
     # 9. Top Celulares Más Vendidos en el Mes
-    cursor.execute("""
+    q_top_cel = """
     SELECT 
         COALESCE(e.modelo, vi.nombre_item, 'Celular') as nombre,
         COUNT(vi.id) as unidades,
@@ -1267,14 +1491,17 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     LEFT JOIN equipos e ON vi.equipo_id = e.id
     WHERE strftime('%Y-%m', v.fecha_venta) = ?
       AND (vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL)
-    GROUP BY nombre
-    ORDER BY unidades DESC, ganancia DESC
-    LIMIT 5
-    """, (mes_actual_str,))
+    """
+    p_top_cel = [mes_actual_str]
+    if tenant_id is not None:
+        q_top_cel += " AND v.tenant_id = ?"
+        p_top_cel.append(tenant_id)
+    q_top_cel += " GROUP BY nombre ORDER BY unidades DESC, ganancia DESC LIMIT 5"
+    cursor.execute(q_top_cel, p_top_cel)
     top_celulares = [dict(r) for r in cursor.fetchall()]
 
     # 10. Top Accesorios Más Vendidos en el Mes
-    cursor.execute("""
+    q_top_acc = """
     SELECT 
         COALESCE(a.nombre, vi.nombre_item, 'Accesorio') as nombre,
         SUM(vi.cantidad) as unidades,
@@ -1285,10 +1512,13 @@ def get_dashboard_metrics() -> Dict[str, Any]:
     LEFT JOIN accesorios a ON vi.accesorio_id = a.id
     WHERE strftime('%Y-%m', v.fecha_venta) = ?
       AND (vi.tipo_item != 'equipo' OR vi.accesorio_id IS NOT NULL)
-    GROUP BY nombre
-    ORDER BY unidades DESC, ganancia DESC
-    LIMIT 5
-    """, (mes_actual_str,))
+    """
+    p_top_acc = [mes_actual_str]
+    if tenant_id is not None:
+        q_top_acc += " AND v.tenant_id = ?"
+        p_top_acc.append(tenant_id)
+    q_top_acc += " GROUP BY nombre ORDER BY unidades DESC, ganancia DESC LIMIT 5"
+    cursor.execute(q_top_acc, p_top_acc)
     top_accesorios = [dict(r) for r in cursor.fetchall()]
 
     conn.close()
@@ -1348,12 +1578,17 @@ def format_accesorio_dict(row: sqlite3.Row) -> Dict[str, Any]:
 def get_accesorios(
     categoria: Optional[str] = None,
     solo_con_stock: bool = False,
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     query = "SELECT * FROM accesorios WHERE 1=1"
     params = []
+
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
 
     if categoria and categoria != "Todos":
         cat_clean = categoria.rstrip('s').rstrip('es')
@@ -1374,10 +1609,13 @@ def get_accesorios(
     conn.close()
     return [format_accesorio_dict(r) for r in rows]
 
-def get_accesorio_by_id(acc_id: int) -> Optional[Dict[str, Any]]:
+def get_accesorio_by_id(acc_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM accesorios WHERE id = ?", (acc_id,))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM accesorios WHERE id = ? AND tenant_id = ?", (acc_id, tenant_id))
+    else:
+        cursor.execute("SELECT * FROM accesorios WHERE id = ?", (acc_id,))
     row = cursor.fetchone()
     conn.close()
     return format_accesorio_dict(row) if row else None
@@ -1394,14 +1632,29 @@ def create_accesorio(
     precio_20_pzs: float = 0.0,
     precio_caja: float = 0.0,
     imagen_url: Optional[str] = None,
-    color: Optional[str] = None
+    color: Optional[str] = None,
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
 ) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    if tenant_id is None:
+        def_t, def_s = _get_default_tenant_and_sucursal()
+        final_tenant_id = def_t
+        final_sucursal_id = def_s
+    else:
+        final_tenant_id = tenant_id
+        final_sucursal_id = sucursal_id
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-    INSERT INTO accesorios (nombre, categoria, codigo_barras, costo_compra, precio_venta, precio_mayoreo, precio_20_pzs, precio_caja, imagen_url, color, stock, es_servicio, fecha_registro)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO accesorios (
+        nombre, categoria, codigo_barras, costo_compra, precio_venta,
+        precio_mayoreo, precio_20_pzs, precio_caja, imagen_url, color,
+        stock, es_servicio, fecha_registro, tenant_id, sucursal_id
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         nombre.strip(),
         categoria.strip(),
@@ -1415,22 +1668,24 @@ def create_accesorio(
         color.strip() if color else None,
         stock if not es_servicio else 999,
         1 if es_servicio else 0,
-        now
+        now,
+        final_tenant_id,
+        final_sucursal_id
     ))
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
-    return get_accesorio_by_id(new_id)
+    return get_accesorio_by_id(new_id, tenant_id=final_tenant_id)
 
 COLUMNAS_PERMITIDAS_ACCESORIO = (
     "nombre", "categoria", "codigo_barras", "costo_compra", "precio_venta",
     "precio_mayoreo", "precio_20_pzs", "precio_caja", "imagen_url", "color", "stock", "es_servicio"
 )
 
-def update_accesorio(acc_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def update_accesorio(acc_id: int, datos: Dict[str, Any], tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    current = get_accesorio_by_id(acc_id)
+    current = get_accesorio_by_id(acc_id, tenant_id=tenant_id)
     if not current:
         conn.close()
         return None
@@ -1450,15 +1705,27 @@ def update_accesorio(acc_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, A
 
     if fields:
         values.append(acc_id)
-        cursor.execute(f"UPDATE accesorios SET {', '.join(fields)} WHERE id = ?", values)
+        if tenant_id is not None:
+            values.append(tenant_id)
+            cursor.execute(f"UPDATE accesorios SET {', '.join(fields)} WHERE id = ? AND tenant_id = ?", values)
+        else:
+            cursor.execute(f"UPDATE accesorios SET {', '.join(fields)} WHERE id = ?", values)
         conn.commit()
     conn.close()
-    return get_accesorio_by_id(acc_id)
+    return get_accesorio_by_id(acc_id, tenant_id=tenant_id)
 
-def delete_accesorio(acc_id: int) -> bool:
+def delete_accesorio(acc_id: int, tenant_id: Optional[int] = None) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM accesorios WHERE id = ?", (acc_id,))
+    current = get_accesorio_by_id(acc_id, tenant_id=tenant_id)
+    if not current:
+        conn.close()
+        return False
+
+    if tenant_id is not None:
+        cursor.execute("DELETE FROM accesorios WHERE id = ? AND tenant_id = ?", (acc_id, tenant_id))
+    else:
+        cursor.execute("DELETE FROM accesorios WHERE id = ?", (acc_id,))
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()
@@ -1517,7 +1784,8 @@ def ajustar_stock_accesorio(
     nuevo_stock: int,
     tipo_movimiento: str = "AJUSTE",
     motivo: str = "Ajuste manual de stock",
-    usuario: str = "Admin"
+    usuario: str = "Admin",
+    tenant_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """Ajusta el stock de un accesorio registrando el motivo en el Kardex (Auditoría Anti-Mermas)."""
     if nuevo_stock < 0:
@@ -1526,13 +1794,19 @@ def ajustar_stock_accesorio(
     cursor = conn.cursor()
     try:
         _begin_immediate(cursor)
-        cursor.execute("SELECT id, stock, nombre FROM accesorios WHERE id = ?", (acc_id,))
+        if tenant_id is not None:
+            cursor.execute("SELECT id, stock, nombre FROM accesorios WHERE id = ? AND tenant_id = ?", (acc_id, tenant_id))
+        else:
+            cursor.execute("SELECT id, stock, nombre FROM accesorios WHERE id = ?", (acc_id,))
         acc = cursor.fetchone()
         if not acc:
-            raise ValueError(f"Accesorio con ID {acc_id} no encontrado.")
+            raise ValueError(f"Accesorio con ID {acc_id} no encontrado o no pertenece a este negocio.")
         stock_anterior = int(acc["stock"] or 0)
         diferencia = abs(nuevo_stock - stock_anterior)
-        cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ?", (nuevo_stock, acc_id))
+        if tenant_id is not None:
+            cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ? AND tenant_id = ?", (nuevo_stock, acc_id, tenant_id))
+        else:
+            cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ?", (nuevo_stock, acc_id))
         registrar_movimiento_stock_accesorio(
             accesorio_id=acc_id,
             tipo_movimiento=tipo_movimiento,
@@ -1543,7 +1817,10 @@ def ajustar_stock_accesorio(
             usuario=usuario,
             cursor=cursor
         )
-        cursor.execute("SELECT * FROM accesorios WHERE id = ?", (acc_id,))
+        if tenant_id is not None:
+            cursor.execute("SELECT * FROM accesorios WHERE id = ? AND tenant_id = ?", (acc_id, tenant_id))
+        else:
+            cursor.execute("SELECT * FROM accesorios WHERE id = ?", (acc_id,))
         row = cursor.fetchone()
         conn.commit()
         return format_accesorio_dict(row) if row else None
@@ -1556,7 +1833,8 @@ def ajustar_stock_accesorio(
 def actualizar_stock_masivo(
     items: List[Dict[str, Any]],
     motivo_general: str = "Carga masiva de inventario",
-    usuario: str = "Admin"
+    usuario: str = "Admin",
+    tenant_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """Actualiza en masa el stock de múltiples accesorios en una sola transacción atómica."""
     conn = get_db_connection()
@@ -1567,14 +1845,20 @@ def actualizar_stock_masivo(
         for it in items:
             acc_id = int(it["id"])
             nuevo_stock = max(0, int(it.get("stock", 0)))
-            cursor.execute("SELECT stock FROM accesorios WHERE id = ?", (acc_id,))
+            if tenant_id is not None:
+                cursor.execute("SELECT stock FROM accesorios WHERE id = ? AND tenant_id = ?", (acc_id, tenant_id))
+            else:
+                cursor.execute("SELECT stock FROM accesorios WHERE id = ?", (acc_id,))
             row = cursor.fetchone()
             if row:
                 stock_ant = int(row["stock"] or 0)
                 if stock_ant != nuevo_stock:
                     dif = abs(nuevo_stock - stock_ant)
                     tipo = "ENTRADA" if nuevo_stock > stock_ant else "AJUSTE"
-                    cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ?", (nuevo_stock, acc_id))
+                    if tenant_id is not None:
+                        cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ? AND tenant_id = ?", (nuevo_stock, acc_id, tenant_id))
+                    else:
+                        cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ?", (nuevo_stock, acc_id))
                     registrar_movimiento_stock_accesorio(
                         accesorio_id=acc_id,
                         tipo_movimiento=tipo,
@@ -1597,7 +1881,8 @@ def actualizar_stock_masivo(
 def get_historial_kardex_accesorios(
     acc_id: Optional[int] = None,
     tipo: Optional[str] = None,
-    limit: int = 150
+    limit: int = 150,
+    tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Consulta la bitácora de movimientos de accesorios para auditoría."""
     conn = get_db_connection()
@@ -1620,6 +1905,9 @@ def get_historial_kardex_accesorios(
     WHERE 1=1
     """
     params = []
+    if tenant_id is not None:
+        query += " AND a.tenant_id = ?"
+        params.append(tenant_id)
     if acc_id:
         query += " AND m.accesorio_id = ?"
         params.append(acc_id)
@@ -1633,19 +1921,28 @@ def get_historial_kardex_accesorios(
     conn.close()
     return [dict(r) for r in rows]
 
-def generar_sugerido_reabastecimiento(stock_objetivo: int = 10, stock_minimo: int = 3) -> Dict[str, Any]:
+def generar_sugerido_reabastecimiento(
+    stock_objetivo: int = 10,
+    stock_minimo: int = 3,
+    tenant_id: Optional[int] = None
+) -> Dict[str, Any]:
     """
     Analiza accesorios agotados o con stock bajo y genera una lista de compra inteligente
     con cantidades sugeridas para reordenar al proveedor y texto para WhatsApp.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    query = """
     SELECT id, nombre, categoria, costo_compra, precio_mayoreo, stock, imagen_url
     FROM accesorios
     WHERE es_servicio = 0 AND stock <= ?
-    ORDER BY categoria ASC, stock ASC, nombre ASC;
-    """, (stock_minimo,))
+    """
+    params = [stock_minimo]
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
+    query += " ORDER BY categoria ASC, stock ASC, nombre ASC;"
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
 
@@ -1707,12 +2004,22 @@ def generar_sugerido_reabastecimiento(stock_objetivo: int = 10, stock_minimo: in
 # CORTES DE CAJA DIARIOS (ARQUEO / REPORTE Z)
 # ==============================================================================
 
-def obtener_resumen_corte_actual(conn_ext: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
-    """Calcula el balance acumulado de ventas desde el último corte de caja registrado (o del día de hoy)."""
+def obtener_resumen_corte_actual(
+    conn_ext: Optional[sqlite3.Connection] = None,
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """Calcula el balance acumulado de ventas desde el último corte de caja del tenant (o del día de hoy)."""
     conn = conn_ext if conn_ext else get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT fecha_corte FROM cortes_caja ORDER BY id DESC LIMIT 1")
+    q_corte = "SELECT fecha_corte FROM cortes_caja"
+    p_corte = []
+    if tenant_id is not None:
+        q_corte += " WHERE tenant_id = ?"
+        p_corte.append(tenant_id)
+    q_corte += " ORDER BY id DESC LIMIT 1"
+    cursor.execute(q_corte, p_corte)
     ultimo_corte = cursor.fetchone()
 
     now = datetime.now()
@@ -1720,11 +2027,12 @@ def obtener_resumen_corte_actual(conn_ext: Optional[sqlite3.Connection] = None) 
 
     if ultimo_corte and ultimo_corte["fecha_corte"]:
         fecha_inicio = ultimo_corte["fecha_corte"]
+        op_comparacion = ">"
     else:
-        # Inicio del día actual a las 00:00:00
         fecha_inicio = now.strftime("%Y-%m-%d 00:00:00")
+        op_comparacion = ">="
 
-    cursor.execute("""
+    q_totales = f"""
     SELECT 
         COUNT(id) as total_operaciones,
         COALESCE(SUM(precio_final), 0) as total_ventas,
@@ -1732,17 +2040,27 @@ def obtener_resumen_corte_actual(conn_ext: Optional[sqlite3.Connection] = None) 
         COALESCE(SUM(monto_transferencia), 0) as total_transferencia,
         COALESCE(SUM(monto_garantia), 0) as total_garantia
     FROM ventas
-    WHERE fecha_venta >= ? AND fecha_venta <= ?
-    """, (fecha_inicio, now_str))
+    WHERE fecha_venta {op_comparacion} ? AND fecha_venta <= ?
+    """
+    p_totales = [fecha_inicio, now_str]
+    if tenant_id is not None:
+        q_totales += " AND tenant_id = ?"
+        p_totales.append(tenant_id)
+    cursor.execute(q_totales, p_totales)
     r = cursor.fetchone()
 
-    cursor.execute("""
+    q_ventas = f"""
     SELECT v.id, v.fecha_venta, v.precio_final, v.metodo_pago, v.monto_efectivo, v.monto_transferencia, v.monto_garantia, c.nombre as cliente_nombre
     FROM ventas v
     JOIN clientes c ON v.cliente_id = c.id
-    WHERE v.fecha_venta >= ? AND v.fecha_venta <= ?
-    ORDER BY v.id DESC
-    """, (fecha_inicio, now_str))
+    WHERE v.fecha_venta {op_comparacion} ? AND v.fecha_venta <= ?
+    """
+    p_ventas = [fecha_inicio, now_str]
+    if tenant_id is not None:
+        q_ventas += " AND v.tenant_id = ?"
+        p_ventas.append(tenant_id)
+    q_ventas += " ORDER BY v.id DESC"
+    cursor.execute(q_ventas, p_ventas)
     ventas_rows = [dict(v) for v in cursor.fetchall()]
 
     if not conn_ext:
@@ -1759,12 +2077,29 @@ def obtener_resumen_corte_actual(conn_ext: Optional[sqlite3.Connection] = None) 
         "ventas_periodo": ventas_rows
     }
 
-def guardar_corte_caja(efectivo_declarado: float, notas: Optional[str] = None) -> Dict[str, Any]:
+def guardar_corte_caja(
+    efectivo_declarado: float,
+    notas: Optional[str] = None,
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
+) -> Dict[str, Any]:
+    if tenant_id is None:
+        def_t, def_s = _get_default_tenant_and_sucursal()
+        final_tenant_id = def_t
+        final_sucursal_id = def_s
+    else:
+        final_tenant_id = tenant_id
+        final_sucursal_id = sucursal_id
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         _begin_immediate(cursor)
-        resumen = obtener_resumen_corte_actual(conn_ext=conn)
+        resumen = obtener_resumen_corte_actual(
+            conn_ext=conn,
+            tenant_id=final_tenant_id,
+            sucursal_id=final_sucursal_id
+        )
         total_efectivo_sistema = resumen["total_efectivo"]
         efectivo_declarado = round(float(efectivo_declarado), 2)
         diferencia = round(efectivo_declarado - total_efectivo_sistema, 2)
@@ -1773,9 +2108,10 @@ def guardar_corte_caja(efectivo_declarado: float, notas: Optional[str] = None) -
         cursor.execute("""
         INSERT INTO cortes_caja (
             fecha_corte, fecha_inicio_periodo, total_ventas, total_efectivo, total_transferencia,
-            total_garantia, efectivo_declarado, diferencia, cantidad_ventas, notas, fecha_registro
+            total_garantia, efectivo_declarado, diferencia, cantidad_ventas, notas, fecha_registro,
+            tenant_id, sucursal_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             now_str,
             resumen["fecha_inicio_periodo"],
@@ -1787,7 +2123,9 @@ def guardar_corte_caja(efectivo_declarado: float, notas: Optional[str] = None) -
             diferencia,
             resumen["cantidad_ventas"],
             notas,
-            now_str
+            now_str,
+            final_tenant_id,
+            final_sucursal_id
         ))
         conn.commit()
         new_id = cursor.lastrowid
@@ -1802,12 +2140,17 @@ def guardar_corte_caja(efectivo_declarado: float, notas: Optional[str] = None) -
     resumen["diferencia"] = diferencia
     resumen["notas"] = notas
     resumen["fecha_registro"] = now_str
+    resumen["tenant_id"] = final_tenant_id
+    resumen["sucursal_id"] = final_sucursal_id
     return resumen
 
-def get_cortes_caja(limit: int = 50) -> List[Dict[str, Any]]:
+def get_cortes_caja(limit: int = 50, tenant_id: Optional[int] = None) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM cortes_caja ORDER BY id DESC LIMIT ?", (limit,))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM cortes_caja WHERE tenant_id = ? ORDER BY id DESC LIMIT ?", (tenant_id, limit))
+    else:
+        cursor.execute("SELECT * FROM cortes_caja ORDER BY id DESC LIMIT ?", (limit,))
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
@@ -1816,12 +2159,15 @@ def get_cortes_caja(limit: int = 50) -> List[Dict[str, Any]]:
 # HISTORIAL UNIVERSAL POR IMEI (TRAZABILIDAD 360°)
 # ==============================================================================
 
-def obtener_historial_imei(imei: str) -> Dict[str, Any]:
+def obtener_historial_imei(imei: str, tenant_id: Optional[int] = None) -> Dict[str, Any]:
     clean_imei = imei.strip().replace(" ", "").replace("-", "")
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM equipos WHERE imei = ?", (clean_imei,))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM equipos WHERE imei = ? AND tenant_id = ?", (clean_imei, tenant_id))
+    else:
+        cursor.execute("SELECT * FROM equipos WHERE imei = ?", (clean_imei,))
     eq = cursor.fetchone()
     if not eq:
         conn.close()
@@ -1982,17 +2328,27 @@ def exportar_todo_json() -> Dict[str, Any]:
 # MÓDULO DE REPARACIONES Y TALLER TÉCNICO
 # ==============================================================================
 
-def generar_siguiente_folio_reparacion(cursor) -> str:
-    cursor.execute("SELECT COALESCE(MAX(id), 0) as max_id FROM reparaciones")
+def generar_siguiente_folio_reparacion(cursor, tenant_id: Optional[int] = None) -> str:
+    cursor.execute("SELECT COALESCE(MAX(id), 0) as max_id FROM reparaciones;")
     row = cursor.fetchone()
     next_id = (int(row["max_id"]) + 1) if row else 1
+    if tenant_id and tenant_id > 1:
+        return f"REP-T{tenant_id}-{next_id:04d}"
     return f"REP-{next_id:04d}"
 
-def get_reparaciones(estado: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_reparaciones(
+    estado: Optional[str] = None,
+    search: Optional[str] = None,
+    tenant_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     query = "SELECT * FROM reparaciones WHERE 1=1"
     params = []
+
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
 
     if estado and estado != "Todos":
         query += " AND estado = ?"
@@ -2013,10 +2369,13 @@ def get_reparaciones(estado: Optional[str] = None, search: Optional[str] = None)
     conn.close()
     return rows
 
-def get_reparacion_by_id(rep_id: int) -> Optional[Dict[str, Any]]:
+def get_reparacion_by_id(rep_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM reparaciones WHERE id = ?", (rep_id,))
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM reparaciones WHERE id = ? AND tenant_id = ?", (rep_id, tenant_id))
+    else:
+        cursor.execute("SELECT * FROM reparaciones WHERE id = ?", (rep_id,))
     row = cursor.fetchone()
     conn.close()
     if not row:
@@ -2025,12 +2384,25 @@ def get_reparacion_by_id(rep_id: int) -> Optional[Dict[str, Any]]:
     res["margen_ganancia"] = round(res["precio_servicio"] - res["costo_refaccion"], 2)
     return res
 
-def create_reparacion(datos: Dict[str, Any]) -> Dict[str, Any]:
+def create_reparacion(
+    datos: Dict[str, Any],
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
+) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    if tenant_id is None:
+        def_t, def_s = _get_default_tenant_and_sucursal()
+        final_tenant_id = def_t
+        final_sucursal_id = def_s
+    else:
+        final_tenant_id = tenant_id
+        final_sucursal_id = sucursal_id
+
     try:
         _begin_immediate(cursor)
-        folio = generar_siguiente_folio_reparacion(cursor)
+        folio = generar_siguiente_folio_reparacion(cursor, tenant_id=final_tenant_id)
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         precio = float(datos.get("precio_servicio", 0))
@@ -2043,9 +2415,9 @@ def create_reparacion(datos: Dict[str, Any]) -> Dict[str, Any]:
             imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico,
             condicion_recepcion, costo_refaccion, precio_servicio, anticipo,
             saldo_pendiente, estado, fecha_ingreso, fecha_prometida,
-            tecnico_responsable, notas
+            tecnico_responsable, notas, tenant_id, sucursal_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido', ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido', ?, ?, ?, ?, ?, ?)
         """, (
             folio,
             datos["cliente_nombre"].strip(),
@@ -2064,7 +2436,9 @@ def create_reparacion(datos: Dict[str, Any]) -> Dict[str, Any]:
             now_str,
             datos.get("fecha_prometida") or None,
             datos.get("tecnico_responsable", "Samuel N."),
-            datos.get("notas", "").strip() if datos.get("notas") else None
+            datos.get("notas", "").strip() if datos.get("notas") else None,
+            final_tenant_id,
+            final_sucursal_id
         ))
         conn.commit()
         new_id = cursor.lastrowid
@@ -2073,7 +2447,7 @@ def create_reparacion(datos: Dict[str, Any]) -> Dict[str, Any]:
         raise
     finally:
         conn.close()
-    return get_reparacion_by_id(new_id)
+    return get_reparacion_by_id(new_id, tenant_id=final_tenant_id)
 
 COLUMNAS_PERMITIDAS_REPARACION = {
     "cliente_nombre", "cliente_telefono", "dispositivo_modelo", "color",
@@ -2083,11 +2457,14 @@ COLUMNAS_PERMITIDAS_REPARACION = {
     "fecha_entrega", "tecnico_responsable", "notas"
 }
 
-def update_reparacion(rep_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def update_reparacion(
+    rep_id: int,
+    datos: Dict[str, Any],
+    tenant_id: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM reparaciones WHERE id = ?", (rep_id,))
-    existing = cursor.fetchone()
+    existing = get_reparacion_by_id(rep_id, tenant_id=tenant_id)
     if not existing:
         conn.close()
         return None
@@ -2110,13 +2487,21 @@ def update_reparacion(rep_id: int, datos: Dict[str, Any]) -> Optional[Dict[str, 
 
     if campos:
         valores.append(rep_id)
-        cursor.execute(f"UPDATE reparaciones SET {', '.join(campos)} WHERE id = ?", valores)
+        if tenant_id is not None:
+            valores.append(tenant_id)
+            cursor.execute(f"UPDATE reparaciones SET {', '.join(campos)} WHERE id = ? AND tenant_id = ?", valores)
+        else:
+            cursor.execute(f"UPDATE reparaciones SET {', '.join(campos)} WHERE id = ?", valores)
         conn.commit()
 
     conn.close()
-    return get_reparacion_by_id(rep_id)
+    return get_reparacion_by_id(rep_id, tenant_id=tenant_id)
 
-def cambiar_estado_reparacion(rep_id: int, nuevo_estado: str) -> Optional[Dict[str, Any]]:
+def cambiar_estado_reparacion(
+    rep_id: int,
+    nuevo_estado: str,
+    tenant_id: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
     estados_validos = ('Recibido', 'En Revision', 'Esperando Refaccion', 'Listo para Entrega', 'Entregado', 'Cancelado')
     if nuevo_estado not in estados_validos:
         raise ValueError(f"Estado inválido: {nuevo_estado}. Válidos: {', '.join(estados_validos)}")
@@ -2126,9 +2511,13 @@ def cambiar_estado_reparacion(rep_id: int, nuevo_estado: str) -> Optional[Dict[s
         update_data["fecha_entrega"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         update_data["saldo_pendiente"] = 0.0
 
-    return update_reparacion(rep_id, update_data)
+    return update_reparacion(rep_id, update_data, tenant_id=tenant_id)
 
-def abonar_reparacion(rep_id: int, monto_abono: float) -> Optional[Dict[str, Any]]:
+def abonar_reparacion(
+    rep_id: int,
+    monto_abono: float,
+    tenant_id: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
     if monto_abono <= 0:
         raise ValueError("El monto del abono debe ser mayor a cero.")
 
@@ -2136,7 +2525,10 @@ def abonar_reparacion(rep_id: int, monto_abono: float) -> Optional[Dict[str, Any
     cursor = conn.cursor()
     try:
         _begin_immediate(cursor)
-        cursor.execute("SELECT * FROM reparaciones WHERE id = ?", (rep_id,))
+        if tenant_id is not None:
+            cursor.execute("SELECT * FROM reparaciones WHERE id = ? AND tenant_id = ?", (rep_id, tenant_id))
+        else:
+            cursor.execute("SELECT * FROM reparaciones WHERE id = ?", (rep_id,))
         row = cursor.fetchone()
         if not row:
             conn.rollback()
@@ -2149,10 +2541,16 @@ def abonar_reparacion(rep_id: int, monto_abono: float) -> Optional[Dict[str, Any
         nuevo_anticipo = round(float(rep["anticipo"]) + float(monto_abono), 2)
         nuevo_saldo = round(max(0.0, float(rep["precio_servicio"]) - nuevo_anticipo), 2)
 
-        cursor.execute(
-            "UPDATE reparaciones SET anticipo = ?, saldo_pendiente = ? WHERE id = ?",
-            (nuevo_anticipo, nuevo_saldo, rep_id)
-        )
+        if tenant_id is not None:
+            cursor.execute(
+                "UPDATE reparaciones SET anticipo = ?, saldo_pendiente = ? WHERE id = ? AND tenant_id = ?",
+                (nuevo_anticipo, nuevo_saldo, rep_id, tenant_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE reparaciones SET anticipo = ?, saldo_pendiente = ? WHERE id = ?",
+                (nuevo_anticipo, nuevo_saldo, rep_id)
+            )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -2160,12 +2558,20 @@ def abonar_reparacion(rep_id: int, monto_abono: float) -> Optional[Dict[str, Any
     finally:
         conn.close()
 
-    return get_reparacion_by_id(rep_id)
+    return get_reparacion_by_id(rep_id, tenant_id=tenant_id)
 
-def delete_reparacion(rep_id: int) -> bool:
+def delete_reparacion(rep_id: int, tenant_id: Optional[int] = None) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM reparaciones WHERE id = ?", (rep_id,))
+    existing = get_reparacion_by_id(rep_id, tenant_id=tenant_id)
+    if not existing:
+        conn.close()
+        return False
+
+    if tenant_id is not None:
+        cursor.execute("DELETE FROM reparaciones WHERE id = ? AND tenant_id = ?", (rep_id, tenant_id))
+    else:
+        cursor.execute("DELETE FROM reparaciones WHERE id = ?", (rep_id,))
     conn.commit()
     filas = cursor.rowcount
     conn.close()

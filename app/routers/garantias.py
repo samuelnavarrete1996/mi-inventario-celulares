@@ -2,14 +2,15 @@ from fastapi import APIRouter, HTTPException, Query, status, Depends
 from typing import List, Optional, Dict, Any
 from app import crud
 from app.models import GarantiaCreate, GarantiaResponse
-from app.security import get_current_user, sanitizar_datos_sensibles
+from app.security import get_current_user, sanitizar_datos_sensibles, get_current_tenant
+from app.dependencies import TenantContext
 
 router = APIRouter(prefix="/api/garantias", tags=["Garantías"])
 
 @router.get("/verificar-imei")
 def verificar_imei_garantia(
     imei: str = Query(..., min_length=4, max_length=30, description="IMEI del equipo vendido a consultar para garantía"),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
     Verifica los datos de venta de un equipo y calcula si está dentro de su plazo de garantía:
@@ -19,8 +20,8 @@ def verificar_imei_garantia(
     (Requiere sesión activa y oculta costos confidenciales a vendedores).
     """
     try:
-        info = crud.buscar_equipo_para_garantia(imei)
-        return sanitizar_datos_sensibles(info, user)
+        info = crud.buscar_equipo_para_garantia(imei, tenant_id=tenant.tenant_id)
+        return sanitizar_datos_sensibles(info, tenant.user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception:
@@ -32,7 +33,7 @@ def verificar_imei_garantia(
 @router.post("/devolucion", response_model=GarantiaResponse, status_code=status.HTTP_201_CREATED)
 def procesar_devolucion_garantia(
     garantia: GarantiaCreate,
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
     Procesa el regreso de un equipo por garantía:
@@ -42,8 +43,8 @@ def procesar_devolucion_garantia(
     (Requiere sesión activa).
     """
     try:
-        resultado = crud.procesar_devolucion_garantia(garantia)
-        return sanitizar_datos_sensibles(resultado, user)
+        resultado = crud.procesar_devolucion_garantia(garantia, tenant_id=tenant.tenant_id)
+        return sanitizar_datos_sensibles(resultado, tenant.user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
@@ -55,16 +56,16 @@ def procesar_devolucion_garantia(
 @router.get("", response_model=List[Dict[str, Any]])
 def listar_historial_garantias(
     limit: int = Query(100, ge=1, le=500),
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
-    """Obtiene el historial de todas las devoluciones y reclamos de garantía procesados (requiere sesión activa)."""
-    historial = crud.get_historial_garantias(limit=limit)
-    return sanitizar_datos_sensibles(historial, user)
+    """Obtiene el historial de todas las devoluciones y reclamos de garantía procesados del tenant en sesión."""
+    historial = crud.get_historial_garantias(limit=limit, tenant_id=tenant.tenant_id)
+    return sanitizar_datos_sensibles(historial, tenant.user)
 
 @router.get("/historial-imei/{imei}")
 def obtener_historial_completo_imei(
     imei: str,
-    user: dict = Depends(get_current_user)
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
     """
     Trazabilidad 360° por IMEI:
@@ -73,8 +74,8 @@ def obtener_historial_completo_imei(
     (Requiere sesión activa y sanitiza costos de compra para vendedores).
     """
     try:
-        historial = crud.obtener_historial_imei(imei)
-        return sanitizar_datos_sensibles(historial, user)
+        historial = crud.obtener_historial_imei(imei, tenant_id=tenant.tenant_id)
+        return sanitizar_datos_sensibles(historial, tenant.user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception:
