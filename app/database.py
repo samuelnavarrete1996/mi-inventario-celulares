@@ -17,11 +17,24 @@ if os.path.exists(_env_file):
         pass
 
 
-TURSO_URL = os.environ.get("TURSO_DATABASE_URL") or os.environ.get("TURSO_URL") or os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+def is_postgres_enabled() -> bool:
+    """Retorna True si DATABASE_URL está configurada para PostgreSQL / Supabase."""
+    raw = os.environ.get("DATABASE_URL", "").strip()
+    return bool(raw and (
+        raw.startswith("postgresql://") or
+        raw.startswith("postgres://") or
+        raw.startswith("postgresql+psycopg2://")
+    ))
+
+TURSO_URL = os.environ.get("TURSO_DATABASE_URL") or os.environ.get("TURSO_URL") or (DATABASE_URL if not is_postgres_enabled() else "")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN") or os.environ.get("TURSO_TOKEN") or os.environ.get("DATABASE_AUTH_TOKEN")
 
 def is_turso_enabled() -> bool:
-    """Retorna True si las credenciales de Turso Cloud están configuradas."""
+    """Retorna True si las credenciales de Turso Cloud están configuradas y no es Postgres."""
+    if is_postgres_enabled():
+        return False
     return bool(TURSO_URL and TURSO_TOKEN and ("turso.io" in TURSO_URL or "libsql:" in TURSO_URL))
 
 def _resolve_sqlite_path() -> str:
@@ -29,7 +42,7 @@ def _resolve_sqlite_path() -> str:
     explicit = os.environ.get("DATABASE_PATH")
     if explicit:
         return explicit
-    if is_turso_enabled():
+    if is_turso_enabled() or is_postgres_enabled():
         return os.path.join(tempfile.gettempdir(), "inventario.db")
 
     default_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "inventario.db")
@@ -51,7 +64,16 @@ def _resolve_sqlite_path() -> str:
 DATABASE_FILE = _resolve_sqlite_path()
 
 def get_db_connection():
-    """Retorna una conexión a Turso Cloud si está configurada, o a SQLite local con WAL y busy_timeout para evitar condiciones de carrera."""
+    """
+    Retorna:
+    1. Conexión pooled a PostgreSQL si DATABASE_URL empieza con postgresql / postgres.
+    2. Conexión a Turso Cloud si está configurada.
+    3. Conexión local a SQLite ('inventario.db') con WAL y busy_timeout como fallback.
+    """
+    if is_postgres_enabled():
+        from app.postgres_client import get_postgres_connection
+        return get_postgres_connection()
+
     if is_turso_enabled():
         from app.turso_client import TursoConnection
         return TursoConnection(TURSO_URL, TURSO_TOKEN)
@@ -70,6 +92,52 @@ def init_db():
     """Crea las tablas, índices y migraciones si no existen."""
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # ==========================================================================
+    # 0. TABLAS MAESTRAS MULTI-TENANT SAAS (Tenants, Sucursales, Configuración)
+    # ==========================================================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tenants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre_comercial TEXT NOT NULL,
+        slug TEXT UNIQUE NOT NULL,
+        email_contacto TEXT,
+        telefono TEXT,
+        plan TEXT NOT NULL DEFAULT 'basico',
+        activo INTEGER NOT NULL DEFAULT 1,
+        fecha_creacion TEXT NOT NULL
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS sucursales (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id INTEGER NOT NULL,
+        nombre_sucursal TEXT NOT NULL,
+        direccion TEXT,
+        telefono TEXT,
+        es_matriz INTEGER NOT NULL DEFAULT 1,
+        fecha_registro TEXT NOT NULL,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sucursales_tenant ON sucursales(tenant_id);")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS configuracion_tienda (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id INTEGER NOT NULL UNIQUE,
+        logo_url TEXT,
+        encabezado_ticket TEXT,
+        pie_ticket_garantia TEXT,
+        whatsapp_notificaciones TEXT,
+        fecha_actualizacion TEXT NOT NULL,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_config_tienda_tenant ON configuracion_tienda(tenant_id);")
 
     # 1. Tabla Equipos
     cursor.execute("""
@@ -401,8 +469,151 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_telefono ON reparaciones(cliente_telefono);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username);")
 
+    # ==========================================================================
+    # MIGRACIÓN DE COLUMNAS MULTI-TENANT (tenant_id, sucursal_id)
+    # ==========================================================================
+    tablas_multitenant = [
+        ("equipos", True),
+        ("ventas", True),
+        ("reparaciones", True),
+        ("accesorios", True),
+        ("cortes_caja", True),
+        ("clientes", False),
+        ("usuarios", False),
+    ]
+
+    for tabla, tiene_sucursal in tablas_multitenant:
+        try:
+            cursor.execute(f"PRAGMA table_info({tabla});")
+            cols = [row["name"] for row in cursor.fetchall()]
+            if cols:
+                if "tenant_id" not in cols:
+                    cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE;")
+                if tiene_sucursal and "sucursal_id" not in cols:
+                    cursor.execute(f"ALTER TABLE {tabla} ADD COLUMN sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL;")
+                
+                # Crear índices de búsqueda multi-tenant
+                if tiene_sucursal:
+                    cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_{tabla}_tenant_sucursal ON {tabla}(tenant_id, sucursal_id);")
+                else:
+                    cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_{tabla}_tenant ON {tabla}(tenant_id);")
+        except Exception:
+            pass
+
+    # Crear vista de compatibilidad caja_cortes
+    try:
+        cursor.execute("CREATE VIEW IF NOT EXISTS caja_cortes AS SELECT * FROM cortes_caja;")
+    except Exception:
+        pass
+
     conn.commit()
     conn.close()
+
+    # Inicializar el tenant de prueba y asignar registros existentes (Backfill)
+    init_demo_tenant_if_empty()
+
+
+def init_demo_tenant_if_empty():
+    """
+    Inicializa la arquitectura Multi-Tenant SaaS:
+    1. Si no existe un tenant activo o la BD está vacía, crea el tenant de prueba 'Demostración Celulares'.
+    2. Crea su sucursal matriz y su configuración de tienda.
+    3. Asigna (backfill) todos los registros históricos existentes (con tenant_id NULL) a este tenant
+       para garantizar 100% de compatibilidad hacia atrás y evitar que nada se rompa.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        # 1. Verificar si ya existe el tenant de demostración
+        cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares' OR nombre_comercial = 'Demostración Celulares' LIMIT 1;")
+        row = cursor.fetchone()
+        
+        if row:
+            tenant_id = row["id"] if isinstance(row, dict) or hasattr(row, '__getitem__') else row[0]
+        else:
+            # Crear Tenant de Demostración
+            cursor.execute("""
+            INSERT INTO tenants (nombre_comercial, slug, email_contacto, telefono, plan, activo, fecha_creacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
+            """, (
+                "Demostración Celulares",
+                "demo-celulares",
+                "contacto@democelulares.com",
+                "5512345678",
+                "pro",
+                1,
+                now
+            ))
+            tenant_id = cursor.lastrowid
+            if not tenant_id:
+                cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares';")
+                tenant_id = cursor.fetchone()["id"]
+
+        # 2. Verificar o crear Sucursal Matriz
+        cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (tenant_id,))
+        row_suc = cursor.fetchone()
+        if row_suc:
+            sucursal_id = row_suc["id"] if isinstance(row_suc, dict) or hasattr(row_suc, '__getitem__') else row_suc[0]
+        else:
+            cursor.execute("""
+            INSERT INTO sucursales (tenant_id, nombre_sucursal, direccion, telefono, es_matriz, fecha_registro)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """, (
+                tenant_id,
+                "Sucursal Matriz Centro",
+                "Av. Principal #100, Col. Centro",
+                "5512345678",
+                1,
+                now
+            ))
+            sucursal_id = cursor.lastrowid
+            if not sucursal_id:
+                cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
+                sucursal_id = cursor.fetchone()["id"]
+
+        # 3. Verificar o crear Configuración de Tienda
+        cursor.execute("SELECT id FROM configuracion_tienda WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO configuracion_tienda (tenant_id, logo_url, encabezado_ticket, pie_ticket_garantia, whatsapp_notificaciones, fecha_actualizacion)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """, (
+                tenant_id,
+                "/static/img/logo.png",
+                "Demostración Celulares | Compra y Venta Móvil",
+                "Garantía de 30 días válida únicamente con este comprobante original.",
+                "525512345678",
+                now
+            ))
+
+        # 4. Asignar registros huérfanos o existentes a este tenant (Backfill)
+        tablas_a_migrar = [
+            ("equipos", True),
+            ("ventas", True),
+            ("reparaciones", True),
+            ("accesorios", True),
+            ("cortes_caja", True),
+            ("clientes", False),
+            ("usuarios", False),
+        ]
+
+        for tabla, tiene_sucursal in tablas_a_migrar:
+            try:
+                if tiene_sucursal:
+                    cursor.execute(f"UPDATE {tabla} SET tenant_id = ?, sucursal_id = ? WHERE tenant_id IS NULL;", (tenant_id, sucursal_id))
+                else:
+                    cursor.execute(f"UPDATE {tabla} SET tenant_id = ? WHERE tenant_id IS NULL;", (tenant_id,))
+            except Exception:
+                pass
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def seed_demo_data_if_empty():
     """

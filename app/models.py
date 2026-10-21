@@ -17,6 +17,8 @@ class EquipoCreate(BaseModel):
     grado: str = Field(..., description="Grado estético y funcional: A, B o C")
     costo_compra: float = Field(..., gt=0, description="Costo al que se adquirió el equipo")
     precio_venta: float = Field(..., gt=0, description="Precio sugerido de venta al público")
+    tenant_id: Optional[int] = Field(None, description="ID del tenant (SaaS Multi-tenant)")
+    sucursal_id: Optional[int] = Field(None, description="ID de la sucursal (SaaS Multi-tenant)")
 
     @field_validator('grado')
     def validate_grado(cls, v):
@@ -45,6 +47,8 @@ class EquipoUpdate(BaseModel):
     costo_compra: Optional[float] = Field(None, gt=0)
     precio_venta: Optional[float] = Field(None, gt=0)
     estado: Optional[str] = None
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
 
     @field_validator('grado')
     def validate_grado_update(cls, v):
@@ -76,6 +80,8 @@ class EquipoResponse(BaseModel):
     imei: str
     grado: str
     costo_compra: Optional[float] = None
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
     precio_venta: float
     estado: str
     fecha_registro: str
@@ -83,17 +89,21 @@ class EquipoResponse(BaseModel):
     porcentaje_margen: Optional[float] = None
     dias_en_stock: Optional[int] = 0
     estado_antiguedad: Optional[str] = "Fresco"
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
 
 class ClienteCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=2, max_length=150, description="Nombre completo del cliente")
     telefono: str = Field(..., min_length=7, max_length=30, description="Teléfono de contacto")
+    tenant_id: Optional[int] = Field(None, description="ID del tenant (SaaS Multi-tenant)")
 
 class ClienteResponse(BaseModel):
     id: int
     nombre: str
     telefono: str
     fecha_registro: str
+    tenant_id: Optional[int] = None
 
 # --- MODELOS DE ACCESORIOS Y SERVICIOS ---
 
@@ -111,6 +121,8 @@ class AccesorioCreate(BaseModel):
     color: Optional[str] = Field(None, max_length=50, description="Color o variante del accesorio")
     stock: int = Field(0, ge=0, le=1000000, description="Cantidad en stock")
     es_servicio: bool = Field(False, description="True si es servicio/mano de obra")
+    tenant_id: Optional[int] = Field(None, description="ID del tenant (SaaS Multi-tenant)")
+    sucursal_id: Optional[int] = Field(None, description="ID de la sucursal (SaaS Multi-tenant)")
 
     @field_validator('costo_compra', 'precio_venta', 'precio_mayoreo', 'precio_20_pzs', 'precio_caja')
     def validate_montos_accesorio(cls, v):
@@ -130,6 +142,8 @@ class AccesorioUpdate(BaseModel):
     color: Optional[str] = Field(None, max_length=50)
     stock: Optional[int] = Field(None, ge=0, le=1000000)
     es_servicio: Optional[bool] = None
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
 
     @field_validator('costo_compra', 'precio_venta', 'precio_mayoreo', 'precio_20_pzs', 'precio_caja')
     def validate_montos_accesorio_update(cls, v):
@@ -151,6 +165,8 @@ class AccesorioResponse(BaseModel):
     es_servicio: int
     fecha_registro: str
     margen_unitario: Optional[float] = None
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
 
 class AccesorioAjusteStockRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -244,6 +260,10 @@ class VentaCreate(BaseModel):
     fecha_vencimiento: Optional[str] = Field(None, max_length=20, description="Fecha de vencimiento (YYYY-MM-DD)")
     monto_anticipo: float = Field(0.0, ge=0, description="Monto del anticipo inicial")
     
+    # Soporte Multi-Tenant
+    tenant_id: Optional[int] = Field(None, description="ID del tenant (SaaS Multi-tenant)")
+    sucursal_id: Optional[int] = Field(None, description="ID de la sucursal (SaaS Multi-tenant)")
+
     # Retrocompatibilidad con venta de un solo equipo
     equipo_id: Optional[int] = None
     precio_final: Optional[float] = None
@@ -443,6 +463,8 @@ class CorteCajaCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     efectivo_declarado: float = Field(..., ge=0, description="Efectivo físico contado en caja")
     notas: Optional[str] = Field(None, max_length=500)
+    tenant_id: Optional[int] = Field(None, description="ID del tenant (SaaS Multi-tenant)")
+    sucursal_id: Optional[int] = Field(None, description="ID de la sucursal (SaaS Multi-tenant)")
 
     @field_validator('efectivo_declarado')
     def validate_efectivo(cls, v):
@@ -458,6 +480,8 @@ class CorteCajaResponse(BaseModel):
     total_garantia: float
     efectivo_declarado: float
     diferencia: float
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
     cantidad_ventas: int
     notas: Optional[str] = None
     fecha_registro: Optional[str] = None
@@ -505,6 +529,8 @@ class ReparacionCreate(BaseModel):
     tecnico_responsable: Optional[str] = Field("Samuel N.", max_length=100)
     notas: Optional[str] = Field(None, max_length=500)
     fecha_prometida: Optional[str] = Field(None, max_length=40)
+    tenant_id: Optional[int] = Field(None, description="ID del tenant (SaaS Multi-tenant)")
+    sucursal_id: Optional[int] = Field(None, description="ID de la sucursal (SaaS Multi-tenant)")
 
     @field_validator('costo_refaccion', 'precio_servicio', 'anticipo')
     def validate_montos_reparacion(cls, v):
@@ -530,6 +556,8 @@ class ReparacionUpdate(BaseModel):
     notas: Optional[str] = Field(None, max_length=500)
     fecha_prometida: Optional[str] = Field(None, max_length=40)
     fecha_entrega: Optional[str] = Field(None, max_length=40)
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
 
     @field_validator('estado')
     def validate_estado_rep(cls, v):
@@ -574,3 +602,84 @@ class ReparacionResponse(BaseModel):
     tecnico_responsable: Optional[str] = None
     notas: Optional[str] = None
     margen_ganancia: Optional[float] = None
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
+
+
+# ==============================================================================
+# MODELOS MULTI-TENANT SAAS (Tenants, Sucursales, Configuración Tienda)
+# ==============================================================================
+
+class TenantBase(BaseModel):
+    nombre_comercial: str = Field(..., min_length=2, max_length=150, description="Nombre comercial del negocio / tienda")
+    slug: str = Field(..., min_length=2, max_length=60, description="Identificador único para URL/subdominio (slug alfanumérico)")
+    email_contacto: Optional[str] = Field(None, max_length=120, description="Correo electrónico de contacto")
+    telefono: Optional[str] = Field(None, max_length=30, description="Teléfono de contacto")
+    plan: str = Field("basico", max_length=50, description="Plan de suscripción: gratis, basico, pro, enterprise")
+    activo: bool = Field(True, description="Estado de la cuenta/tenant")
+
+    @field_validator('slug')
+    def validate_slug(cls, v):
+        v = v.strip().lower().replace(" ", "-")
+        if not all(c.isalnum() or c in ('-', '_') for c in v):
+            raise ValueError("El slug solo debe contener letras, números, guiones y guiones bajos.")
+        return v
+
+class TenantCreate(TenantBase):
+    model_config = ConfigDict(extra="forbid")
+
+class TenantUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre_comercial: Optional[str] = Field(None, min_length=2, max_length=150)
+    email_contacto: Optional[str] = Field(None, max_length=120)
+    telefono: Optional[str] = Field(None, max_length=30)
+    plan: Optional[str] = Field(None, max_length=50)
+    activo: Optional[bool] = None
+
+class TenantResponse(TenantBase):
+    id: int
+    fecha_creacion: str
+
+
+class SucursalBase(BaseModel):
+    tenant_id: int = Field(..., description="ID del tenant al que pertenece la sucursal")
+    nombre_sucursal: str = Field(..., min_length=2, max_length=100, description="Nombre de la sucursal o punto de venta")
+    direccion: Optional[str] = Field(None, max_length=255, description="Dirección física de la sucursal")
+    telefono: Optional[str] = Field(None, max_length=30, description="Teléfono de la sucursal")
+    es_matriz: bool = Field(False, description="Indica si es la sucursal principal o matriz")
+
+class SucursalCreate(SucursalBase):
+    model_config = ConfigDict(extra="forbid")
+
+class SucursalUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre_sucursal: Optional[str] = Field(None, min_length=2, max_length=100)
+    direccion: Optional[str] = Field(None, max_length=255)
+    telefono: Optional[str] = Field(None, max_length=30)
+    es_matriz: Optional[bool] = None
+
+class SucursalResponse(SucursalBase):
+    id: int
+    fecha_registro: Optional[str] = None
+
+
+class ConfiguracionTiendaBase(BaseModel):
+    tenant_id: int = Field(..., description="ID del tenant asociado a esta configuración")
+    logo_url: Optional[str] = Field(None, max_length=500, description="URL pública del logotipo")
+    encabezado_ticket: Optional[str] = Field(None, max_length=300, description="Texto personalizado en cabecera de tickets")
+    pie_ticket_garantia: Optional[str] = Field(None, max_length=500, description="Texto de políticas y garantía al pie del ticket")
+    whatsapp_notificaciones: Optional[str] = Field(None, max_length=30, description="Número de WhatsApp para notificaciones del negocio")
+
+class ConfiguracionTiendaCreate(ConfiguracionTiendaBase):
+    model_config = ConfigDict(extra="forbid")
+
+class ConfiguracionTiendaUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    logo_url: Optional[str] = Field(None, max_length=500)
+    encabezado_ticket: Optional[str] = Field(None, max_length=300)
+    pie_ticket_garantia: Optional[str] = Field(None, max_length=500)
+    whatsapp_notificaciones: Optional[str] = Field(None, max_length=30)
+
+class ConfiguracionTiendaResponse(ConfiguracionTiendaBase):
+    id: int
+    fecha_actualizacion: Optional[str] = None
