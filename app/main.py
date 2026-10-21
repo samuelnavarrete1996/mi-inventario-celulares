@@ -32,20 +32,25 @@ async def global_unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 # Configuración Segura de CORS (Permite localhost, red local Wi-Fi y subdominios de Render)
-allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
-if allowed_origins_env:
-    allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+cors_env = os.environ.get("CORS_ORIGINS") or os.environ.get("ALLOWED_ORIGINS")
+if cors_env and cors_env.strip() == "*":
+    allowed_origins = []
+    allow_origin_regex = r".*"
+elif cors_env:
+    allowed_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$|^https://[a-zA-Z0-9-]+\.onrender\.com$"
 else:
     allowed_origins = [
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "http://localhost:3000",
     ]
+    allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$|^https://[a-zA-Z0-9-]+\.onrender\.com$"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$|^https://[a-zA-Z0-9-]+\.onrender\.com$",
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -86,10 +91,13 @@ async def security_and_cache_headers(request: Request, call_next):
         
     return response
 
-# Inicializar Base de Datos en el arranque
+# Inicializar Base de Datos y estructura de almacenamiento en el arranque
 @app.on_event("startup")
 def on_startup():
     init_db()
+    # Asegurar que el directorio de almacenamiento de logos exista
+    logos_dir = os.path.join(STATIC_DIR, "uploads", "logos")
+    os.makedirs(logos_dir, exist_ok=True)
 
 # Registro de routers de API
 app.include_router(auth.router)
@@ -145,3 +153,24 @@ def serve_service_worker():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "app": "Mi Inventario Samuel Navarrete", "version": "2.1.0"}
+
+@app.get("/healthz")
+def healthz_check():
+    """Endpoint de verificación de salud para Render, balanceadores y monitoreo cloud."""
+    from app.database import is_postgres_enabled, get_db_connection
+    engine = "postgresql" if is_postgres_enabled() else "sqlite"
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1;")
+            cur.fetchone()
+        finally:
+            conn.close()
+        return {"status": "ok", "database": "connected", "engine": engine}
+    except Exception as e:
+        logger.error("Health check error: %s", repr(e))
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "error", "database": "disconnected", "engine": engine, "detail": str(e)}
+        )

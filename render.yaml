@@ -1,11 +1,22 @@
 services:
   - type: web
-    name: mi-inventario-samuel-navarrete
+    name: mi-inventario-pos
     runtime: python
     plan: free
     autoDeploy: true
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2
+    healthCheckPath: /healthz
     envVars:
+      - key: ENVIRONMENT
+        value: production
       - key: AUTO_OPEN_BROWSER
         value: "0"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_DELETE_PASSWORD
+        sync: false
