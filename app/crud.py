@@ -2576,3 +2576,163 @@ def delete_reparacion(rep_id: int, tenant_id: Optional[int] = None) -> bool:
     filas = cursor.rowcount
     conn.close()
     return filas > 0
+
+
+# ==============================================================================
+# CONFIGURACIÓN DE TIENDA Y MARCA BLANCA (WHITE-LABEL)
+# ==============================================================================
+
+def get_configuracion_general(tenant_id: int) -> Dict[str, Any]:
+    """Obtiene la configuración visual, fiscal y de tickets para el tenant especificado."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM tenants WHERE id = ? LIMIT 1;", (tenant_id,))
+        tenant = cursor.fetchone()
+        if not tenant:
+            raise ValueError(f"El tenant con ID {tenant_id} no existe.")
+
+        cursor.execute("SELECT * FROM sucursales WHERE tenant_id = ? ORDER BY es_matriz DESC, id ASC LIMIT 1;", (tenant_id,))
+        sucursal = cursor.fetchone()
+
+        cursor.execute("SELECT * FROM configuracion_tienda WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
+        conf = cursor.fetchone()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if not conf:
+            def_logo = "/static/img/logo.png"
+            def_encabezado = f"{tenant['nombre_comercial']} | Compra, Venta y Reparación"
+            def_pie = "Garantía de 30 días válida únicamente con este comprobante original. No cubre humedad, golpes ni manipulación indebida."
+            def_wsp = tenant["telefono"] or ""
+
+            cursor.execute("""
+            INSERT INTO configuracion_tienda (tenant_id, logo_url, encabezado_ticket, pie_ticket_garantia, whatsapp_notificaciones, fecha_actualizacion)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """, (tenant_id, def_logo, def_encabezado, def_pie, def_wsp, now))
+            conn.commit()
+            conf_dict = {
+                "logo_url": def_logo,
+                "encabezado_ticket": def_encabezado,
+                "pie_ticket_garantia": def_pie,
+                "whatsapp_notificaciones": def_wsp,
+                "fecha_actualizacion": now,
+            }
+        else:
+            conf_dict = dict(conf)
+
+        return {
+            "tenant_id": int(tenant["id"]),
+            "nombre_comercial": str(tenant["nombre_comercial"]),
+            "slug": str(tenant["slug"]),
+            "email_contacto": tenant["email_contacto"],
+            "telefono": tenant["telefono"] or conf_dict.get("whatsapp_notificaciones"),
+            "whatsapp_notificaciones": conf_dict.get("whatsapp_notificaciones") or tenant["telefono"],
+            "direccion": sucursal["direccion"] if sucursal and sucursal["direccion"] else "",
+            "nombre_sucursal": sucursal["nombre_sucursal"] if sucursal and sucursal["nombre_sucursal"] else "Matriz",
+            "logo_url": conf_dict.get("logo_url") or "/static/img/logo.png",
+            "encabezado_ticket": conf_dict.get("encabezado_ticket") or f"{tenant['nombre_comercial']} | Compra, Venta y Reparación",
+            "pie_ticket_garantia": conf_dict.get("pie_ticket_garantia") or "Garantía de 30 días válida únicamente con este comprobante original.",
+            "fecha_actualizacion": conf_dict.get("fecha_actualizacion") or now,
+        }
+    finally:
+        conn.close()
+
+
+def update_configuracion_general(tenant_id: int, datos: Dict[str, Any]) -> Dict[str, Any]:
+    """Actualiza datos del negocio, sucursal matriz y configuración de tickets."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        _begin_immediate(cursor)
+
+        # 1. Actualizar tenants si aplica
+        if "nombre_comercial" in datos and datos["nombre_comercial"] is not None:
+            cursor.execute("UPDATE tenants SET nombre_comercial = ? WHERE id = ?;", (datos["nombre_comercial"].strip(), tenant_id))
+
+        if "telefono" in datos and datos["telefono"] is not None:
+            cursor.execute("UPDATE tenants SET telefono = ? WHERE id = ?;", (datos["telefono"].strip(), tenant_id))
+
+        # 2. Actualizar sucursal matriz
+        if "direccion" in datos and datos["direccion"] is not None:
+            cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? ORDER BY es_matriz DESC, id ASC LIMIT 1;", (tenant_id,))
+            suc = cursor.fetchone()
+            if suc:
+                cursor.execute("UPDATE sucursales SET direccion = ? WHERE id = ?;", (datos["direccion"].strip(), suc["id"]))
+            else:
+                cursor.execute("""
+                INSERT INTO sucursales (tenant_id, nombre_sucursal, direccion, telefono, es_matriz, fecha_registro)
+                VALUES (?, 'Matriz', ?, ?, 1, ?);
+                """, (tenant_id, datos["direccion"].strip(), datos.get("telefono", ""), now))
+
+        # 3. Actualizar configuracion_tienda
+        cursor.execute("SELECT id FROM configuracion_tienda WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
+        conf_row = cursor.fetchone()
+
+        encabezado = datos.get("encabezado_ticket")
+        pie = datos.get("pie_ticket_garantia")
+        whatsapp = datos.get("whatsapp_notificaciones")
+
+        if not conf_row:
+            cursor.execute("""
+            INSERT INTO configuracion_tienda (tenant_id, logo_url, encabezado_ticket, pie_ticket_garantia, whatsapp_notificaciones, fecha_actualizacion)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """, (
+                tenant_id,
+                "/static/img/logo.png",
+                encabezado.strip() if encabezado else None,
+                pie.strip() if pie else None,
+                whatsapp.strip() if whatsapp else None,
+                now
+            ))
+        else:
+            updates = ["fecha_actualizacion = ?"]
+            vals = [now]
+            if encabezado is not None:
+                updates.append("encabezado_ticket = ?")
+                vals.append(encabezado.strip())
+            if pie is not None:
+                updates.append("pie_ticket_garantia = ?")
+                vals.append(pie.strip())
+            if whatsapp is not None:
+                updates.append("whatsapp_notificaciones = ?")
+                vals.append(whatsapp.strip())
+
+            vals.append(tenant_id)
+            cursor.execute(f"UPDATE configuracion_tienda SET {', '.join(updates)} WHERE tenant_id = ?;", vals)
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return get_configuracion_general(tenant_id)
+
+
+def update_logo_tienda(tenant_id: int, logo_url: str) -> str:
+    """Actualiza la URL del logotipo de la tienda para el tenant especificado."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        _begin_immediate(cursor)
+        cursor.execute("SELECT id FROM configuracion_tienda WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO configuracion_tienda (tenant_id, logo_url, encabezado_ticket, pie_ticket_garantia, whatsapp_notificaciones, fecha_actualizacion)
+            VALUES (?, ?, NULL, NULL, NULL, ?);
+            """, (tenant_id, logo_url, now))
+        else:
+            cursor.execute("UPDATE configuracion_tienda SET logo_url = ?, fecha_actualizacion = ? WHERE tenant_id = ?;", (logo_url, now, tenant_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return logo_url

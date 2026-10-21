@@ -13,6 +13,9 @@ const App = {
         this.setupLockscreenListeners();
         this.iniciarTemporizadorInactividad();
         await this.verificarSesion();
+        if (typeof ConfiguracionTienda !== 'undefined') {
+            await ConfiguracionTienda.init();
+        }
         this.updateHeaderStats();
         this.registerServiceWorker();
     },
@@ -345,6 +348,9 @@ const App = {
         if (typeof Reparaciones !== 'undefined' && Reparaciones.cargar) {
             Reparaciones.cargar();
         }
+        if (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.cargar) {
+            ConfiguracionTienda.cargar();
+        }
         this.updateHeaderStats();
     },
 
@@ -420,8 +426,8 @@ const App = {
     },
 
     switchTab(tabName) {
-        if (tabName === 'reportes' && !this.isAdmin) {
-            this.showToast("El módulo de Reportes requiere permisos de Dueño.", "warning");
+        if ((tabName === 'reportes' || tabName === 'configuracion') && !this.isAdmin) {
+            this.showToast(`El módulo de ${tabName === 'reportes' ? 'Reportes' : 'Configuración'} requiere permisos de Dueño.`, "warning");
             return;
         }
         this.currentTab = tabName;
@@ -475,6 +481,8 @@ const App = {
             Reportes.cargarHistorialVentas();
         } else if (tabName === 'reparaciones') {
             if (typeof Reparaciones !== 'undefined') Reparaciones.cargar();
+        } else if (tabName === 'configuracion') {
+            if (typeof ConfiguracionTienda !== 'undefined') ConfiguracionTienda.cargar();
         }
 
         // Si estamos en POS móvil, verificar visibilidad del carrito flotante
@@ -524,7 +532,7 @@ const App = {
                 this.currentUser = data.user;
                 this.aplicarModoAdmin();
 
-                if (this.currentTab === 'reportes') {
+                if (this.currentTab === 'reportes' || this.currentTab === 'configuracion') {
                     this.switchTab('inventario');
                 }
 

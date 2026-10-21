@@ -305,6 +305,41 @@ const Reparaciones = {
         document.getElementById('boleta-anticipo').textContent = App.formatCurrency(rep.anticipo);
         document.getElementById('boleta-saldo').textContent = App.formatCurrency(rep.saldo_pendiente);
 
+        // IMEI / Serie, Contraseña, Accesorios y Técnico
+        const elImei = document.getElementById('boleta-imei');
+        if (elImei) elImei.textContent = rep.imei_serie || 'No registrado';
+        const elPass = document.getElementById('boleta-password');
+        if (elPass) elPass.textContent = rep.codigo_patron || 'Sin contraseña / Desbloqueado';
+        const elTecnico = document.getElementById('boleta-tecnico');
+        if (elTecnico) elTecnico.textContent = rep.tecnico_responsable || 'Samuel N.';
+
+        // Generar QR para la boleta de servicio (consulta en línea o WhatsApp con folio)
+        const qrContainer = document.getElementById('boleta-qr-container');
+        if (qrContainer && typeof QRCode !== 'undefined') {
+            qrContainer.innerHTML = '';
+            const wsp = (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.datos && ConfiguracionTienda.datos.whatsapp_notificaciones) || '';
+            const telLimpio = wsp.replace(/\D/g, '');
+            const qrUrl = telLimpio
+                ? 'https://wa.me/' + telLimpio + '?text=' + encodeURIComponent('Hola, quisiera consultar el estatus de mi orden #' + rep.folio)
+                : window.location.origin + '/catalogo?check_rep=' + encodeURIComponent(rep.folio);
+            try {
+                new QRCode(qrContainer, {
+                    text: qrUrl,
+                    width: 100,
+                    height: 100,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (e) {
+                console.warn('Error generando QR boleta:', e);
+            }
+        }
+
+        if (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.aplicarClasesAnchoTickets) {
+            ConfiguracionTienda.aplicarClasesAnchoTickets();
+        }
+
         const modal = document.getElementById('modal-boleta-reparacion');
         if (modal) modal.classList.remove('hidden');
     },
@@ -315,7 +350,12 @@ const Reparaciones = {
     },
 
     imprimirBoleta() {
+        const content = document.getElementById('boleta-modal-content');
+        if (content) content.classList.add('print-ticket-active');
         window.print();
+        setTimeout(() => {
+            if (content) content.classList.remove('print-ticket-active');
+        }, 500);
     },
 
     enviarWhatsApp(id) {

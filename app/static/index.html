@@ -42,16 +42,17 @@
     <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
-                <!-- Branding -->
+                <!-- Branding con Soporte White-Label -->
                 <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 flex-shrink-0">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    <div id="header-logo-container" class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 flex-shrink-0 overflow-hidden">
+                        <img id="header-logo-img" src="" alt="Logo Tienda" class="w-full h-full object-cover hidden">
+                        <svg id="header-logo-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
                             <span class="text-xs uppercase tracking-wider font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">POS & Inventario</span>
                         </div>
-                        <h1 class="text-base font-extrabold text-slate-900 tracking-tight leading-none mt-0.5 truncate">
+                        <h1 id="header-store-name" class="text-base font-extrabold text-slate-900 tracking-tight leading-none mt-0.5 truncate">
                             Samuel Navarrete <span class="font-normal text-slate-500 hidden sm:inline">| Celulares</span>
                         </h1>
                     </div>
@@ -95,6 +96,10 @@
                         <button data-tab="reportes" class="admin-only nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                             <span>Reportes</span>
+                        </button>
+                        <button data-tab="configuracion" class="admin-only nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all" title="Ajustes de tienda, logotipo y formato de tickets">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            <span>Ajustes</span>
                         </button>
                     </nav>
 
@@ -1367,6 +1372,116 @@
             </div>
         </section>
 
+        <!-- ========================================== -->
+        <!-- PESTAÑA 6: CONFIGURACIÓN Y MARCA BLANCA    -->
+        <!-- ========================================== -->
+        <section id="view-configuracion" class="tab-view hidden space-y-6 md:space-y-8">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div class="flex items-center justify-between pb-5 border-b border-slate-100 mb-6 flex-wrap gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-2xl shadow-inner">
+                            ⚙️
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Configuración de Tienda y Marca Blanca</h2>
+                            <p class="text-xs text-slate-500">Personaliza la identidad visual de tu tienda, logotipo oficial, datos de contacto y formato térmico de tickets.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="px-3 py-1 bg-blue-50 text-blue-700 font-bold rounded-lg border border-blue-200">
+                            Tenant: <span id="cfg-info-tenant-id">--</span> (<span id="cfg-info-slug">demo</span>)
+                        </span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    <!-- Columna Izquierda: Logotipo y Previsualización -->
+                    <div class="lg:col-span-4 bg-slate-50 rounded-2xl p-6 border border-slate-200 text-center space-y-4">
+                        <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Logotipo Oficial</h3>
+                        <p class="text-xs text-slate-500">Se mostrará en la barra superior, catálogo web público y en los tickets térmicos.</p>
+
+                        <div class="mx-auto w-36 h-36 bg-white border-2 border-dashed border-slate-300 rounded-2xl flex items-center justify-center overflow-hidden relative shadow-inner">
+                            <img id="cfg-logo-preview" src="" alt="Previsualización de Logo" class="w-full h-full object-contain p-2 hidden">
+                            <div id="cfg-logo-placeholder" class="text-center p-3 text-slate-400">
+                                <span class="text-3xl block mb-1">🖼️</span>
+                                <span class="text-[11px] font-semibold block leading-tight">Sin logotipo cargado</span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <input type="file" id="cfg-logo-input" accept="image/png,image/jpeg,image/webp" onchange="ConfiguracionTienda.previsualizarLogo(this)" class="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer">
+                            <p class="text-[10px] text-slate-400">Formatos permitidos: PNG, JPG, WEBP. Tamaño máximo: 2 MB.</p>
+                            <button type="button" id="btn-subir-logo" onclick="ConfiguracionTienda.subirLogo()" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                <span>📤 Subir Logotipo</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Formulario de Datos y Tickets -->
+                    <div class="lg:col-span-8 space-y-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Nombre Comercial de la Tienda *</label>
+                                <input type="text" id="cfg-nombre-comercial" placeholder="Ej. Celulares Samuel Navarrete" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all font-semibold">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Teléfono Fijo / Tienda</label>
+                                <input type="text" id="cfg-telefono" placeholder="Ej. 55 1234 5678" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">WhatsApp Notificaciones y Cobranza</label>
+                                <input type="text" id="cfg-whatsapp" placeholder="Ej. 5215512345678" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Dirección de la Sucursal / Matriz</label>
+                                <input type="text" id="cfg-direccion" placeholder="Ej. Av. Central #123, Col. Centro" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 space-y-4">
+                            <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Plantilla de Tickets Térmicos (POS y Taller)</h3>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Encabezado del Ticket</label>
+                                <input type="text" id="cfg-encabezado-ticket" placeholder="Ej. Mi Inventario - Celulares | Compra y Venta Móvil" class="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Políticas de Garantía / Pie de Ticket</label>
+                                <textarea id="cfg-pie-ticket" rows="3" placeholder="Garantía de 30 días válida únicamente con este comprobante original..." class="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all leading-relaxed"></textarea>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-2">Formato de Impresión Térmica Predeterminado</label>
+                                <div class="grid grid-cols-2 gap-3 max-w-md">
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input type="radio" id="cfg-radio-58mm" name="ancho_ticket_cfg" value="58mm" class="text-blue-600 focus:ring-blue-500">
+                                        <div>
+                                            <span class="text-xs font-bold text-slate-900 block">58 mm (Portátil)</span>
+                                            <span class="text-[10px] text-slate-500 block">Bluetooth / Mini POS</span>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input type="radio" id="cfg-radio-80mm" name="ancho_ticket_cfg" value="80mm" checked class="text-blue-600 focus:ring-blue-500">
+                                        <div>
+                                            <span class="text-xs font-bold text-slate-900 block">80 mm (Estándar)</span>
+                                            <span class="text-[10px] text-slate-500 block">Mostrador / USB</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 flex justify-end">
+                            <button type="button" id="btn-guardar-cfg" onclick="ConfiguracionTienda.guardar()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer">
+                                <span>💾 Guardar Configuración de Tienda</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
 
@@ -1376,21 +1491,33 @@
     <div id="modal-recibo-venta" class="modal-sheet-mobile hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
         <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden relative">
             
+            <!-- Selector rápido de ancho térmico en pantalla (no se imprime) -->
+            <div class="no-print flex items-center justify-between px-6 py-2.5 bg-slate-50 border-b border-slate-200 text-xs">
+                <span class="font-bold text-slate-600">Formato de Ticket:</span>
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="ConfiguracionTienda.setAnchoTicket('58mm')" class="btn-ancho-58mm px-2.5 py-1 text-xs font-bold rounded-lg transition-all">58 mm</button>
+                    <button type="button" onclick="ConfiguracionTienda.setAnchoTicket('80mm')" class="btn-ancho-80mm px-2.5 py-1 text-xs font-bold rounded-lg transition-all">80 mm</button>
+                </div>
+            </div>
+
             <!-- CONTENIDO DEL RECIBO (Imprimible con @media print) -->
-            <div id="receipt-modal-content" class="p-6 bg-white text-slate-900 font-sans">
+            <div id="receipt-modal-content" class="ticket-printable-container p-6 bg-white text-slate-900 font-sans mx-auto">
                 
-                <!-- Encabezado del Recibo -->
+                <!-- Encabezado del Recibo con Marca Blanca -->
                 <div class="text-center pb-4 border-b border-dashed border-slate-300">
-                    <div class="w-10 h-10 mx-auto rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg mb-2">
-                        SN
-                    </div>
-                    <h2 class="text-lg font-black tracking-tight uppercase">Mi Inventario - Celulares</h2>
-                    <p class="text-xs font-semibold text-slate-600">Samuel Navarrete | Compra y Venta Móvil</p>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Especialistas en telefonía seminueva y garantizada</p>
+                    <img class="ticket-logo-img h-12 mx-auto mb-2 object-contain hidden" alt="Logo Tienda" />
+                    <h2 class="ticket-nombre-comercial text-lg font-black tracking-tight uppercase">Mi Inventario - Celulares</h2>
+                    <p class="ticket-encabezado text-xs font-semibold text-slate-600">Samuel Navarrete | Compra y Venta Móvil</p>
+                    <p class="ticket-direccion text-[11px] text-slate-400 mt-0.5">Especialistas en telefonía seminueva y garantizada</p>
+                    <p class="ticket-telefono text-[10px] text-slate-500 font-mono mt-0.5"></p>
 
                     <div class="mt-3 flex justify-between items-center text-xs text-slate-500 bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
                         <span id="recibo-folio" class="font-mono font-bold text-slate-800">FOLIO #00000</span>
                         <span id="recibo-fecha" class="text-slate-600">--</span>
+                    </div>
+                    <div class="mt-1 flex justify-between items-center text-[11px] text-slate-400 px-1">
+                        <span>Atendido por:</span>
+                        <span id="recibo-cajero" class="font-semibold text-slate-700">Caja Principal</span>
                     </div>
                 </div>
 
@@ -1432,6 +1559,12 @@
                     <p class="text-[9px] text-slate-400">Conserva esta nota de venta para validar tu garantía de 30 días.</p>
                     <div class="pt-1 font-mono text-[9px] text-slate-400 uppercase tracking-widest">
                         ¡Gracias por tu compra!
+                    </div>
+
+                    <!-- Código QR hacia catálogo web de la tienda -->
+                    <div class="mt-3 pt-3 border-t border-dashed border-slate-300 flex flex-col items-center justify-center text-center">
+                        <div id="recibo-qr-container" class="ticket-qr-box bg-white p-1 rounded inline-block"></div>
+                        <span class="text-[9px] font-mono text-slate-500 mt-1 uppercase tracking-wider">Escanea para ver nuestro Catálogo Web</span>
                     </div>
                 </div>
             </div>
@@ -2566,19 +2699,31 @@
     <!-- ==================================================== -->
     <div id="modal-boleta-reparacion" class="modal-sheet-mobile hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
         <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden relative">
-            <div id="boleta-modal-content" class="p-6 bg-white text-slate-900 font-sans">
-                <!-- Encabezado de la Boleta -->
+            <!-- Selector rápido de ancho térmico en pantalla (no se imprime) -->
+            <div class="no-print flex items-center justify-between px-6 py-2.5 bg-slate-50 border-b border-slate-200 text-xs">
+                <span class="font-bold text-slate-600">Formato de Ticket:</span>
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="ConfiguracionTienda.setAnchoTicket('58mm')" class="btn-ancho-58mm px-2.5 py-1 text-xs font-bold rounded-lg transition-all">58 mm</button>
+                    <button type="button" onclick="ConfiguracionTienda.setAnchoTicket('80mm')" class="btn-ancho-80mm px-2.5 py-1 text-xs font-bold rounded-lg transition-all">80 mm</button>
+                </div>
+            </div>
+
+            <div id="boleta-modal-content" class="ticket-printable-container p-6 bg-white text-slate-900 font-sans mx-auto">
+                <!-- Encabezado de la Boleta con Marca Blanca -->
                 <div class="text-center pb-4 border-b border-dashed border-slate-300">
-                    <div class="w-10 h-10 mx-auto rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-lg mb-2">
-                        🔧
-                    </div>
-                    <h2 class="text-lg font-black tracking-tight uppercase">Taller Técnico Especializado</h2>
-                    <p class="text-xs font-semibold text-slate-600">Samuel Navarrete | Celulares y Servicio</p>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Diagnóstico, mantenimiento y reparación profesional</p>
+                    <img class="ticket-logo-img h-12 mx-auto mb-2 object-contain hidden" alt="Logo Tienda" />
+                    <h2 class="ticket-nombre-comercial text-lg font-black tracking-tight uppercase">Taller Técnico Especializado</h2>
+                    <p class="ticket-encabezado text-xs font-semibold text-slate-600">Diagnóstico y Reparación Profesional</p>
+                    <p class="ticket-direccion text-[11px] text-slate-400 mt-0.5"></p>
+                    <p class="ticket-telefono text-[10px] text-slate-500 font-mono mt-0.5"></p>
 
                     <div class="mt-3 flex justify-between items-center text-xs text-slate-500 bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
                         <span id="boleta-folio" class="font-mono font-bold text-purple-700">FOLIO #00000</span>
                         <span id="boleta-fecha" class="text-slate-600">--</span>
+                    </div>
+                    <div class="mt-1 flex justify-between items-center text-[11px] text-slate-400 px-1">
+                        <span>Técnico Responsable:</span>
+                        <span id="boleta-tecnico" class="font-semibold text-slate-700">Samuel N.</span>
                     </div>
                 </div>
 
@@ -2594,18 +2739,26 @@
                     </div>
                 </div>
 
-                <!-- Datos del Equipo y Falla -->
+                <!-- Datos del Equipo, IMEI, Contraseña y Falla -->
                 <div class="py-3 border-b border-dashed border-slate-300 text-xs space-y-2">
                     <div class="flex justify-between">
                         <span class="text-slate-400">Equipo Recibido:</span>
                         <span id="boleta-modelo" class="font-bold text-slate-900 text-right">--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">IMEI / N° Serie:</span>
+                        <span id="boleta-imei" class="font-mono font-bold text-slate-800 text-right">--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Clave / Desbloqueo:</span>
+                        <span id="boleta-password" class="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-right">--</span>
                     </div>
                     <div>
                         <span class="text-slate-400 block mb-0.5">Falla Reportada:</span>
                         <p id="boleta-falla" class="font-semibold text-slate-800 bg-slate-50 p-2 rounded-lg border border-slate-100">--</p>
                     </div>
                     <div>
-                        <span class="text-slate-400 block mb-0.5">Condición Física de Recepción:</span>
+                        <span class="text-slate-400 block mb-0.5">Condición / Accesorios Dejados:</span>
                         <p id="boleta-condicion" class="text-slate-600 italic bg-slate-50 p-2 rounded-lg border border-slate-100 text-[11px]">--</p>
                     </div>
                 </div>
@@ -2632,6 +2785,12 @@
                     <p class="italic">Toda reparación cuenta con garantía sobre el componente reemplazado. Equipos no reclamados después de 30 días generarán cargo por almacenaje. Indispensable presentar esta boleta física o digital para su entrega.</p>
                     <div class="pt-1 font-mono text-[9px] text-slate-400 uppercase tracking-widest">
                         ¡Gracias por tu confianza!
+                    </div>
+
+                    <!-- Código QR para consulta de reparación -->
+                    <div class="mt-3 pt-3 border-t border-dashed border-slate-300 flex flex-col items-center justify-center text-center">
+                        <div id="boleta-qr-container" class="ticket-qr-box bg-white p-1 rounded inline-block"></div>
+                        <span class="text-[9px] font-mono text-slate-500 mt-1 uppercase tracking-wider">Escanea para consultar estatus de servicio</span>
                     </div>
                 </div>
             </div>
@@ -2714,6 +2873,11 @@
                 <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.abrirModalRespaldo();" class="admin-only p-4 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 rounded-2xl border border-slate-200 flex flex-col items-center justify-center gap-2 text-center transition-all">
                     <span class="text-2xl">💾</span>
                     <span class="text-xs font-bold">Respaldo / BD</span>
+                </button>
+
+                <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.switchTab('configuracion');" class="admin-only p-4 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-800 rounded-2xl border border-blue-200/80 flex flex-col items-center justify-center gap-2 text-center transition-all">
+                    <span class="text-2xl">⚙️</span>
+                    <span class="text-xs font-bold">Ajustes Tienda</span>
                 </button>
 
                 <button type="button" onclick="App.cerrarMenuAccionesMovil(); App.toggleAdminMode();" class="p-4 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 rounded-2xl border border-slate-200 flex flex-col items-center justify-center gap-2 text-center transition-all">
@@ -2809,5 +2973,7 @@
     <script src="/static/js/reportes.js?v=20261019_v19"></script>
     <script src="/static/js/reparaciones.js?v=20261019_v18"></script>
     <script src="/static/js/etiquetas_scanner.js?v=20261019_v18"></script>
+    <script src="/static/js/qrcode.min.js"></script>
+    <script src="/static/js/configuracion.js?v=20261019_v18"></script>
 </body>
 </html>

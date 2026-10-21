@@ -28,14 +28,15 @@
     <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-xs">
         <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 flex-shrink-0 font-black text-lg">
-                    SN
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 flex-shrink-0 font-black text-lg overflow-hidden">
+                    <img id="cat-store-logo-img" src="" alt="Logo Tienda" class="w-full h-full object-cover hidden">
+                    <span id="cat-store-logo-monogram">SN</span>
                 </div>
                 <div>
-                    <h1 class="text-base font-extrabold text-slate-900 tracking-tight leading-none">
+                    <h1 id="cat-store-name" class="text-base font-extrabold text-slate-900 tracking-tight leading-none">
                         Samuel Navarrete
                     </h1>
-                    <p class="text-xs text-blue-600 font-semibold mt-0.5">
+                    <p id="cat-store-header" class="text-xs text-blue-600 font-semibold mt-0.5">
                         📱 Catálogo de Celulares & Accesorios Mayoreo
                     </p>
                 </div>
@@ -321,7 +322,11 @@
                 return '';
             },
 
+            configTienda: null,
+            whatsappTienda: '',
+
             async init() {
+                await this.cargarConfiguracionPublica();
                 this.cargarCarritoDeStorage();
                 await this.cargarAccesorios();
                 await this.cargarEquipos();
@@ -331,6 +336,44 @@
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') this.cerrarCarrito();
                 });
+            },
+
+            async cargarConfiguracionPublica() {
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const slug = urlParams.get('tenant') || '';
+                    const url = slug ? `/api/configuracion/publica?slug=${encodeURIComponent(slug)}` : '/api/configuracion/publica';
+                    const res = await fetch(url);
+                    if (!res.ok) return;
+                    const d = await res.json();
+                    if (!d) return;
+
+                    this.configTienda = d;
+
+                    if (d.nombre_comercial) {
+                        document.title = `${d.nombre_comercial} - Catálogo Oficial`;
+                        const nameEl = document.getElementById('cat-store-name');
+                        if (nameEl) nameEl.textContent = d.nombre_comercial;
+                        const headEl = document.getElementById('cat-store-header');
+                        if (headEl && d.encabezado_ticket) headEl.textContent = `📱 ${d.encabezado_ticket}`;
+                    }
+
+                    if (d.logo_url) {
+                        const imgEl = document.getElementById('cat-store-logo-img');
+                        const monoEl = document.getElementById('cat-store-logo-monogram');
+                        if (imgEl) {
+                            imgEl.src = d.logo_url;
+                            imgEl.classList.remove('hidden');
+                        }
+                        if (monoEl) monoEl.classList.add('hidden');
+                    }
+
+                    if (d.whatsapp_notificaciones || d.telefono) {
+                        this.whatsappTienda = (d.whatsapp_notificaciones || d.telefono).replace(/\D/g, '');
+                    }
+                } catch (e) {
+                    console.warn("No se pudo cargar la configuración de marca blanca:", e);
+                }
             },
 
             // --- CARGA DE DATOS ---
@@ -946,7 +989,8 @@
 
                 texto += `\n¿Me confirmas disponibilidad y los datos para pago y entrega? ¡Muchas gracias!`;
 
-                const urlWA = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+                const numWA = this.whatsappTienda ? (this.whatsappTienda.length === 10 ? '52' + this.whatsappTienda : this.whatsappTienda) : '';
+                const urlWA = `https://wa.me/${numWA}?text=${encodeURIComponent(texto)}`;
                 window.open(urlWA, '_blank');
             },
 

@@ -1088,12 +1088,49 @@ const POS = {
             }
         }
 
+        // Cajero
+        const cajeroEl = document.getElementById('recibo-cajero');
+        if (cajeroEl) {
+            cajeroEl.textContent = (App.currentUser && App.currentUser.nombre) || 'Caja Principal';
+        }
+
+        // Generar QR para el ticket de venta (dirige al catálogo web de la tienda)
+        const qrContainer = document.getElementById('recibo-qr-container');
+        if (qrContainer && typeof QRCode !== 'undefined') {
+            qrContainer.innerHTML = '';
+            const slug = (App.currentUser && App.currentUser.tenant_slug) 
+                || (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.datos && ConfiguracionTienda.datos.slug) 
+                || '';
+            const qrUrl = window.location.origin + '/catalogo' + (slug ? '?tenant=' + encodeURIComponent(slug) : '');
+            try {
+                new QRCode(qrContainer, {
+                    text: qrUrl,
+                    width: 100,
+                    height: 100,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (e) {
+                console.warn('Error generando QR recibo:', e);
+            }
+        }
+
+        if (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.aplicarClasesAnchoTickets) {
+            ConfiguracionTienda.aplicarClasesAnchoTickets();
+        }
+
         const modal = document.getElementById('modal-recibo-venta');
         if (modal) modal.classList.remove('hidden');
     },
 
     imprimirRecibo() {
+        const content = document.getElementById('receipt-modal-content');
+        if (content) content.classList.add('print-ticket-active');
         window.print();
+        setTimeout(() => {
+            if (content) content.classList.remove('print-ticket-active');
+        }, 500);
     },
 
     cerrarRecibo() {

@@ -685,6 +685,31 @@ class ConfiguracionTiendaResponse(ConfiguracionTiendaBase):
     fecha_actualizacion: Optional[str] = None
 
 
+class ConfiguracionGeneralUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre_comercial: Optional[str] = Field(None, min_length=1, max_length=150, description="Nombre del negocio")
+    telefono: Optional[str] = Field(None, max_length=30, description="Teléfono de contacto general")
+    whatsapp_notificaciones: Optional[str] = Field(None, max_length=30, description="WhatsApp para notificaciones de tickets")
+    direccion: Optional[str] = Field(None, max_length=250, description="Dirección física del establecimiento")
+    encabezado_ticket: Optional[str] = Field(None, max_length=300, description="Encabezado impreso en tickets térmicos")
+    pie_ticket_garantia: Optional[str] = Field(None, max_length=500, description="Póliza de garantía impresa al pie")
+
+
+class ConfiguracionGeneralResponse(BaseModel):
+    tenant_id: int
+    nombre_comercial: str
+    slug: str
+    email_contacto: Optional[str] = None
+    telefono: Optional[str] = None
+    whatsapp_notificaciones: Optional[str] = None
+    direccion: Optional[str] = None
+    nombre_sucursal: Optional[str] = None
+    logo_url: Optional[str] = None
+    encabezado_ticket: Optional[str] = None
+    pie_ticket_garantia: Optional[str] = None
+    fecha_actualizacion: Optional[str] = None
+
+
 # ==============================================================================
 # MODELOS DE USUARIO Y LOGIN MULTI-TENANT
 # ==============================================================================
