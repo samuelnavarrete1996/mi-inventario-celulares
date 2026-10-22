@@ -1,3 +1,6 @@
+import os
+import time
+import uuid
 from fastapi import APIRouter, HTTPException, Query, status, Depends, UploadFile, File, Response
 from typing import List, Optional, Dict, Any
 from app import crud
@@ -188,6 +191,67 @@ def obtener_accesorio(
     if not acc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accesorio no encontrado")
     return sanitizar_datos_sensibles(acc, tenant.user)
+
+MAX_ARTICULO_FOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+ALLOWED_FOTO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_FOTO_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+
+@router.post("/foto")
+async def subir_foto_accesorio(
+    file: UploadFile = File(...),
+    tenant: TenantContext = Depends(get_current_tenant),
+    user: dict = Depends(require_role("dueno"))
+):
+    """
+    Sube una fotografía de accesorio o artículo.
+    Valida formato (PNG, JPG, JPEG, WEBP), tamaño (máx 5 MB) y la guarda de forma segura en:
+    app/static/uploads/articulos/{tenant_id}_{uuid}.ext
+    Retorna la URL relativa para almacenar en el campo imagen_url del artículo.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se seleccionó ningún archivo.")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext == ".jpeg":
+        ext = ".jpg"
+    content_type = (file.content_type or "").lower()
+
+    if ext not in ALLOWED_FOTO_EXTENSIONS or (content_type and content_type not in ALLOWED_FOTO_MIME_TYPES):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato de imagen no permitido. Solo se aceptan archivos PNG, JPG o WEBP."
+        )
+
+    contenido = await file.read(MAX_ARTICULO_FOTO_SIZE_BYTES + 1)
+    if not contenido:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo está vacío.")
+
+    if len(contenido) > MAX_ARTICULO_FOTO_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="La imagen excede el tamaño máximo permitido de 5 MB."
+        )
+
+    # Crear carpeta uploads/articulos si no existe
+    uploads_articulos_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "static", "uploads", "articulos"
+    )
+    os.makedirs(uploads_articulos_dir, exist_ok=True)
+
+    unique_suffix = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    filename_guardado = f"{tenant.tenant_id}_{unique_suffix}{ext}"
+    filepath = os.path.join(uploads_articulos_dir, filename_guardado)
+
+    with open(filepath, "wb") as f:
+        f.write(contenido)
+
+    imagen_url = f"/static/uploads/articulos/{filename_guardado}"
+    return {
+        "success": True,
+        "imagen_url": imagen_url,
+        "mensaje": "Fotografía subida exitosamente."
+    }
 
 @router.post("", response_model=AccesorioResponse, status_code=status.HTTP_201_CREATED)
 def crear_accesorio(

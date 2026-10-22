@@ -1,11 +1,16 @@
 import os
+os.environ["SEED_DEMO_DATA"] = "1"
 if "ADMIN_DELETE_PASSWORD" not in os.environ:
     os.environ["ADMIN_DELETE_PASSWORD"] = "samuelykim."
 
 import pytest
 import httpx
 from app.main import app
+from app.database import init_db, seed_demo_data_if_empty
 from app.security import reset_all_rate_limits
+
+init_db()
+seed_demo_data_if_empty()
 
 ADMIN_PASSWORD = os.environ["ADMIN_DELETE_PASSWORD"]
 
@@ -178,3 +183,47 @@ async def test_variantes_color_y_sheets():
         # 5. Eliminar accesorio de prueba
         del_res = await client.delete(f"/api/accesorios/{acc_id}", headers={"X-Admin-Password": ADMIN_PASSWORD})
         assert del_res.status_code == 200
+
+@pytest.mark.anyio
+async def test_subir_foto_accesorio_y_crear_articulo():
+    """Valida la subida de fotografía de artículo y su vinculación en el catálogo."""
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        # Iniciar sesión como administrador
+        login_res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
+        assert login_res.status_code == 200
+
+        # 1. Subir fotografía simulada en formato PNG
+        png_sample = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        files = {"file": ("funda_pro_max.png", png_sample, "image/png")}
+        foto_res = await client.post("/api/accesorios/foto", files=files)
+        assert foto_res.status_code == 200
+        foto_data = foto_res.json()
+        assert foto_data["success"] is True
+        assert "/static/uploads/articulos/" in foto_data["imagen_url"]
+        uploaded_url = foto_data["imagen_url"]
+
+        # 2. Registrar artículo asociando la fotografía
+        payload = {
+            "nombre": "Funda Uso Rudo Foto Test",
+            "categoria": "Fundas",
+            "costo_compra": 35.0,
+            "precio_venta": 150.0,
+            "precio_mayoreo": 120.0,
+            "imagen_url": uploaded_url,
+            "stock": 10,
+            "es_servicio": False
+        }
+        create_res = await client.post("/api/accesorios", json=payload)
+        assert create_res.status_code == 201
+        creado = create_res.json()
+        assert creado["imagen_url"] == uploaded_url
+        acc_id = creado["id"]
+
+        # 3. Consultar artículo y verificar imagen_url
+        get_res = await client.get(f"/api/accesorios/{acc_id}")
+        assert get_res.status_code == 200
+        assert get_res.json()["imagen_url"] == uploaded_url
+
+        # 4. Limpieza
+        await client.delete(f"/api/accesorios/{acc_id}", headers={"X-Admin-Password": ADMIN_PASSWORD})

@@ -423,8 +423,8 @@ const POS = {
                     <div class="p-3 bg-white rounded-xl border border-blue-200/80 shadow-2xs hover:border-blue-300 transition-all space-y-2">
                         <div class="flex justify-between items-start gap-2">
                             <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-1.5 flex-wrap">
-                                    <span class="text-sm">🎧</span>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    ${acc.imagen_url ? `<img src="${App.sanitizeUrl(acc.imagen_url)}" class="w-7 h-7 object-contain rounded-lg border border-slate-200 bg-slate-50 p-0.5 flex-shrink-0" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">` : '<span class="text-sm">🎧</span>'}
                                     <h5 class="font-bold text-slate-800 text-sm truncate">${App.escapeHtml(acc.nombre)}</h5>
                                 </div>
                                 <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
@@ -669,18 +669,27 @@ const POS = {
                 const hermanosConColor = items.filter(x => x.nombre.trim().toLowerCase() === acc.nombre.trim().toLowerCase() && x.color);
                 const tieneMasColores = hermanosConColor.length > 1;
 
+                const imgHtml = acc.imagen_url
+                    ? `<img src="${App.sanitizeUrl(acc.imagen_url)}" class="w-12 h-12 object-contain rounded-xl border border-slate-100 bg-slate-50 p-1 flex-shrink-0" alt="${App.escapeHtml(acc.nombre)}" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
+                    : `<div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg flex-shrink-0 font-bold">${acc.es_servicio ? '🔧' : '🔌'}</div>`;
+
                 return `
-                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs hover:shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between group">
+                <div class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs hover:shadow-sm hover:border-blue-300 transition-all flex flex-col justify-between group">
                     <div>
-                        <div class="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
+                        <div class="flex items-center justify-between gap-1 mb-2 flex-wrap">
                             <div class="flex items-center gap-1 flex-wrap">
                                 <span class="text-[10px] uppercase font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">${App.escapeHtml(acc.categoria)}</span>
                                 ${acc.color ? `<span class="text-[10px] uppercase font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-200">🎨 ${App.escapeHtml(acc.color)}</span>` : ''}
                             </div>
                             <span class="text-xs ${acc.stock <= 3 && !acc.es_servicio ? 'text-rose-600 font-bold' : 'text-slate-500 font-medium'}">${stockTxt}</span>
                         </div>
-                        <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors mb-0.5">${App.escapeHtml(acc.nombre)}</h4>
-                        ${acc.codigo_barras ? `<p class="font-mono text-[11px] text-slate-400">SKU: ${App.escapeHtml(acc.codigo_barras)}</p>` : ''}
+                        <div class="flex items-center gap-2.5 mb-1">
+                            ${imgHtml}
+                            <div class="min-w-0 flex-1">
+                                <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors leading-snug line-clamp-2">${App.escapeHtml(acc.nombre)}</h4>
+                                ${acc.codigo_barras ? `<p class="font-mono text-[10px] text-slate-400">SKU: ${App.escapeHtml(acc.codigo_barras)}</p>` : ''}
+                            </div>
+                        </div>
                         ${tieneMasColores ? `
                         <button type="button" onclick="POS.abrirSelectorColor('${App.escapeHtml(acc.nombre).replace(/'/g, "\\'")}')" class="mt-1 text-[11px] font-bold text-violet-600 hover:text-violet-800 flex items-center gap-1 cursor-pointer">
                             <span>🎨 Ver todos los colores (${hermanosConColor.length})</span>

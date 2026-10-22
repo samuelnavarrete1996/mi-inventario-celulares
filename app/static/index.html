@@ -2018,6 +2018,35 @@
 
             <form id="form-accesorio" onsubmit="event.preventDefault(); Accesorios.guardar();" class="space-y-4">
                 <input type="hidden" id="input-acc-id">
+                <input type="hidden" id="input-acc-imagen-url">
+
+                <!-- FOTOGRAFÍA DEL ARTÍCULO (SUBIR / PREVISUALIZAR) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Foto del Artículo (Opcional)</label>
+                        <span class="text-[11px] font-medium text-slate-400">PNG, JPG o WEBP (máx. 5MB)</span>
+                    </div>
+                    
+                    <input type="file" id="input-acc-foto-file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="Accesorios.procesarSeleccionFoto(this)">
+
+                    <div id="acc-foto-dropzone" class="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/80 hover:bg-blue-50/20 rounded-2xl p-3 transition-all flex items-center gap-3.5 cursor-pointer" onclick="document.getElementById('input-acc-foto-file').click()">
+                        <div id="acc-foto-preview-container" class="w-16 h-16 rounded-xl border border-slate-200 bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-2xs relative">
+                            <img id="acc-foto-preview-img" src="" class="w-full h-full object-contain hidden" alt="Foto">
+                            <span id="acc-foto-placeholder-icon" class="text-2xl text-slate-400">📷</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 bg-white hover:bg-slate-100 text-blue-700 font-bold text-xs rounded-lg border border-slate-200 shadow-2xs">
+                                    📷 Seleccionar / Tomar Foto
+                                </span>
+                                <button type="button" id="btn-eliminar-acc-foto" onclick="event.stopPropagation(); Accesorios.quitarFoto();" class="hidden px-2 py-1 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg font-bold transition-colors">
+                                    ✕ Quitar
+                                </button>
+                            </div>
+                            <p id="acc-foto-estado-txt" class="text-[11px] text-slate-500 mt-1 truncate">Haz clic para subir una foto y reconocer el artículo más fácil en el catálogo y POS.</p>
+                        </div>
+                    </div>
+                </div>
                 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nombre del Producto / Servicio *</label>

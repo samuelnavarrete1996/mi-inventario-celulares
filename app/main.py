@@ -95,9 +95,11 @@ async def security_and_cache_headers(request: Request, call_next):
 @app.on_event("startup")
 def on_startup():
     init_db()
-    # Asegurar que el directorio de almacenamiento de logos exista
+    # Asegurar que el directorio de almacenamiento de logos y fotos de artículos existan
     logos_dir = os.path.join(STATIC_DIR, "uploads", "logos")
     os.makedirs(logos_dir, exist_ok=True)
+    articulos_dir = os.path.join(STATIC_DIR, "uploads", "articulos")
+    os.makedirs(articulos_dir, exist_ok=True)
 
 # Registro de routers de API
 app.include_router(auth.router)

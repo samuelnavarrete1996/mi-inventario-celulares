@@ -130,7 +130,7 @@ const Accesorios = {
             const pCaja = acc.precio_caja || acc.costo_compra || p20;
 
             const imgHtml = acc.imagen_url 
-                ? `<img src="${App.sanitizeUrl(acc.imagen_url)}" class="w-10 h-10 object-contain rounded-xl border border-slate-200 bg-white p-1 flex-shrink-0 shadow-2xs" alt="${App.escapeHtml(acc.nombre)}" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
+                ? `<img src="${App.sanitizeUrl(acc.imagen_url)}" onclick="event.stopPropagation(); Accesorios.verFotoGrande('${App.sanitizeUrl(acc.imagen_url)}', '${App.escapeHtml(acc.nombre).replace(/'/g, "\\'")}')" class="w-10 h-10 object-contain rounded-xl border border-slate-200 bg-white p-1 flex-shrink-0 shadow-2xs cursor-pointer hover:scale-110 hover:border-blue-400 transition-all" alt="${App.escapeHtml(acc.nombre)}" title="Haz clic para ver foto ampliada" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
                 : `<span class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-base flex-shrink-0">${acc.es_servicio ? '🔧' : '🔌'}</span>`;
 
             return `
@@ -179,9 +179,118 @@ const Accesorios = {
         }).join('');
     },
 
+    procesarSeleccionFoto(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+
+        // Validar tamaño (máximo 5 MB)
+        if (file.size > 5 * 1024 * 1024) {
+            App.showToast("La fotografía excede el tamaño máximo permitido de 5 MB.", "error");
+            input.value = '';
+            return;
+        }
+
+        // Previsualización inmediata en local
+        const previewImg = document.getElementById('acc-foto-preview-img');
+        const placeholderIcon = document.getElementById('acc-foto-placeholder-icon');
+        const btnEliminar = document.getElementById('btn-eliminar-acc-foto');
+        const estadoTxt = document.getElementById('acc-foto-estado-txt');
+
+        if (previewImg) {
+            previewImg.src = URL.createObjectURL(file);
+            previewImg.classList.remove('hidden');
+        }
+        if (placeholderIcon) placeholderIcon.classList.add('hidden');
+        if (btnEliminar) btnEliminar.classList.remove('hidden');
+        if (estadoTxt) {
+            estadoTxt.textContent = `⏳ Subiendo foto: ${file.name}...`;
+            estadoTxt.className = "text-[11px] text-blue-600 font-semibold mt-1 truncate";
+        }
+
+        // Subir al backend
+        const formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/api/accesorios/foto', {
+            method: 'POST',
+            body: formData
+        })
+        .then(async res => {
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || "Error al subir la fotografía.");
+            }
+            return res.json();
+        })
+        .then(data => {
+            const inputUrl = document.getElementById('input-acc-imagen-url');
+            if (inputUrl) inputUrl.value = data.imagen_url;
+            if (estadoTxt) {
+                estadoTxt.textContent = `✅ Foto cargada correctamente (${file.name})`;
+                estadoTxt.className = "text-[11px] text-emerald-600 font-semibold mt-1 truncate";
+            }
+            App.showToast("Fotografía del artículo subida exitosamente.", "success");
+        })
+        .catch(e => {
+            console.error("Error al subir foto:", e);
+            App.showToast(e.message || "No se pudo subir la foto.", "error");
+            this.quitarFoto();
+        });
+    },
+
+    quitarFoto() {
+        const inputUrl = document.getElementById('input-acc-imagen-url');
+        const inputFile = document.getElementById('input-acc-foto-file');
+        const previewImg = document.getElementById('acc-foto-preview-img');
+        const placeholderIcon = document.getElementById('acc-foto-placeholder-icon');
+        const btnEliminar = document.getElementById('btn-eliminar-acc-foto');
+        const estadoTxt = document.getElementById('acc-foto-estado-txt');
+
+        if (inputUrl) inputUrl.value = '';
+        if (inputFile) inputFile.value = '';
+        if (previewImg) {
+            previewImg.src = '';
+            previewImg.classList.add('hidden');
+        }
+        if (placeholderIcon) placeholderIcon.classList.remove('hidden');
+        if (btnEliminar) btnEliminar.classList.add('hidden');
+        if (estadoTxt) {
+            estadoTxt.textContent = 'Haz clic para subir una foto y reconocer el artículo más fácil en el catálogo y POS.';
+            estadoTxt.className = "text-[11px] text-slate-500 mt-1 truncate";
+        }
+    },
+
+    verFotoGrande(url, nombre) {
+        if (!url) return;
+        // Crea o muestra modal de ampliación
+        let modal = document.getElementById('modal-foto-ampliada-acc');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'modal-foto-ampliada-acc';
+            modal.className = 'fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4';
+            modal.onclick = (e) => { if (e.target === modal || e.target.closest('#btn-cerrar-foto-ampliada')) modal.classList.add('hidden'); };
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-md w-full p-4 shadow-2xl relative animate-in fade-in zoom-in duration-150">
+                    <button id="btn-cerrar-foto-ampliada" class="absolute top-3 right-3 text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                    <h4 id="txt-foto-ampliada-titulo" class="font-bold text-slate-800 text-sm mb-3 pr-8 truncate"></h4>
+                    <div class="w-full max-h-[70vh] flex items-center justify-center overflow-hidden rounded-xl bg-slate-50 border border-slate-100 p-2">
+                        <img id="img-foto-ampliada" src="" class="max-h-[65vh] max-w-full object-contain" alt="Foto">
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        document.getElementById('txt-foto-ampliada-titulo').textContent = nombre || 'Detalle de Artículo';
+        document.getElementById('img-foto-ampliada').src = url;
+        modal.classList.remove('hidden');
+    },
+
     abrirModalNuevo() {
         document.getElementById('form-accesorio').reset();
         document.getElementById('input-acc-id').value = '';
+        this.quitarFoto();
         if (document.getElementById('input-acc-stock')) document.getElementById('input-acc-stock').value = '0';
         if (document.getElementById('input-acc-costo')) document.getElementById('input-acc-costo').value = '0.00';
         if (document.getElementById('input-acc-20-pzs')) document.getElementById('input-acc-20-pzs').value = '';
@@ -216,6 +325,29 @@ const Accesorios = {
         document.getElementById('input-acc-stock').value = item.stock;
         document.getElementById('input-acc-servicio').checked = Boolean(item.es_servicio);
 
+        // Cargar foto si ya tiene una asociada
+        if (item.imagen_url) {
+            const inputUrl = document.getElementById('input-acc-imagen-url');
+            const previewImg = document.getElementById('acc-foto-preview-img');
+            const placeholderIcon = document.getElementById('acc-foto-placeholder-icon');
+            const btnEliminar = document.getElementById('btn-eliminar-acc-foto');
+            const estadoTxt = document.getElementById('acc-foto-estado-txt');
+
+            if (inputUrl) inputUrl.value = item.imagen_url;
+            if (previewImg) {
+                previewImg.src = App.sanitizeUrl(item.imagen_url);
+                previewImg.classList.remove('hidden');
+            }
+            if (placeholderIcon) placeholderIcon.classList.add('hidden');
+            if (btnEliminar) btnEliminar.classList.remove('hidden');
+            if (estadoTxt) {
+                estadoTxt.textContent = 'Foto actual del artículo. Haz clic si deseas reemplazarla.';
+                estadoTxt.className = "text-[11px] text-blue-600 font-semibold mt-1 truncate";
+            }
+        } else {
+            this.quitarFoto();
+        }
+
         document.getElementById('modal-accesorio-titulo').textContent = 'Editar Accesorio / Servicio';
         document.getElementById('modal-accesorio').classList.remove('hidden');
     },
@@ -226,6 +358,7 @@ const Accesorios = {
         const categoria = document.getElementById('input-acc-categoria').value;
         const color = document.getElementById('input-acc-color')?.value?.trim() || null;
         const codigo_barras = document.getElementById('input-acc-codigo')?.value?.trim() || null;
+        const imagen_url = document.getElementById('input-acc-imagen-url')?.value?.trim() || null;
         const precio_mayoreo = parseFloat(document.getElementById('input-acc-precio').value) || 0;
         const precio_20_pzs = parseFloat(document.getElementById('input-acc-20-pzs')?.value) || precio_mayoreo;
         const precio_caja = parseFloat(document.getElementById('input-acc-caja')?.value) || 0;
@@ -248,6 +381,7 @@ const Accesorios = {
             categoria, 
             color,
             codigo_barras,
+            imagen_url,
             costo_compra, 
             precio_venta, 
             precio_mayoreo, 
