@@ -67,6 +67,9 @@ const ConfiguracionTienda = {
             this.datos = await res.json();
             this.llenarFormulario(this.datos);
             this.aplicarMarcaBlanca(this.datos);
+            if (typeof Empleados !== 'undefined' && Empleados.cargar) {
+                Empleados.cargar();
+            }
         } catch (e) {
             console.error("Error cargando configuración:", e);
         }

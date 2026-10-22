@@ -2736,3 +2736,158 @@ def update_logo_tienda(tenant_id: int, logo_url: str) -> str:
         conn.close()
 
     return logo_url
+
+
+# ==============================================================================
+# GESTIÓN DE EMPLEADOS Y CAJEROS MULTI-TENANT
+# ==============================================================================
+
+def get_empleados(tenant_id: int) -> List[Dict[str, Any]]:
+    """
+    Retorna la lista de empleados y usuarios pertenecientes al tenant_id en sesión.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, nombre, username, rol, activo, fecha_creacion, tenant_id, sucursal_id
+            FROM usuarios
+            WHERE tenant_id = ?
+            ORDER BY id ASC;
+        """, (tenant_id,))
+        rows = cursor.fetchall()
+        empleados = []
+        for r in rows:
+            d = dict(r)
+            d["activo"] = bool(d["activo"])
+            empleados.append(d)
+        return empleados
+    finally:
+        conn.close()
+
+
+def get_empleado_by_id(empleado_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Obtiene un usuario/empleado por ID garantizando aislamiento multi-tenant.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, nombre, username, rol, activo, fecha_creacion, tenant_id, sucursal_id
+            FROM usuarios
+            WHERE id = ? AND tenant_id = ?
+            LIMIT 1;
+        """, (empleado_id, tenant_id))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["activo"] = bool(d["activo"])
+        return d
+    finally:
+        conn.close()
+
+
+def create_empleado(
+    nombre: str,
+    username: str,
+    password: str,
+    rol: str,
+    tenant_id: int,
+    sucursal_id: Optional[int]
+) -> Dict[str, Any]:
+    """
+    Registra un nuevo empleado con rol 'vendedor' o 'tecnico', validando duplicidad de username,
+    hasheando con Argon2id y vinculándolo al tenant y sucursal de la sesión del dueño.
+    """
+    from app.security import hash_secret
+
+    clean_username = username.strip().lower()
+    clean_nombre = nombre.strip()
+    clean_rol = rol.strip().lower()
+
+    if clean_rol not in ('vendedor', 'tecnico'):
+        raise ValueError("El rol asignado debe ser 'vendedor' o 'tecnico'.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        _begin_immediate(cursor)
+
+        # Validación de username único en el sistema
+        cursor.execute("SELECT id FROM usuarios WHERE LOWER(username) = ? LIMIT 1;", (clean_username,))
+        if cursor.fetchone():
+            raise ValueError(f"El nombre de usuario '{clean_username}' ya se encuentra en uso.")
+
+        # Hashing criptográfico Argon2id
+        pin_hash, salt = hash_secret(password)
+
+        cursor.execute("""
+            INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, (clean_nombre, clean_username, pin_hash, salt, clean_rol, True, now, tenant_id, sucursal_id))
+
+        new_id = cursor.lastrowid
+        if not new_id:
+            cursor.execute("SELECT id FROM usuarios WHERE LOWER(username) = ? LIMIT 1;", (clean_username,))
+            r = cursor.fetchone()
+            new_id = r["id"] if r else None
+
+        conn.commit()
+
+        return {
+            "id": new_id,
+            "nombre": clean_nombre,
+            "username": clean_username,
+            "rol": clean_rol,
+            "activo": True,
+            "fecha_creacion": now,
+            "tenant_id": tenant_id,
+            "sucursal_id": sucursal_id,
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def update_empleado_estado(empleado_id: int, activo: bool, tenant_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Activa o desactiva (suspende) un empleado perteneciente al tenant_id sin eliminar su historial.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        _begin_immediate(cursor)
+
+        cursor.execute("""
+            SELECT id, nombre, username, rol, activo, fecha_creacion, tenant_id, sucursal_id
+            FROM usuarios
+            WHERE id = ? AND tenant_id = ?
+            LIMIT 1;
+        """, (empleado_id, tenant_id))
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        cursor.execute("""
+            UPDATE usuarios
+            SET activo = ?
+            WHERE id = ? AND tenant_id = ?;
+        """, (bool(activo), empleado_id, tenant_id))
+
+        conn.commit()
+
+        d = dict(row)
+        d["activo"] = bool(activo)
+        return d
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+

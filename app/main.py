@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
 from app.database import init_db, seed_demo_data_if_empty
-from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup, reparaciones, catalogo, auth, configuracion
+from app.routers import inventario, pos, clientes, reportes, garantias, accesorios, caja, backup, reparaciones, catalogo, auth, configuracion, empleados
 
 logger = logging.getLogger("inventario.security")
 
@@ -114,6 +114,7 @@ app.include_router(backup.router)
 app.include_router(reparaciones.router)
 app.include_router(catalogo.router)
 app.include_router(configuracion.router)
+app.include_router(empleados.router)
 
 # Archivos estáticos y Single Page Application (SPA)
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")

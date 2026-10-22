@@ -717,7 +717,7 @@ class ConfiguracionGeneralResponse(BaseModel):
 class UsuarioBase(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=150)
     username: str = Field(..., min_length=2, max_length=80)
-    rol: str = Field("vendedor", description="Rol de acceso: dueno, vendedor")
+    rol: str = Field("vendedor", description="Rol de acceso: dueno, vendedor, tecnico")
     activo: bool = Field(True, description="Estado del usuario")
     tenant_id: Optional[int] = Field(None, description="ID del tenant al que pertenece")
     sucursal_id: Optional[int] = Field(None, description="ID de la sucursal asignada")
@@ -736,4 +736,44 @@ class UsuarioResponse(BaseModel):
     tenant_id: Optional[int] = None
     sucursal_id: Optional[int] = None
     tenant_slug: Optional[str] = None
+
+
+class EmpleadoCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nombre: str = Field(..., min_length=2, max_length=150, description="Nombre completo del empleado")
+    username: str = Field(..., min_length=3, max_length=60, description="Nombre de usuario único para inicio de sesión")
+    password: str = Field(..., min_length=4, max_length=120, description="Contraseña de acceso")
+    rol: str = Field(..., description="Rol del empleado: vendedor o tecnico")
+
+    @field_validator('rol')
+    def validate_rol(cls, v):
+        v = v.strip().lower()
+        if v not in ('vendedor', 'tecnico'):
+            raise ValueError("El rol debe ser 'vendedor' o 'tecnico'")
+        return v
+
+    @field_validator('username')
+    def validate_username(cls, v):
+        v = v.strip().lower()
+        if len(v) < 3:
+            raise ValueError("El nombre de usuario debe tener al menos 3 caracteres")
+        if not v.replace("_", "").replace("-", "").replace(".", "").isalnum():
+            raise ValueError("El nombre de usuario solo puede contener letras, números, puntos, guiones y guiones bajos")
+        return v
+
+class EmpleadoEstadoUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    activo: bool = Field(..., description="Estado del empleado: True (activo) o False (suspendido/inactivo)")
+
+class EmpleadoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nombre: str
+    username: str
+    rol: str
+    activo: bool = True
+    fecha_creacion: Optional[str] = None
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
+
 

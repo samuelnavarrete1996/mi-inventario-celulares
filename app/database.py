@@ -735,7 +735,7 @@ def init_db():
         username TEXT UNIQUE NOT NULL,
         pin_hash TEXT NOT NULL,
         salt TEXT NOT NULL,
-        rol TEXT NOT NULL CHECK(rol IN ('dueno', 'vendedor')),
+        rol TEXT NOT NULL CHECK(rol IN ('dueno', 'vendedor', 'tecnico')),
         activo INTEGER NOT NULL DEFAULT 1,
         fecha_creacion TEXT NOT NULL
     );
@@ -758,6 +758,41 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_estado ON reparaciones(estado);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_telefono ON reparaciones(cliente_telefono);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username);")
+
+    # Migración de constraint CHECK en usuarios para soportar rol 'tecnico' en bases SQLite existentes
+    try:
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='usuarios';")
+        u_schema_row = cursor.fetchone()
+        if u_schema_row and u_schema_row["sql"] and "tecnico" not in u_schema_row["sql"]:
+            cursor.execute("PRAGMA foreign_keys=off;")
+            cursor.execute("ALTER TABLE usuarios RENAME TO usuarios_old_mig;")
+            cursor.execute("""
+            CREATE TABLE usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                username TEXT UNIQUE NOT NULL,
+                pin_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                rol TEXT NOT NULL CHECK(rol IN ('dueno', 'vendedor', 'tecnico')),
+                activo INTEGER NOT NULL DEFAULT 1,
+                fecha_creacion TEXT NOT NULL,
+                tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+                sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+            );
+            """)
+            cursor.execute("""
+            INSERT INTO usuarios (id, nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
+            SELECT id, nombre, username, pin_hash, salt, rol, activo, fecha_creacion, 
+                   CASE WHEN (SELECT count(*) FROM pragma_table_info('usuarios_old_mig') WHERE name='tenant_id') > 0 THEN tenant_id ELSE NULL END,
+                   CASE WHEN (SELECT count(*) FROM pragma_table_info('usuarios_old_mig') WHERE name='sucursal_id') > 0 THEN sucursal_id ELSE NULL END
+            FROM usuarios_old_mig;
+            """)
+            cursor.execute("DROP TABLE usuarios_old_mig;")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_tenant_sucursal ON usuarios(tenant_id, sucursal_id);")
+            cursor.execute("PRAGMA foreign_keys=on;")
+    except Exception:
+        pass
 
     # ==========================================================================
     # MIGRACIÓN DE COLUMNAS MULTI-TENANT (tenant_id, sucursal_id)

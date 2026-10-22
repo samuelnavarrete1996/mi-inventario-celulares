@@ -483,6 +483,7 @@ const App = {
             if (typeof Reparaciones !== 'undefined') Reparaciones.cargar();
         } else if (tabName === 'configuracion') {
             if (typeof ConfiguracionTienda !== 'undefined') ConfiguracionTienda.cargar();
+            if (typeof Empleados !== 'undefined') Empleados.cargar();
         }
 
         // Si estamos en POS móvil, verificar visibilidad del carrito flotante
