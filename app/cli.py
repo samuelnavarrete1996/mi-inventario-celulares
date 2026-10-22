@@ -236,6 +236,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m app.cli",
         description="Herramienta CLI para Administración de Tenants y Despliegue Cloud (Render & Supabase)"
     )
+    parser.add_argument("--database-url", default=None, help="URL de conexión a base de datos (PostgreSQL o SQLite).")
     subparsers = parser.add_subparsers(dest="subcommand", help="Comandos disponibles")
 
     # Subcomando: crear-tienda
@@ -261,6 +262,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if getattr(args, "database_url", None):
+        import os
+        os.environ["DATABASE_URL"] = args.database_url.strip()
+        import app.database as database
+        database.DATABASE_URL = args.database_url.strip()
+        try:
+            from app.postgres_client import reset_postgres_engine
+            reset_postgres_engine()
+        except Exception:
+            pass
 
     if not args.subcommand:
         parser.print_help()
