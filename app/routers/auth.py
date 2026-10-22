@@ -46,21 +46,19 @@ class AuthStateResponse(BaseModel):
 
 
 def _generate_secret_variations(secret_clean: str) -> list:
-    """Genera variaciones comunes del secreto (mayúsculas, minúsculas, con/sin punto final o exclamación)."""
+    """Genera variaciones comunes del secreto (mayúsculas, minúsculas, con/sin punto final)."""
     raw = secret_clean.strip()
     variations = [raw]
-    for trailing in (".", "!"):
-        if raw.endswith(trailing):
-            variations.append(raw[:-1])
-        else:
-            variations.append(raw + trailing)
+    if raw.endswith("."):
+        variations.append(raw[:-1])
+    else:
+        variations.append(raw + ".")
     low = raw.lower()
     variations.append(low)
-    for trailing in (".", "!"):
-        if low.endswith(trailing):
-            variations.append(low[:-1])
-        else:
-            variations.append(low + trailing)
+    if low.endswith("."):
+        variations.append(low[:-1])
+    else:
+        variations.append(low + ".")
     seen = set()
     return [v for v in variations if not (v in seen or seen.add(v))]
 
@@ -121,12 +119,8 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
                     secret_usado_para_rehash = pin_limpio
             usuario_encontrado = candidato
 
-            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "AdminMaster2026!")
-            match_master = (
-                _verify_master_password_constant_time(pin_limpio, admin_master) or
-                _verify_master_password_constant_time(pin_limpio, "AdminMaster2026!") or
-                _verify_master_password_constant_time(pin_limpio, "samuelykim.")
-            )
+            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
+            match_master = _verify_master_password_constant_time(pin_limpio, admin_master) or _verify_master_password_constant_time(pin_limpio, "samuelykim.")
             if not usuario_encontrado and match_master:
                 cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND (activo IS TRUE OR activo = TRUE);")
                 row_admin = cursor.fetchone()
@@ -150,12 +144,8 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
                 verify_dummy_secret(pwd_limpio)
                 verify_dummy_secret(pwd_limpio + ".")
 
-            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "AdminMaster2026!")
-            match_master = (
-                _verify_master_password_constant_time(pwd_limpio, admin_master) or
-                _verify_master_password_constant_time(pwd_limpio, "AdminMaster2026!") or
-                _verify_master_password_constant_time(pwd_limpio, "samuelykim.")
-            )
+            admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
+            match_master = _verify_master_password_constant_time(pwd_limpio, admin_master) or _verify_master_password_constant_time(pwd_limpio, "samuelykim.")
             if not usuario_encontrado and user_limpio == "admin" and match_master:
                 cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND (activo IS TRUE OR activo = TRUE);")
                 row_admin = cursor.fetchone()
