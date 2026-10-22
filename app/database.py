@@ -914,7 +914,7 @@ def seed_demo_data_if_empty():
 
     # 1. Inicialización o sincronización de usuarios
     from app.security import hash_secret
-    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
+    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "AdminMaster2026!")
     admin_hash, admin_salt = hash_secret(admin_pwd)
     vendedor_pwd = os.environ.get("VENDEDOR_PASSWORD", "piso6bodega606.")
     vendedor_hash, vendedor_salt = hash_secret(vendedor_pwd)
