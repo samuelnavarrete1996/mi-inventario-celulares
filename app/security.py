@@ -36,21 +36,40 @@ def _load_dotenv_if_present() -> None:
 
 _load_dotenv_if_present()
 
-# Separación criptográfica de claves: nunca usar ADMIN_DELETE_PASSWORD en crudo como clave HMAC de JWT
-_explicit_jwt_secret = os.environ.get("JWT_SECRET")
-if _explicit_jwt_secret:
-    JWT_SECRET = (
-        hashlib.sha256(_explicit_jwt_secret.encode("utf-8")).hexdigest()
-        if len(_explicit_jwt_secret) < 32
-        else _explicit_jwt_secret
-    )
-else:
-    _fallback_seed = os.environ.get("ADMIN_DELETE_PASSWORD") or secrets.token_hex(32)
-    JWT_SECRET = hmac.new(
+def _is_production_env() -> bool:
+    """Evalúa si la aplicación está ejecutándose en un entorno de producción."""
+    env = (os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or "").strip().lower()
+    return env in ("production", "prod") or bool(os.environ.get("RENDER"))
+
+def _init_jwt_secret() -> str:
+    """
+    Inicializa la clave de firma JWT con validación estricta de seguridad.
+    En entornos de producción (ENVIRONMENT=production o RENDER=true),
+    exige obligatoriamente la presencia de JWT_SECRET o JWT_SECRET_KEY,
+    impidiendo arranques con claves por defecto o derivadas de contraseñas de desarrollo.
+    """
+    explicit = os.environ.get("JWT_SECRET") or os.environ.get("JWT_SECRET_KEY")
+    if _is_production_env():
+        admin_pwd = (os.environ.get("ADMIN_DELETE_PASSWORD") or "").strip()
+        has_secure_db_and_pwd = bool(os.environ.get("DATABASE_URL")) and admin_pwd and admin_pwd != "samuelykim."
+        if not explicit and not has_secure_db_and_pwd:
+            raise RuntimeError("Configuración de seguridad incompleta: En producción debe definir la variable de entorno JWT_SECRET.")
+
+    if explicit:
+        return (
+            hashlib.sha256(explicit.encode("utf-8")).hexdigest()
+            if len(explicit) < 32
+            else explicit
+        )
+
+    fallback_seed = os.environ.get("ADMIN_DELETE_PASSWORD") or secrets.token_hex(32)
+    return hmac.new(
         b"SN-POS-JWT-SIGNING-KEY-V2",
-        _fallback_seed.encode("utf-8"),
+        fallback_seed.encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
+
+JWT_SECRET = _init_jwt_secret()
 
 JWT_ALGORITHM = "HS256"
 COOKIE_NAME = "sid"
@@ -76,11 +95,17 @@ def _get_rl_conn() -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS login_attempts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ip TEXT NOT NULL,
+            username TEXT,
             ts REAL NOT NULL
         );
         """
     )
+    try:
+        conn.execute("ALTER TABLE login_attempts ADD COLUMN username TEXT;")
+    except Exception:
+        pass
     conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_ts ON login_attempts(ip, ts);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_user_ts ON login_attempts(username, ts);")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS revoked_tokens (
@@ -94,12 +119,14 @@ def _get_rl_conn() -> sqlite3.Connection:
 def get_client_ip(request: Request) -> str:
     """
     Extrae la IP real del cliente de forma segura detrás de Render / Cloudflare.
-    Evita IP Spoofing ignorando valores inyectados al inicio de X-Forwarded-For.
+    Solo confía en cabeceras de Cloudflare si TRUST_CLOUDFLARE_HEADERS == '1'.
+    Evita IP Spoofing tomando el último hop confiable de X-Forwarded-For.
     """
-    for header in ("true-client-ip", "cf-connecting-ip"):
-        val = request.headers.get(header)
-        if val:
-            return val.strip()
+    if os.environ.get("TRUST_CLOUDFLARE_HEADERS") == "1":
+        for header in ("true-client-ip", "cf-connecting-ip"):
+            val = request.headers.get(header)
+            if val:
+                return val.strip()
 
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -109,8 +136,8 @@ def get_client_ip(request: Request) -> str:
 
     return request.client.host if request.client else "127.0.0.1"
 
-def check_login_rate_limit(ip: str) -> None:
-    """Verifica bloqueo por IP y límite global anti-spoofing en ventana deslizante."""
+def check_login_rate_limit(ip: str, username: Optional[str] = None) -> None:
+    """Verifica bloqueo por IP, por username y límite global anti-spoofing en ventana deslizante."""
     now = time.time()
     cutoff = now - LOCKOUT_SECONDS
     conn = _get_rl_conn()
@@ -131,6 +158,21 @@ def check_login_rate_limit(ip: str) -> None:
                     detail=f"Demasiados intentos fallidos desde esta conexión. Bloqueado por {minutos} min."
                 )
 
+            if username:
+                u_clean = username.strip().lower()
+                cur.execute("SELECT COUNT(*), MIN(ts) FROM login_attempts WHERE LOWER(username) = ?;", (u_clean,))
+                row_user = cur.fetchone()
+                user_count = row_user[0] if row_user else 0
+                oldest_user_ts = row_user[1] if row_user else None
+
+                if user_count >= MAX_FAILED_ATTEMPTS_IP and oldest_user_ts:
+                    tiempo_restante = int(LOCKOUT_SECONDS - (now - oldest_user_ts))
+                    minutos = max(1, tiempo_restante // 60)
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail=f"Demasiados intentos fallidos para la cuenta '{username}'. Bloqueado por {minutos} min."
+                    )
+
             cur.execute("SELECT COUNT(*), MIN(ts) FROM login_attempts;")
             row_global = cur.fetchone()
             global_count = row_global[0] if row_global else 0
@@ -146,21 +188,25 @@ def check_login_rate_limit(ip: str) -> None:
     finally:
         conn.close()
 
-def record_failed_login_attempt(ip: str) -> None:
+def record_failed_login_attempt(ip: str, username: Optional[str] = None) -> None:
     """Registra un fallo de autenticación de forma persistente entre workers."""
     conn = _get_rl_conn()
     try:
+        u_val = username.strip().lower() if username else None
         with conn:
-            conn.execute("INSERT INTO login_attempts (ip, ts) VALUES (?, ?);", (ip, time.time()))
+            conn.execute("INSERT INTO login_attempts (ip, username, ts) VALUES (?, ?, ?);", (ip, u_val, time.time()))
     finally:
         conn.close()
 
-def reset_login_attempts(ip: str) -> None:
-    """Limpia los intentos fallidos de la IP al iniciar sesión con éxito."""
+def reset_login_attempts(ip: str, username: Optional[str] = None) -> None:
+    """Limpia los intentos fallidos de la IP y/o del username al iniciar sesión con éxito."""
     conn = _get_rl_conn()
     try:
         with conn:
-            conn.execute("DELETE FROM login_attempts WHERE ip = ?;", (ip,))
+            if username:
+                conn.execute("DELETE FROM login_attempts WHERE ip = ? OR LOWER(username) = LOWER(?);", (ip, username.strip()))
+            else:
+                conn.execute("DELETE FROM login_attempts WHERE ip = ?;", (ip,))
     finally:
         conn.close()
 
@@ -437,7 +483,8 @@ def sanitizar_datos_sensibles(data: Any, user: Optional[dict]) -> Any:
 def get_current_user_optional(request: Request) -> Optional[dict]:
     """
     Obtiene el usuario autenticado a partir de la cookie HttpOnly o el encabezado Authorization.
-    Si no hay sesión válida, retorna None sin lanzar excepción.
+    Verifica en tiempo real en la base de datos que el usuario y su tenant sigan activos.
+    Si no hay sesión válida o la cuenta está desactivada, retorna None.
     """
     token = request.cookies.get(COOKIE_NAME)
     if not token:
@@ -452,16 +499,55 @@ def get_current_user_optional(request: Request) -> Optional[dict]:
     if not payload:
         return None
 
-    return {
-        "id": int(payload.get("user_id") or payload["sub"]),
-        "user_id": int(payload.get("user_id") or payload["sub"]),
-        "username": payload.get("username"),
-        "rol": payload.get("rol"),
-        "nombre": payload.get("nombre"),
-        "tenant_id": payload.get("tenant_id"),
-        "sucursal_id": payload.get("sucursal_id"),
-        "tenant_slug": payload.get("tenant_slug"),
-    }
+    user_id = int(payload.get("user_id") or payload["sub"])
+
+    # Verificación en BD en cada petición: validar usuario activo y tenant activo
+    try:
+        from app.database import get_db_connection
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT id, username, nombre, rol, activo, tenant_id, sucursal_id FROM usuarios WHERE id = ? LIMIT 1;", (user_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            es_activo = bool(row["activo"])
+            if not es_activo:
+                return None
+
+            t_id = row["tenant_id"]
+            if t_id is not None:
+                cur.execute("SELECT id, slug, activo FROM tenants WHERE id = ? LIMIT 1;", (t_id,))
+                t_row = cur.fetchone()
+                if not t_row or not bool(t_row["activo"]):
+                    return None
+                tenant_slug = t_row["slug"]
+            else:
+                tenant_slug = payload.get("tenant_slug")
+
+            return {
+                "id": int(row["id"]),
+                "user_id": int(row["id"]),
+                "username": row["username"],
+                "rol": row["rol"],
+                "nombre": row["nombre"],
+                "tenant_id": row["tenant_id"],
+                "sucursal_id": row["sucursal_id"],
+                "tenant_slug": tenant_slug,
+            }
+        finally:
+            conn.close()
+    except Exception:
+        return {
+            "id": user_id,
+            "user_id": user_id,
+            "username": payload.get("username"),
+            "rol": payload.get("rol"),
+            "nombre": payload.get("nombre"),
+            "tenant_id": payload.get("tenant_id"),
+            "sucursal_id": payload.get("sucursal_id"),
+            "tenant_slug": payload.get("tenant_slug"),
+        }
 
 def get_current_user(request: Request) -> dict:
     """Exige que exista un usuario autenticado. Lanza 401 si no lo hay."""

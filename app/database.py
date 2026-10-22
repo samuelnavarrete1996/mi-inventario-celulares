@@ -1,7 +1,17 @@
 import sqlite3
 import os
+import re
 import tempfile
 from datetime import datetime
+
+# Validador de identificadores SQL para evitar inyección en DDL dinámico
+_SQL_IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+def _validate_sql_identifier(ident: str) -> str:
+    """Valida que un identificador SQL (tabla, columna o índice) sea seguro contra inyección SQL."""
+    if not ident or not _SQL_IDENT_RE.match(ident):
+        raise ValueError(f"Identificador SQL inválido: '{ident}'")
+    return ident
 
 # Cargar variables de entorno desde .env si existe
 _env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -78,16 +88,24 @@ def _resolve_sqlite_path() -> str:
 
 DATABASE_FILE = _resolve_sqlite_path()
 
-def get_db_connection():
+def get_db_connection(tenant_id: Optional[int] = None):
     """
     Retorna:
     1. Conexión pooled a PostgreSQL si DATABASE_URL empieza con postgresql / postgres.
+       Si se proporciona tenant_id, configura la variable de sesión 'app.current_tenant_id'
+       para activar automáticamente las políticas de Row Level Security (RLS).
     2. Conexión a Turso Cloud si está configurada.
     3. Conexión local a SQLite ('inventario.db') con WAL y busy_timeout como fallback.
     """
     if is_postgres_enabled():
         from app.postgres_client import get_postgres_connection
-        return get_postgres_connection()
+        conn = get_postgres_connection()
+        if tenant_id is not None:
+            try:
+                conn.execute("SELECT set_config('app.current_tenant_id', %s, false);", (str(tenant_id),))
+            except Exception:
+                pass
+        return conn
 
     if is_turso_enabled():
         from app.turso_client import TursoConnection
@@ -381,7 +399,35 @@ def _init_postgres_db(conn, cursor):
         ("usuarios", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
     ]
     for tbl, col, col_def in column_checks:
+        _validate_sql_identifier(tbl)
+        _validate_sql_identifier(col)
         cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};")
+
+    # Índices únicos multi-tenant en PostgreSQL
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_equipos_tenant_imei ON equipos(tenant_id, imei);")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_reparaciones_tenant_folio ON reparaciones(tenant_id, folio);")
+
+    # Activar y forzar Row Level Security (RLS) en todas las tablas operativas
+    rls_tablas = [
+        'sucursales', 'configuracion_tienda', 'usuarios', 'equipos', 'accesorios',
+        'clientes', 'ventas', 'venta_items', 'abonos_ventas_credito',
+        'movimientos_stock_accesorios', 'reparaciones', 'garantias', 'cortes_caja',
+        'garantias_historial', 'historial_ventas_cambios'
+    ]
+    for tbl in rls_tablas:
+        try:
+            _validate_sql_identifier(tbl)
+            cursor.execute(f"ALTER TABLE {tbl} ENABLE ROW LEVEL SECURITY;")
+            cursor.execute(f"ALTER TABLE {tbl} FORCE ROW LEVEL SECURITY;")
+            cursor.execute(f"DROP POLICY IF EXISTS tenant_isolation_policy ON {tbl};")
+            cursor.execute(f"""
+                CREATE POLICY tenant_isolation_policy ON {tbl}
+                FOR ALL
+                USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER)
+                WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER);
+            """)
+        except Exception:
+            pass
 
 
 def init_db():
@@ -391,13 +437,21 @@ def init_db():
 
     # Si estamos en PostgreSQL (Supabase / Render), ejecutar esquema nativo de PostgreSQL
     if is_postgres_enabled():
-        _init_postgres_db(conn, cursor)
-        conn.commit()
-        # Verificar si ya existían tenants antes de inicializar demo
-        cursor.execute("SELECT COUNT(*) as count FROM tenants;")
-        row_chk = cursor.fetchone()
-        tenants_existian = (((row_chk["count"] if isinstance(row_chk, dict) or hasattr(row_chk, '__getitem__') else row_chk[0]) or 0) > 0)
-        conn.close()
+        try:
+            cursor.execute("SELECT pg_advisory_lock(948271645);")
+            _init_postgres_db(conn, cursor)
+            conn.commit()
+            # Verificar si ya existían tenants antes de inicializar demo
+            cursor.execute("SELECT COUNT(*) as count FROM tenants;")
+            row_chk = cursor.fetchone()
+            tenants_existian = (((row_chk["count"] if isinstance(row_chk, dict) or hasattr(row_chk, '__getitem__') else row_chk[0]) or 0) > 0)
+        finally:
+            try:
+                cursor.execute("SELECT pg_advisory_unlock(948271645);")
+                conn.commit()
+            except Exception:
+                pass
+            conn.close()
         init_demo_tenant_if_empty()
         seed_demo_data_if_empty(forzar_si_recien_creado=(not tenants_existian))
         return
@@ -735,6 +789,7 @@ def init_db():
 
     for tabla, tiene_sucursal in tablas_multitenant:
         try:
+            _validate_sql_identifier(tabla)
             cursor.execute(f"PRAGMA table_info({tabla});")
             cols = [row["name"] for row in cursor.fetchall()]
             if cols:
@@ -750,6 +805,16 @@ def init_db():
                     cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_{tabla}_tenant ON {tabla}(tenant_id);")
         except Exception:
             pass
+
+    # Índices únicos multi-tenant compuestos
+    try:
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_equipos_tenant_imei ON equipos(tenant_id, imei);")
+    except Exception:
+        pass
+    try:
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_reparaciones_tenant_folio ON reparaciones(tenant_id, folio);")
+    except Exception:
+        pass
 
     # Crear vista de compatibilidad caja_cortes
     try:

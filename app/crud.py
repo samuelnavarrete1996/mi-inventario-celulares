@@ -2307,21 +2307,50 @@ TABLAS_PERMITIDAS_EXPORTACION = (
     "historial_ventas_cambios", "garantias_historial"
 )
 
-def exportar_todo_json() -> Dict[str, Any]:
+def exportar_todo_json(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
     resultado = {
         "version": "2.0",
         "app": "Mi Inventario Samuel Navarrete",
         "fecha_exportacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "tenant_id": tenant_id,
         "datos": {}
     }
+
+    columnas_usuarios_seguras = "id, nombre, username, rol, activo, fecha_creacion, tenant_id, sucursal_id"
+
     for t in TABLAS_PERMITIDAS_EXPORTACION:
         try:
-            cursor.execute(f"SELECT * FROM {t}")
+            if tenant_id is not None:
+                if t == "tenants":
+                    cursor.execute("SELECT * FROM tenants WHERE id = ?;", (tenant_id,))
+                elif t == "usuarios":
+                    cursor.execute(f"SELECT {columnas_usuarios_seguras} FROM usuarios WHERE tenant_id = ?;", (tenant_id,))
+                elif t in ("sucursales", "configuracion_tienda", "clientes", "equipos", "accesorios", "ventas", "reparaciones", "cortes_caja"):
+                    cursor.execute(f"SELECT * FROM {t} WHERE tenant_id = ?;", (tenant_id,))
+                elif t == "venta_items":
+                    cursor.execute("SELECT vi.* FROM venta_items vi JOIN ventas v ON vi.venta_id = v.id WHERE v.tenant_id = ?;", (tenant_id,))
+                elif t == "abonos_ventas_credito":
+                    cursor.execute("SELECT a.* FROM abonos_ventas_credito a JOIN ventas v ON a.venta_id = v.id WHERE v.tenant_id = ?;", (tenant_id,))
+                elif t == "garantias":
+                    cursor.execute("SELECT g.* FROM garantias g JOIN equipos e ON g.equipo_id = e.id WHERE e.tenant_id = ?;", (tenant_id,))
+                elif t == "historial_ventas_cambios":
+                    cursor.execute("SELECT h.* FROM historial_ventas_cambios h JOIN ventas v ON h.venta_id = v.id WHERE v.tenant_id = ?;", (tenant_id,))
+                elif t == "garantias_historial":
+                    cursor.execute("SELECT gh.* FROM garantias_historial gh JOIN garantias g ON gh.garantia_id = g.id JOIN equipos e ON g.equipo_id = e.id WHERE e.tenant_id = ?;", (tenant_id,))
+                else:
+                    cursor.execute(f"SELECT * FROM {t};")
+            else:
+                if t == "usuarios":
+                    cursor.execute(f"SELECT {columnas_usuarios_seguras} FROM usuarios;")
+                else:
+                    cursor.execute(f"SELECT * FROM {t};")
+
             resultado["datos"][t] = [dict(r) for r in cursor.fetchall()]
         except Exception:
             resultado["datos"][t] = []
+
     conn.close()
     return resultado
 

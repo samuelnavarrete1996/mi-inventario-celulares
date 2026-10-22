@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+import logging
 from fastapi import APIRouter, HTTPException, Query, status, Depends, UploadFile, File, Response
 from typing import List, Optional, Dict, Any
 from app import crud
@@ -15,8 +16,16 @@ from app.excel_importer import (
     generar_plantilla_stock_accesorios_csv,
     importar_stock_accesorios_excel
 )
+from app.routers.configuracion import validar_y_sanitizar_imagen
+
+logger = logging.getLogger("inventario.accesorios")
 
 router = APIRouter(prefix="/api/accesorios", tags=["Accesorios y Servicios"])
+
+MAX_STOCK_EXCEL_BYTES = 25 * 1024 * 1024  # Límite de 25 MB para archivos de stock
+MAX_ARTICULO_FOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+ALLOWED_FOTO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_FOTO_MIME_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
 
 @router.get("", response_model=List[AccesorioResponse])
 def listar_accesorios(
@@ -55,7 +64,8 @@ def descargar_plantilla_stock(
                 headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_Excel.xlsx"}
             )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generando plantilla: {str(e)}")
+        logger.error("Error generando plantilla: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error generando plantilla.")
 
 @router.get("/plantilla-sheets")
 def descargar_plantilla_stock_sheets(user: dict = Depends(require_role("dueno"))):
@@ -68,7 +78,8 @@ def descargar_plantilla_stock_sheets(user: dict = Depends(require_role("dueno"))
             headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_GoogleSheets.csv"}
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generando plantilla Google Sheets: {str(e)}")
+        logger.error("Error generando plantilla Google Sheets: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error generando plantilla Google Sheets.")
 
 @router.post("/importar-stock-excel")
 async def importar_stock_excel(
@@ -85,8 +96,8 @@ async def importar_stock_excel(
     if not target_file.filename or not target_file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El archivo debe ser una hoja de Google Sheets (.csv) o Excel (.xlsx)")
     
-    contenido = await target_file.read()
-    if len(contenido) > 25 * 1024 * 1024:
+    contenido = await target_file.read(MAX_STOCK_EXCEL_BYTES + 1)
+    if len(contenido) > MAX_STOCK_EXCEL_BYTES:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="El archivo supera el límite de 25 MB.")
 
     try:
@@ -101,7 +112,8 @@ async def importar_stock_excel(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al procesar el archivo: {str(e)}")
+        logger.error("Error al procesar archivo de stock: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al procesar el archivo.")
 
 @router.post("/actualizacion-masiva-rapida")
 def actualizacion_masiva_rapida(
@@ -170,7 +182,8 @@ def ajustar_stock_individual(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno al ajustar el stock: {str(e)}")
+        logger.error("Error interno al ajustar stock: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al ajustar el stock.")
 
 @router.get("/{acc_id}/kardex", response_model=List[MovimientoStockResponse])
 def obtener_kardex_accesorio(
@@ -232,6 +245,19 @@ async def subir_foto_accesorio(
             detail="La imagen excede el tamaño máximo permitido de 5 MB."
         )
 
+    try:
+        contenido_limpio = validar_y_sanitizar_imagen(
+            contenido=contenido,
+            ext=ext,
+            content_type=content_type,
+            target_format="PNG" if ext == ".png" else "JPEG"
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error("Error sanitizando imagen de accesorio: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al procesar la imagen.")
+
     # Crear carpeta uploads/articulos si no existe
     uploads_articulos_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -244,7 +270,7 @@ async def subir_foto_accesorio(
     filepath = os.path.join(uploads_articulos_dir, filename_guardado)
 
     with open(filepath, "wb") as f:
-        f.write(contenido)
+        f.write(contenido_limpio)
 
     imagen_url = f"/static/uploads/articulos/{filename_guardado}"
     return {

@@ -1,9 +1,12 @@
+import logging
 from fastapi import APIRouter, HTTPException, Query, status, Depends
 from typing import List, Optional, Dict, Any
 from app import crud
 from app.models import VentaCreate, VentaDetalleResponse, EquipoResponse, AbonoCreditoCreate
 from app.security import get_current_user, sanitizar_datos_sensibles, get_current_tenant
 from app.dependencies import TenantContext
+
+logger = logging.getLogger("inventario.pos")
 
 router = APIRouter(prefix="/api/pos", tags=["Punto de Venta"])
 
@@ -58,7 +61,8 @@ def realizar_venta(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error interno procesando la venta: {str(e)}")
+        logger.error("Error interno procesando la venta: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno procesando la venta.")
 
 @router.get("/recibo/{venta_id}", response_model=VentaDetalleResponse)
 def obtener_recibo(
@@ -83,7 +87,8 @@ def listar_notas_credito(
         data = crud.get_notas_credito(estado_filtro=estado, tenant_id=tenant.tenant_id)
         return sanitizar_datos_sensibles(data, tenant.user)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al obtener notas de crédito: {str(e)}")
+        logger.error("Error al obtener notas de crédito: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al obtener notas de crédito.")
 
 @router.get("/creditos/alertas")
 def obtener_alertas_credito(
@@ -106,7 +111,8 @@ def obtener_alertas_credito(
             ][:10]
         }
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al obtener alertas de crédito: {str(e)}")
+        logger.error("Error al obtener alertas de crédito: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al obtener alertas de crédito.")
 
 @router.post("/creditos/{venta_id}/abono")
 def abonar_a_nota_credito(
@@ -134,5 +140,6 @@ def abonar_a_nota_credito(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al registrar abono: {str(e)}")
+        logger.error("Error al registrar abono: %s", repr(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al registrar abono.")
 

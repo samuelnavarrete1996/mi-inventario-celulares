@@ -197,6 +197,31 @@ BEGIN
     END IF;
 END $$;
 
+-- ==============================================================================
+-- 5. BLINDAJE DE SEGURIDAD A NIVEL DE FILA (POSTGRESQL ROW LEVEL SECURITY - RLS)
+-- ==============================================================================
+DO $do$
+DECLARE
+    tbl TEXT;
+    tablas_rls TEXT[] := ARRAY[
+        'sucursales', 'configuracion_tienda', 'usuarios', 'equipos', 'accesorios',
+        'clientes', 'ventas', 'venta_accesorios', 'abonos_credito', 'pagos_credito',
+        'movimientos_stock', 'reparaciones', 'garantias', 'cortes_caja'
+    ];
+BEGIN
+    FOREACH tbl IN ARRAY tablas_rls LOOP
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = tbl) THEN
+            EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', tbl);
+            EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY;', tbl);
+            EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_policy ON %I;', tbl);
+            EXECUTE format(
+                $pol$CREATE POLICY tenant_isolation_policy ON %I FOR ALL USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER) WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER);$pol$,
+                tbl
+            );
+        END IF;
+    END LOOP;
+END $do$;
+
 COMMIT;
 
 -- Verificación final

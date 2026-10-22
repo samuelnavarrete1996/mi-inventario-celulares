@@ -186,5 +186,5 @@ def healthz_check(request: Request):
             return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "error", "database": "disconnected", "engine": engine, "detail": str(e)}
+            content={"status": "error", "database": "disconnected", "engine": engine, "detail": "No fue posible conectar con la base de datos."}
         )
