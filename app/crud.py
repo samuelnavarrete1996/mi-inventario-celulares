@@ -2301,8 +2301,10 @@ def obtener_historial_imei(imei: str, tenant_id: Optional[int] = None) -> Dict[s
 # ==============================================================================
 
 TABLAS_PERMITIDAS_EXPORTACION = (
-    "equipos", "clientes", "ventas", "venta_items",
-    "garantias", "accesorios", "cortes_caja", "reparaciones"
+    "tenants", "sucursales", "configuracion_tienda", "usuarios",
+    "clientes", "equipos", "accesorios", "ventas", "venta_items",
+    "abonos_ventas_credito", "reparaciones", "garantias", "cortes_caja",
+    "historial_ventas_cambios", "garantias_historial"
 )
 
 def exportar_todo_json() -> Dict[str, Any]:

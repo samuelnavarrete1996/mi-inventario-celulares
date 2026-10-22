@@ -37,6 +37,21 @@ def is_turso_enabled() -> bool:
         return False
     return bool(TURSO_URL and TURSO_TOKEN and ("turso.io" in TURSO_URL or "libsql:" in TURSO_URL))
 
+def verificar_guarda_anti_destruccion(operacion: str = "") -> None:
+    """
+    Guarda de Seguridad Anti-Destrucción:
+    Prohíbe estrictamente cualquier operación destructiva de base de datos
+    (DROP TABLE, TRUNCATE, DELETE masivo o reseteo de esquemas) si ENVIRONMENT == 'production'
+    o si is_postgres_enabled() es True (Supabase / Render / Postgres en producción).
+    """
+    env = (os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or "").strip().lower()
+    es_produccion = env in ("production", "prod") or bool(os.environ.get("RENDER"))
+    if es_produccion or is_postgres_enabled():
+        raise RuntimeError(
+            f"GUARDA DE SEGURIDAD ANTI-DESTRUCCIÓN: La operación '{operacion}' está estrictamente "
+            f"bloqueada para proteger la integridad de datos en producción y bases de datos activas."
+        )
+
 def _resolve_sqlite_path() -> str:
     """Resuelve la ruta de SQLite verificando soporte de bloqueo de archivos (compatible con contenedores y montajes FUSE)."""
     explicit = os.environ.get("DATABASE_PATH")
@@ -378,9 +393,13 @@ def init_db():
     if is_postgres_enabled():
         _init_postgres_db(conn, cursor)
         conn.commit()
+        # Verificar si ya existían tenants antes de inicializar demo
+        cursor.execute("SELECT COUNT(*) as count FROM tenants;")
+        row_chk = cursor.fetchone()
+        tenants_existian = (((row_chk["count"] if isinstance(row_chk, dict) or hasattr(row_chk, '__getitem__') else row_chk[0]) or 0) > 0)
         conn.close()
         init_demo_tenant_if_empty()
-        seed_demo_data_if_empty()
+        seed_demo_data_if_empty(forzar_si_recien_creado=(not tenants_existian))
         return
 
     # ==========================================================================
@@ -444,31 +463,6 @@ def init_db():
         fecha_registro TEXT NOT NULL
     );
     """)
-
-    # Migración de constraint en equipos si la tabla fue creada antes con solo Disponible/Vendido
-    try:
-        cursor.execute("UPDATE equipos SET estado = 'En Garantia' WHERE id = -9999;")
-    except (sqlite3.IntegrityError, Exception):
-        # Migrar tabla equipos para permitir 'En Garantia' y 'Baja por Garantia'
-        cursor.execute("PRAGMA foreign_keys = OFF;")
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS equipos_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            modelo TEXT NOT NULL,
-            capacidad_gb INTEGER NOT NULL,
-            color TEXT NOT NULL,
-            imei TEXT UNIQUE NOT NULL,
-            grado TEXT NOT NULL CHECK(grado IN ('A', 'B', 'C')),
-            costo_compra REAL NOT NULL,
-            precio_venta REAL NOT NULL,
-            estado TEXT NOT NULL DEFAULT 'Disponible' CHECK(estado IN ('Disponible', 'Vendido', 'En Garantia', 'Baja por Garantia')),
-            fecha_registro TEXT NOT NULL
-        );
-        """)
-        cursor.execute("INSERT INTO equipos_new SELECT * FROM equipos;")
-        cursor.execute("DROP TABLE equipos;")
-        cursor.execute("ALTER TABLE equipos_new RENAME TO equipos;")
-        cursor.execute("PRAGMA foreign_keys = ON;")
 
     # 2. Tabla Clientes
     cursor.execute("""
@@ -562,39 +556,6 @@ def init_db():
         FOREIGN KEY (equipo_id) REFERENCES equipos (id) ON DELETE SET NULL
     );
     """)
-
-    # Migración de venta_items si existe con esquema antiguo (equipo_id NOT NULL)
-    cursor.execute("PRAGMA table_info(venta_items);")
-    items_rows = cursor.fetchall()
-    items_cols = [row["name"] for row in items_rows]
-    equipo_id_row = next((r for r in items_rows if r["name"] == "equipo_id"), None)
-    equipo_id_notnull = equipo_id_row["notnull"] if equipo_id_row else 0
-
-    if "tipo_item" not in items_cols or equipo_id_notnull == 1:
-        cursor.execute("PRAGMA foreign_keys = OFF;")
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS venta_items_migrated (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venta_id INTEGER NOT NULL,
-            equipo_id INTEGER,
-            accesorio_id INTEGER,
-            tipo_item TEXT NOT NULL DEFAULT 'equipo',
-            nombre_item TEXT,
-            cantidad INTEGER NOT NULL DEFAULT 1,
-            precio_final REAL NOT NULL,
-            costo_compra REAL NOT NULL,
-            margen_ganancia REAL NOT NULL,
-            FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE,
-            FOREIGN KEY (equipo_id) REFERENCES equipos (id) ON DELETE SET NULL
-        );
-        """)
-        cursor.execute("""
-        INSERT INTO venta_items_migrated (id, venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, tipo_item, cantidad)
-        SELECT id, venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, 'equipo', 1 FROM venta_items;
-        """)
-        cursor.execute("DROP TABLE venta_items;")
-        cursor.execute("ALTER TABLE venta_items_migrated RENAME TO venta_items;")
-        cursor.execute("PRAGMA foreign_keys = ON;")
 
     # 5. Tabla Devoluciones por Garantía
     cursor.execute("""
@@ -759,41 +720,6 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_telefono ON reparaciones(cliente_telefono);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username);")
 
-    # Migración de constraint CHECK en usuarios para soportar rol 'tecnico' en bases SQLite existentes
-    try:
-        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='usuarios';")
-        u_schema_row = cursor.fetchone()
-        if u_schema_row and u_schema_row["sql"] and "tecnico" not in u_schema_row["sql"]:
-            cursor.execute("PRAGMA foreign_keys=off;")
-            cursor.execute("ALTER TABLE usuarios RENAME TO usuarios_old_mig;")
-            cursor.execute("""
-            CREATE TABLE usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL,
-                username TEXT UNIQUE NOT NULL,
-                pin_hash TEXT NOT NULL,
-                salt TEXT NOT NULL,
-                rol TEXT NOT NULL CHECK(rol IN ('dueno', 'vendedor', 'tecnico')),
-                activo INTEGER NOT NULL DEFAULT 1,
-                fecha_creacion TEXT NOT NULL,
-                tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
-                sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
-            );
-            """)
-            cursor.execute("""
-            INSERT INTO usuarios (id, nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
-            SELECT id, nombre, username, pin_hash, salt, rol, activo, fecha_creacion, 
-                   CASE WHEN (SELECT count(*) FROM pragma_table_info('usuarios_old_mig') WHERE name='tenant_id') > 0 THEN tenant_id ELSE NULL END,
-                   CASE WHEN (SELECT count(*) FROM pragma_table_info('usuarios_old_mig') WHERE name='sucursal_id') > 0 THEN sucursal_id ELSE NULL END
-            FROM usuarios_old_mig;
-            """)
-            cursor.execute("DROP TABLE usuarios_old_mig;")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_tenant_sucursal ON usuarios(tenant_id, sucursal_id);")
-            cursor.execute("PRAGMA foreign_keys=on;")
-    except Exception:
-        pass
-
     # ==========================================================================
     # MIGRACIÓN DE COLUMNAS MULTI-TENANT (tenant_id, sucursal_id)
     # ==========================================================================
@@ -834,105 +760,106 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Verificar si existían tenants antes de inicializar demo para blindaje anti-overwrite
+    conn_chk = get_db_connection()
+    c_chk = conn_chk.cursor()
+    c_chk.execute("SELECT COUNT(*) as count FROM tenants;")
+    r_chk = c_chk.fetchone()
+    tenants_existian = (((r_chk["count"] if isinstance(r_chk, dict) or hasattr(r_chk, '__getitem__') else r_chk[0]) or 0) > 0)
+    conn_chk.close()
+
     # Inicializar el tenant de prueba y asignar registros existentes (Backfill)
     init_demo_tenant_if_empty()
-    seed_demo_data_if_empty()
+    seed_demo_data_if_empty(forzar_si_recien_creado=(not tenants_existian))
 
 
 def init_demo_tenant_if_empty():
     """
-    Inicializa la arquitectura Multi-Tenant SaaS:
-    1. Si no existe un tenant activo o la BD está vacía, crea el tenant de prueba 'Demostración Celulares'.
-    2. Crea su sucursal matriz y su configuración de tienda.
-    3. Asigna (backfill) todos los registros históricos existentes (con tenant_id NULL) a este tenant
-       para garantizar 100% de compatibilidad hacia atrás y evitar que nada se rompa.
+    Inicializa la arquitectura Multi-Tenant SaaS únicamente si la base de datos está completamente vacía (0 tenants).
+    BLINDAJE ESTRICTO ANTI-OVERWRITE:
+    Si la tabla 'tenants' tiene al menos 1 registro (COUNT(*) > 0), retorna inmediatamente
+    sin realizar ningún INSERT, UPDATE ni alteración de registros existentes.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        # 1. Verificar si ya existe el tenant de demostración
-        cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares' OR nombre_comercial = 'Demostración Celulares' LIMIT 1;")
-        row = cursor.fetchone()
-        
-        if row:
-            tenant_id = row["id"] if isinstance(row, dict) or hasattr(row, '__getitem__') else row[0]
-        else:
-            # Crear Tenant de Demostración
-            cursor.execute("""
-            INSERT INTO tenants (nombre_comercial, slug, email_contacto, telefono, plan, activo, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, ?, ?);
-            """, (
-                "Demostración Celulares",
-                "demo-celulares",
-                "contacto@democelulares.com",
-                "5512345678",
-                "pro",
-                True,
-                now
-            ))
-            tenant_id = cursor.lastrowid
-            if not tenant_id:
-                cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares';")
-                tenant_id = cursor.fetchone()["id"]
+        # Blindaje Estricto Anti-Overwrite: si ya existe al menos 1 tenant, salir inmediatamente
+        cursor.execute("SELECT COUNT(*) as count FROM tenants;")
+        row_count = cursor.fetchone()
+        count = (row_count["count"] if isinstance(row_count, dict) or hasattr(row_count, '__getitem__') else row_count[0]) if row_count else 0
+        if count > 0:
+            return
 
-        # 2. Verificar o crear Sucursal Matriz
-        cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = ? LIMIT 1;", (tenant_id, True))
-        row_suc = cursor.fetchone()
-        if row_suc:
-            sucursal_id = row_suc["id"] if isinstance(row_suc, dict) or hasattr(row_suc, '__getitem__') else row_suc[0]
-        else:
-            cursor.execute("""
-            INSERT INTO sucursales (tenant_id, nombre_sucursal, direccion, telefono, es_matriz, fecha_registro)
-            VALUES (?, ?, ?, ?, ?, ?);
-            """, (
-                tenant_id,
-                "Sucursal Matriz Centro",
-                "Av. Principal #100, Col. Centro",
-                "5512345678",
-                True,
-                now
-            ))
-            sucursal_id = cursor.lastrowid
-            if not sucursal_id:
-                cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
-                sucursal_id = cursor.fetchone()["id"]
+        # 1. Crear Tenant de Demostración inicial
+        cursor.execute("""
+        INSERT INTO tenants (nombre_comercial, slug, email_contacto, telefono, plan, activo, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """, (
+            "Demostración Celulares",
+            "demo-celulares",
+            "contacto@democelulares.com",
+            "5512345678",
+            "pro",
+            True,
+            now
+        ))
+        tenant_id = cursor.lastrowid
+        if not tenant_id:
+            cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares';")
+            tenant_id = cursor.fetchone()["id"]
 
-        # 3. Verificar o crear Configuración de Tienda
-        cursor.execute("SELECT id FROM configuracion_tienda WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
+        # 2. Crear Sucursal Matriz
+        cursor.execute("""
+        INSERT INTO sucursales (tenant_id, nombre_sucursal, direccion, telefono, es_matriz, fecha_registro)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, (
+            tenant_id,
+            "Sucursal Matriz Centro",
+            "Av. Principal #100, Col. Centro",
+            "5512345678",
+            True,
+            now
+        ))
+        sucursal_id = cursor.lastrowid
+        if not sucursal_id:
+            cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? LIMIT 1;", (tenant_id,))
+            sucursal_id = cursor.fetchone()["id"]
+
+        # 3. Crear Configuración de Tienda
+        cursor.execute("""
+        INSERT INTO configuracion_tienda (tenant_id, logo_url, encabezado_ticket, pie_ticket_garantia, whatsapp_notificaciones, fecha_actualizacion)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, (
+            tenant_id,
+            "/static/img/logo.png",
+            "Demostración Celulares | Compra y Venta Móvil",
+            "Garantía de 30 días válida únicamente con este comprobante original.",
+            "525512345678",
+            now
+        ))
+
+        # 4. Crear Usuarios iniciales para este tenant inicial (admin y vendedor)
+        from app.security import hash_secret
+        admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
+        admin_hash, admin_salt = hash_secret(admin_pwd)
+        vendedor_pwd = os.environ.get("VENDEDOR_PASSWORD", "piso6bodega606.")
+        vendedor_hash, vendedor_salt = hash_secret(vendedor_pwd)
+
+        cursor.execute("SELECT id FROM usuarios WHERE username = 'admin' LIMIT 1;")
         if not cursor.fetchone():
             cursor.execute("""
-            INSERT INTO configuracion_tienda (tenant_id, logo_url, encabezado_ticket, pie_ticket_garantia, whatsapp_notificaciones, fecha_actualizacion)
-            VALUES (?, ?, ?, ?, ?, ?);
-            """, (
-                tenant_id,
-                "/static/img/logo.png",
-                "Demostración Celulares | Compra y Venta Móvil",
-                "Garantía de 30 días válida únicamente con este comprobante original.",
-                "525512345678",
-                now
-            ))
+            INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
+            VALUES (?, ?, ?, ?, 'dueno', ?, ?, ?, ?);
+            """, ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, True, now, tenant_id, sucursal_id))
 
-        # 4. Asignar registros huérfanos o existentes a este tenant (Backfill)
-        tablas_a_migrar = [
-            ("equipos", True),
-            ("ventas", True),
-            ("reparaciones", True),
-            ("accesorios", True),
-            ("cortes_caja", True),
-            ("clientes", False),
-            ("usuarios", True),
-        ]
-
-        for tabla, tiene_sucursal in tablas_a_migrar:
-            try:
-                if tiene_sucursal:
-                    cursor.execute(f"UPDATE {tabla} SET tenant_id = ?, sucursal_id = ? WHERE tenant_id IS NULL;", (tenant_id, sucursal_id))
-                else:
-                    cursor.execute(f"UPDATE {tabla} SET tenant_id = ? WHERE tenant_id IS NULL;", (tenant_id,))
-            except Exception:
-                pass
+        cursor.execute("SELECT id FROM usuarios WHERE username = 'vendedor' LIMIT 1;")
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
+            VALUES (?, ?, ?, ?, 'vendedor', ?, ?, ?, ?);
+            """, ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, True, now, tenant_id, sucursal_id))
 
         conn.commit()
     except Exception as e:
@@ -941,150 +868,125 @@ def init_demo_tenant_if_empty():
     finally:
         conn.close()
 
-def seed_demo_data_if_empty():
+def seed_demo_data_if_empty(forzar_si_recien_creado: bool = False):
     """
-    Inserta datos de demostración solo si la base de datos está vacía y se solicita explícitamente vía
-    SEED_DEMO_DATA=1 o durante la ejecución de pruebas automatizadas.
-    Garantiza siempre la inicialización segura de usuarios de acceso.
+    Inserta datos de demostración solo si la base de datos está completamente vacía (0 tenants)
+    y se solicita explícitamente vía SEED_DEMO_DATA=1 o durante la ejecución de pruebas automatizadas.
+    BLINDAJE ESTRICTO ANTI-OVERWRITE:
+    Si la tabla 'tenants' tiene al menos 1 registro (COUNT(*) > 0) y no se trata de una inicialización
+    desde cero recién creada, retorna inmediatamente sin realizar ningún INSERT, UPDATE ni alteración de registros existentes.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 1. Inicialización o sincronización de usuarios
-    from app.security import hash_secret
-    admin_pwd = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
-    admin_hash, admin_salt = hash_secret(admin_pwd)
-    vendedor_pwd = os.environ.get("VENDEDOR_PASSWORD", "piso6bodega606.")
-    vendedor_hash, vendedor_salt = hash_secret(vendedor_pwd)
+    try:
+        # Blindaje Estricto Anti-Overwrite: si ya existían tenants, salir inmediatamente
+        cursor.execute("SELECT COUNT(*) as count FROM tenants;")
+        row_count = cursor.fetchone()
+        count = (row_count["count"] if isinstance(row_count, dict) or hasattr(row_count, '__getitem__') else row_count[0]) if row_count else 0
+        if count > 0 and not forzar_si_recien_creado:
+            return
 
-    # Obtener tenant y sucursal demo
-    cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares' LIMIT 1;")
-    row_t = cursor.fetchone()
-    demo_t_id = (row_t["id"] if isinstance(row_t, dict) or hasattr(row_t, '__getitem__') else row_t[0]) if row_t else 1
-    cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND (es_matriz IS TRUE OR es_matriz = TRUE) LIMIT 1;", (demo_t_id,))
-    row_s = cursor.fetchone()
-    demo_s_id = (row_s["id"] if isinstance(row_s, dict) or hasattr(row_s, '__getitem__') else row_s[0]) if row_s else 1
+        # Si no se solicitó siembra, salir
+        debe_sembrar = os.environ.get("SEED_DEMO_DATA") == "1" or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+        if not debe_sembrar:
+            return
 
-    # Asegurar usuario administrador inicial
-    cursor.execute("SELECT id FROM usuarios WHERE username = 'admin' LIMIT 1;")
-    admin_row = cursor.fetchone()
-    if not admin_row:
-        cursor.execute("""
-        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
-        VALUES (?, ?, ?, ?, 'dueno', ?, ?, ?, ?);
-        """, ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, True, now, demo_t_id, demo_s_id))
-        conn.commit()
-    else:
-        cursor.execute("UPDATE usuarios SET activo = ? WHERE username = 'admin' AND activo IS NULL;", (True,))
-        if "ADMIN_DELETE_PASSWORD" in os.environ:
-            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ?, activo = ? WHERE username = 'admin';", (admin_hash, admin_salt, True))
-        conn.commit()
+        cursor.execute("SELECT id FROM tenants ORDER BY id ASC LIMIT 1;")
+        t_row = cursor.fetchone()
+        t_id = (t_row["id"] if isinstance(t_row, dict) or hasattr(t_row, '__getitem__') else t_row[0]) if t_row else 1
 
-    # Asegurar usuario vendedor inicial
-    cursor.execute("SELECT id FROM usuarios WHERE username = 'vendedor' LIMIT 1;")
-    vendedor_row = cursor.fetchone()
-    if not vendedor_row:
-        cursor.execute("""
-        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
-        VALUES (?, ?, ?, ?, 'vendedor', ?, ?, ?, ?);
-        """, ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, True, now, demo_t_id, demo_s_id))
-        conn.commit()
-    else:
-        cursor.execute("UPDATE usuarios SET activo = ? WHERE username = 'vendedor' AND activo IS NULL;", (True,))
-        if "VENDEDOR_PASSWORD" in os.environ:
-            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ?, activo = ? WHERE username = 'vendedor';", (vendedor_hash, vendedor_salt, True))
-        conn.commit()
+        cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? LIMIT 1;", (t_id,))
+        s_row = cursor.fetchone()
+        s_id = (s_row["id"] if isinstance(s_row, dict) or hasattr(s_row, '__getitem__') else s_row[0]) if s_row else 1
 
-    # Garantizar que usuarios existentes tengan tenant_id, sucursal_id y activo asignados
-    cursor.execute("UPDATE usuarios SET tenant_id = ?, sucursal_id = ? WHERE tenant_id IS NULL;", (demo_t_id, demo_s_id))
-    cursor.execute("UPDATE usuarios SET activo = ? WHERE activo IS NULL;", (True,))
-    conn.commit()
+        cursor.execute("SELECT COUNT(*) as count FROM equipos;")
+        count_eq = cursor.fetchone()["count"]
 
-    # 2. Siembra de datos demo (solo en tests o con bandera explícita SEED_DEMO_DATA=1)
-    debe_sembrar = os.environ.get("SEED_DEMO_DATA") == "1" or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+        if count_eq == 0:
+            demo_equipos = [
+                ("iPhone 14 Pro Max", 256, "Morado Oscuro", "356789123456781", "A", 14500.0, 18900.0, "Disponible", now),
+                ("iPhone 13", 128, "Azul Medianoche", "356789123456782", "A", 8200.0, 11500.0, "Disponible", now),
+                ("Samsung Galaxy S23 Ultra", 512, "Negro Fantasma", "356789123456783", "A", 13000.0, 17500.0, "Disponible", now),
+                ("Samsung Galaxy A54 5G", 128, "Lima", "356789123456784", "B", 4100.0, 5800.0, "Disponible", now),
+                ("Xiaomi Redmi Note 13 Pro+", 256, "Blanco Luz", "356789123456785", "B", 4900.0, 6900.0, "Disponible", now),
+                ("iPhone 11", 64, "Rojo Product", "356789123456786", "C", 3800.0, 5200.0, "Disponible", now),
+                ("Google Pixel 7 Pro", 128, "Hazel", "356789123456787", "A", 7500.0, 10200.0, "Disponible", now),
+            ]
 
-    if not debe_sembrar:
+            cursor.executemany("""
+            INSERT INTO equipos (modelo, capacidad_gb, color, imei, grado, costo_compra, precio_venta, estado, fecha_registro, tenant_id, sucursal_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """, [(*item, t_id, s_id) for item in demo_equipos])
+
+            demo_clientes = [
+                ("Carlos Mendoza López", "5512345678", now),
+                ("María Fernández Ruiz", "5598765432", now)
+            ]
+            cursor.executemany("""
+            INSERT INTO clientes (nombre, telefono, fecha_registro, tenant_id)
+            VALUES (?, ?, ?, ?);
+            """, [(*item, t_id) for item in demo_clientes])
+
+            # Equipos vendidos para inicializar historial
+            cursor.execute("""
+            INSERT INTO equipos (modelo, capacidad_gb, color, imei, grado, costo_compra, precio_venta, estado, fecha_registro, tenant_id, sucursal_id)
+            VALUES ('iPhone 12', 128, 'Negro', '356789123456788', 'A', 6500.0, 9200.0, 'Vendido', ?, ?, ?);
+            """, (now, t_id, s_id))
+            eq_id_1 = cursor.lastrowid
+            if not eq_id_1:
+                cursor.execute("SELECT id FROM equipos WHERE imei = '356789123456788';")
+                eq_id_1 = cursor.fetchone()["id"]
+
+            cursor.execute("""
+            INSERT INTO ventas (equipo_id, cliente_id, precio_final, margen_ganancia, fecha_venta, metodo_pago, monto_efectivo, monto_transferencia, monto_garantia, tenant_id, sucursal_id)
+            VALUES (?, 1, 9200.0, 2700.0, ?, 'Efectivo', 9200.0, 0, 0, ?, ?);
+            """, (eq_id_1, now, t_id, s_id))
+            v_id_1 = cursor.lastrowid
+            if not v_id_1:
+                cursor.execute("SELECT id FROM ventas WHERE equipo_id = ? LIMIT 1;", (eq_id_1,))
+                v_id_1 = cursor.fetchone()["id"]
+
+            cursor.execute("""
+            INSERT INTO venta_items (venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, tipo_item, cantidad)
+            VALUES (?, ?, 9200.0, 6500.0, 2700.0, 'equipo', 1);
+            """, (v_id_1, eq_id_1))
+
+            conn.commit()
+
+        # Sembrar accesorios demo si la tabla está vacía y se está en modo siembra
+        cursor.execute("SELECT COUNT(*) as count FROM accesorios;")
+        if cursor.fetchone()["count"] == 0:
+            demo_acc = [
+                ("Funda Uso Rudo Silicona (Varios)", "Funda", 45.0, 150.0, 30, 0, now),
+                ("Mica de Cristal Templado 9D", "Mica", 20.0, 100.0, 50, 0, now),
+                ("Cargador Rápido 20W Carga Rápida", "Cargador", 85.0, 250.0, 20, 0, now),
+                ("Cable USB-C a Lightning 1m", "Cable", 35.0, 120.0, 25, 0, now),
+                ("Cable USB-C a USB-C 60W 1m", "Cable", 35.0, 120.0, 25, 0, now),
+                ("Servicio Cambio de Pantalla", "Reparación", 400.0, 850.0, 999, 1, now),
+                ("Servicio Cambio de Batería Original", "Reparación", 300.0, 650.0, 999, 1, now),
+            ]
+            cursor.executemany("""
+            INSERT INTO accesorios (nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro, tenant_id, sucursal_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """, [(*item, t_id, s_id) for item in demo_acc])
+            conn.commit()
+
+        # Sembrar reparaciones demo si la tabla está vacía y se está en modo siembra
+        cursor.execute("SELECT COUNT(*) as count FROM reparaciones;")
+        if cursor.fetchone()["count"] == 0:
+            demo_rep = [
+                ("REP-0001", "Roberto Gómez", "5511223344", "iPhone 11", "Negro", "356789123000111", "1234", "Pantalla estrellada y touch no responde", "Cambio de display OLED completo", "Detalles leves en esquinas", 450.0, 950.0, 300.0, 650.0, "En Revision", now, now, None, "Samuel N.", "Pieza en inventario"),
+                ("REP-0002", "Ana Patricia Solís", "5599887766", "Samsung Galaxy A52", "Azul", "358888000999222", "Patrón en L", "No carga, puerto flojo", "Cambio de centro de carga flex", "Buen estado general", 120.0, 380.0, 200.0, 180.0, "Listo para Entrega", now, now, None, "Samuel N.", "Probado con carga rápida OK"),
+            ]
+            cursor.executemany("""
+            INSERT INTO reparaciones (folio, cliente_nombre, cliente_telefono, dispositivo_modelo, color, imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico, condicion_recepcion, costo_refaccion, precio_servicio, anticipo, saldo_pendiente, estado, fecha_ingreso, fecha_prometida, fecha_entrega, tecnico_responsable, notas, tenant_id, sucursal_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """, [(*item, t_id, s_id) for item in demo_rep])
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
         conn.close()
-        return
-
-    cursor.execute("SELECT COUNT(*) as count FROM equipos;")
-    count = cursor.fetchone()["count"]
-
-    if count == 0:
-        demo_equipos = [
-            ("iPhone 14 Pro Max", 256, "Morado Oscuro", "356789123456781", "A", 14500.0, 18900.0, "Disponible", now),
-            ("iPhone 13", 128, "Azul Medianoche", "356789123456782", "A", 8200.0, 11500.0, "Disponible", now),
-            ("Samsung Galaxy S23 Ultra", 512, "Negro Fantasma", "356789123456783", "A", 13000.0, 17500.0, "Disponible", now),
-            ("Samsung Galaxy A54 5G", 128, "Lima", "356789123456784", "B", 4100.0, 5800.0, "Disponible", now),
-            ("Xiaomi Redmi Note 13 Pro+", 256, "Blanco Luz", "356789123456785", "B", 4900.0, 6900.0, "Disponible", now),
-            ("iPhone 11", 64, "Rojo Product", "356789123456786", "C", 3800.0, 5200.0, "Disponible", now),
-            ("Google Pixel 7 Pro", 128, "Hazel", "356789123456787", "A", 7500.0, 10200.0, "Disponible", now),
-        ]
-
-        cursor.executemany("""
-        INSERT INTO equipos (modelo, capacidad_gb, color, imei, grado, costo_compra, precio_venta, estado, fecha_registro)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-        """, demo_equipos)
-
-        demo_clientes = [
-            ("Carlos Mendoza López", "5512345678", now),
-            ("María Fernández Ruiz", "5598765432", now)
-        ]
-        cursor.executemany("""
-        INSERT INTO clientes (nombre, telefono, fecha_registro)
-        VALUES (?, ?, ?);
-        """, demo_clientes)
-
-        # Equipos vendidos para inicializar historial
-        cursor.execute("""
-        INSERT INTO equipos (modelo, capacidad_gb, color, imei, grado, costo_compra, precio_venta, estado, fecha_registro)
-        VALUES ('iPhone 12', 128, 'Negro', '356789123456788', 'A', 6500.0, 9200.0, 'Vendido', ?);
-        """, (now,))
-        eq_id_1 = cursor.lastrowid
-
-        cursor.execute("""
-        INSERT INTO ventas (equipo_id, cliente_id, precio_final, margen_ganancia, fecha_venta, metodo_pago, monto_efectivo, monto_transferencia, monto_garantia)
-        VALUES (?, 1, 9200.0, 2700.0, ?, 'Efectivo', 9200.0, 0, 0);
-        """, (eq_id_1, now))
-        v_id_1 = cursor.lastrowid
-
-        cursor.execute("""
-        INSERT INTO venta_items (venta_id, equipo_id, precio_final, costo_compra, margen_ganancia, tipo_item, cantidad)
-        VALUES (?, ?, 9200.0, 6500.0, 2700.0, 'equipo', 1);
-        """, (v_id_1, eq_id_1))
-
-        conn.commit()
-
-    # Sembrar accesorios demo si la tabla está vacía y se está en modo siembra
-    cursor.execute("SELECT COUNT(*) as count FROM accesorios;")
-    if cursor.fetchone()["count"] == 0:
-        demo_acc = [
-            ("Funda Uso Rudo Silicona (Varios)", "Funda", 45.0, 150.0, 30, 0, now),
-            ("Mica de Cristal Templado 9D", "Mica", 20.0, 100.0, 50, 0, now),
-            ("Cargador Rápido 20W Carga Rápida", "Cargador", 85.0, 250.0, 20, 0, now),
-            ("Cable USB-C a Lightning 1m", "Cable", 35.0, 120.0, 25, 0, now),
-            ("Cable USB-C a USB-C 60W 1m", "Cable", 35.0, 120.0, 25, 0, now),
-            ("Servicio Cambio de Pantalla", "Reparación", 400.0, 850.0, 999, 1, now),
-            ("Servicio Cambio de Batería Original", "Reparación", 300.0, 650.0, 999, 1, now),
-        ]
-        cursor.executemany("""
-        INSERT INTO accesorios (nombre, categoria, costo_compra, precio_venta, stock, es_servicio, fecha_registro)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
-        """, demo_acc)
-        conn.commit()
-
-    # Sembrar reparaciones demo si la tabla está vacía y se está en modo siembra
-    cursor.execute("SELECT COUNT(*) as count FROM reparaciones;")
-    if cursor.fetchone()["count"] == 0:
-        demo_rep = [
-            ("REP-0001", "Roberto Gómez", "5511223344", "iPhone 11", "Negro", "356789123000111", "1234", "Pantalla estrellada y touch no responde", "Cambio de display OLED completo", "Detalles leves en esquinas", 450.0, 950.0, 300.0, 650.0, "En Revision", now, now, None, "Samuel N.", "Pieza en inventario"),
-            ("REP-0002", "Ana Patricia Solís", "5599887766", "Samsung Galaxy A52", "Azul", "358888000999222", "Patrón en L", "No carga, puerto flojo", "Cambio de centro de carga flex", "Buen estado general", 120.0, 380.0, 200.0, 180.0, "Listo para Entrega", now, now, None, "Samuel N.", "Probado con carga rápida OK"),
-        ]
-        cursor.executemany("""
-        INSERT INTO reparaciones (folio, cliente_nombre, cliente_telefono, dispositivo_modelo, color, imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico, condicion_recepcion, costo_refaccion, precio_servicio, anticipo, saldo_pendiente, estado, fecha_ingreso, fecha_prometida, fecha_entrega, tecnico_responsable, notas)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-        """, demo_rep)
-        conn.commit()
-
-    conn.close()

@@ -61,6 +61,26 @@ async def test_sugerido_reabastecimiento():
         assert "mensaje_whatsapp" in data
         assert isinstance(data["sugeridos"], list)
 
+async def _asegurar_accesorios_prueba(client):
+    acc_res = await client.get("/api/accesorios")
+    accesorios = [a for a in acc_res.json() if not a.get("es_servicio")]
+    while len(accesorios) < 2:
+        idx = len(accesorios) + 1
+        nuevo_payload = {
+            "nombre": f"Accesorio Test Fixture {idx}",
+            "categoria": "Fundas",
+            "costo_compra": 50.0,
+            "precio_venta": 150.0,
+            "stock": 10,
+            "es_servicio": 0,
+            "color": "Negro"
+        }
+        res_crear = await client.post("/api/accesorios", json=nuevo_payload)
+        assert res_crear.status_code == 201
+        acc_res = await client.get("/api/accesorios")
+        accesorios = [a for a in acc_res.json() if not a.get("es_servicio")]
+    return accesorios
+
 @pytest.mark.anyio
 async def test_kardex_general_y_ajuste_stock():
     transport = httpx.ASGITransport(app=app)
@@ -68,10 +88,8 @@ async def test_kardex_general_y_ajuste_stock():
         login_res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
         assert login_res.status_code == 200
 
-        # Obtener lista de accesorios
-        acc_res = await client.get("/api/accesorios")
-        assert acc_res.status_code == 200
-        accesorios = [a for a in acc_res.json() if not a.get("es_servicio")]
+        # Obtener lista de accesorios asegurando que existan al menos 2
+        accesorios = await _asegurar_accesorios_prueba(client)
         assert len(accesorios) > 0
         target = accesorios[0]
         acc_id = target["id"]
@@ -112,8 +130,7 @@ async def test_actualizacion_masiva_rapida():
         login_res = await client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD})
         assert login_res.status_code == 200
 
-        acc_res = await client.get("/api/accesorios")
-        accesorios = [a for a in acc_res.json() if not a.get("es_servicio")]
+        accesorios = await _asegurar_accesorios_prueba(client)
         target1 = accesorios[0]
         target2 = accesorios[1]
 
