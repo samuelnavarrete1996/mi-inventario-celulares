@@ -296,7 +296,9 @@ def get_postgres_engine():
     if _pg_engine is None:
         raw_url = os.environ.get("DATABASE_URL", "").strip()
         if raw_url.startswith("postgres://"):
-            raw_url = raw_url.replace("postgres://", "postgresql://", 1)
+            raw_url = raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif raw_url.startswith("postgresql://") and not raw_url.startswith("postgresql+"):
+            raw_url = raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
         pool_size = int(os.environ.get("DATABASE_POOL_SIZE", "10"))
         max_overflow = int(os.environ.get("DATABASE_MAX_OVERFLOW", "20"))

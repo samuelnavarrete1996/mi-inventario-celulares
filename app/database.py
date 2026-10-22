@@ -360,7 +360,8 @@ def _init_postgres_db(conn, cursor):
             estado_nuevo VARCHAR(50),
             fecha_cambio TEXT NOT NULL,
             usuario VARCHAR(100),
-            observaciones TEXT
+            observaciones TEXT,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE
         );""",
 
         """CREATE TABLE IF NOT EXISTS historial_ventas_cambios (
@@ -371,8 +372,24 @@ def _init_postgres_db(conn, cursor):
             valor_nuevo TEXT,
             usuario VARCHAR(100) NOT NULL,
             fecha_modificacion TEXT NOT NULL,
-            motivo TEXT
-        );"""
+            motivo TEXT,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE
+        );""",
+
+        # 14. Movimientos Stock Accesorios
+        """CREATE TABLE IF NOT EXISTS movimientos_stock_accesorios (
+            id SERIAL PRIMARY KEY,
+            accesorio_id INTEGER NOT NULL REFERENCES accesorios(id) ON DELETE CASCADE,
+            tipo_movimiento VARCHAR(40) NOT NULL,
+            cantidad INTEGER NOT NULL,
+            stock_anterior INTEGER NOT NULL,
+            stock_nuevo INTEGER NOT NULL,
+            motivo TEXT,
+            usuario VARCHAR(100),
+            fecha TEXT NOT NULL,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_mov_stock_tenant ON movimientos_stock_accesorios(tenant_id);"
     ]
 
     for stmt in stmts:
@@ -397,6 +414,11 @@ def _init_postgres_db(conn, cursor):
         ("clientes", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("usuarios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("usuarios", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+        ("movimientos_stock_accesorios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("garantias_historial", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("historial_ventas_cambios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("venta_items", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("abonos_ventas_credito", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
     ]
     for tbl, col, col_def in column_checks:
         _validate_sql_identifier(tbl)
@@ -417,15 +439,21 @@ def _init_postgres_db(conn, cursor):
     for tbl in rls_tablas:
         try:
             _validate_sql_identifier(tbl)
-            cursor.execute(f"ALTER TABLE {tbl} ENABLE ROW LEVEL SECURITY;")
-            cursor.execute(f"ALTER TABLE {tbl} FORCE ROW LEVEL SECURITY;")
-            cursor.execute(f"DROP POLICY IF EXISTS tenant_isolation_policy ON {tbl};")
-            cursor.execute(f"""
-                CREATE POLICY tenant_isolation_policy ON {tbl}
-                FOR ALL
-                USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER)
-                WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER);
-            """)
+            cursor.execute("""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = %s AND column_name = 'tenant_id'
+                LIMIT 1;
+            """, (tbl,))
+            if cursor.fetchone():
+                cursor.execute(f"ALTER TABLE {tbl} ENABLE ROW LEVEL SECURITY;")
+                cursor.execute(f"ALTER TABLE {tbl} FORCE ROW LEVEL SECURITY;")
+                cursor.execute(f"DROP POLICY IF EXISTS tenant_isolation_policy ON {tbl};")
+                cursor.execute(f"""
+                    CREATE POLICY tenant_isolation_policy ON {tbl}
+                    FOR ALL
+                    USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER)
+                    WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER);
+                """)
         except Exception:
             pass
 

@@ -16,5 +16,7 @@ inventario.db
 !.env.example
 app/static/uploads/articulos/*
 !app/static/uploads/articulos/.gitkeep
+app/static/uploads/logos/*
+!app/static/uploads/logos/.gitkeep
 backups/*
 !backups/.gitkeep

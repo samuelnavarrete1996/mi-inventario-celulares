@@ -532,7 +532,7 @@ async def test_vuln06_magic_bytes_y_reencode_pillow():
 
 
 # ==============================================================================
-# TEST 6: VULN-07, VULN-08, VULN-09, VULN-11 DEFENSAS EN PROFUNDIDAD
+# TEST 6: VULN-07 Y VULN-08 BOLA / IDOR EN GARANTÍAS E ÍNDICES COMPUESTOS
 # ==============================================================================
 
 @pytest.mark.anyio
@@ -541,8 +541,6 @@ async def test_vuln07_vuln08_bola_idor_garantias_pos_y_sku_unicidad_por_tenant()
     Verifica que al procesar una garantía en Tenant A, intentar asociar un equipo_reemplazo_id
     perteneciente a Tenant B sea rechazado con error (VULN-07).
     Verifica que existan los índices compuestos uq_equipos_tenant_imei y uq_reparaciones_tenant_folio (VULN-08).
-    Verifica que _validate_sql_identifier rechace inyecciones (VULN-11).
-    Verifica que en producción se proscriban secretos por defecto y fallbacks (VULN-09).
     """
     ids = setup_audit_tenants_and_data()
 
@@ -568,7 +566,17 @@ async def test_vuln07_vuln08_bola_idor_garantias_pos_y_sku_unicidad_por_tenant()
     assert "uq_reparaciones_tenant_folio" in nombres_indices, "VULN-08: Debe existir el índice uq_reparaciones_tenant_folio"
     conn.close()
 
-    # 3. Validación de Identificadores SQL (VULN-11)
+
+# ==============================================================================
+# TEST 7: VULN-09 Y VULN-11 SECRETOS EN PRODUCCIÓN E IDENTIFICADORES SQL
+# ==============================================================================
+
+def test_vuln09_vuln11_secretos_produccion_y_validacion_identificadores_sql():
+    """
+    Verifica que _validate_sql_identifier rechace inyecciones (VULN-11).
+    Verifica que en producción se proscriban secretos por defecto y fallbacks (VULN-09).
+    """
+    # 1. Validación de Identificadores SQL (VULN-11)
     assert _validate_sql_identifier("tabla_valida_123") == "tabla_valida_123"
     with pytest.raises(ValueError, match="Identificador SQL inválido"):
         _validate_sql_identifier("usuarios; DROP TABLE equipos;--")
@@ -576,7 +584,7 @@ async def test_vuln07_vuln08_bola_idor_garantias_pos_y_sku_unicidad_por_tenant()
     with pytest.raises(ValueError):
         _validate_sql_identifier("123_tabla_con_numero_inicial")
 
-    # 4. Proscripción de secretos por defecto en producción (VULN-09)
+    # 2. Proscripción de secretos por defecto en producción (VULN-09)
     os.environ["ENVIRONMENT"] = "production"
     old_jwt = os.environ.pop("JWT_SECRET", None)
     old_jwt_k = os.environ.pop("JWT_SECRET_KEY", None)
@@ -598,3 +606,4 @@ async def test_vuln07_vuln08_bola_idor_garantias_pos_y_sku_unicidad_por_tenant()
             os.environ["JWT_SECRET_KEY"] = old_jwt_k
         if old_db:
             os.environ["DATABASE_URL"] = old_db
+
