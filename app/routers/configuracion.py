@@ -38,11 +38,11 @@ def obtener_configuracion_publica(slug: Optional[str] = Query(None, description=
     cur = conn.cursor()
     try:
         if slug:
-            cur.execute("SELECT id FROM tenants WHERE slug = ? AND activo = 1 LIMIT 1;", (slug.strip(),))
+            cur.execute("SELECT id FROM tenants WHERE slug = ? AND (activo IS TRUE OR activo = TRUE) LIMIT 1;", (slug.strip(),))
             t_row = cur.fetchone()
             tenant_id = t_row["id"] if t_row else None
         else:
-            cur.execute("SELECT id FROM tenants WHERE activo = 1 ORDER BY id ASC LIMIT 1;")
+            cur.execute("SELECT id FROM tenants WHERE (activo IS TRUE OR activo = TRUE) ORDER BY id ASC LIMIT 1;")
             t_row = cur.fetchone()
             tenant_id = t_row["id"] if t_row else 1
 

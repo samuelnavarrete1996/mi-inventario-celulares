@@ -108,7 +108,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
         secret_rapido = (datos.pin or datos.password).strip() if (datos.pin or (datos.password and not datos.username)) else None
         if secret_rapido:
             pin_limpio = secret_rapido
-            cursor.execute("SELECT * FROM usuarios WHERE activo = 1;")
+            cursor.execute("SELECT * FROM usuarios WHERE (activo IS TRUE OR activo = TRUE);")
             todos_usuarios = cursor.fetchall()
             candidato = None
             for u in todos_usuarios:
@@ -122,7 +122,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
             admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
             match_master = _verify_master_password_constant_time(pin_limpio, admin_master)
             if not usuario_encontrado and match_master:
-                cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND activo = 1;")
+                cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND (activo IS TRUE OR activo = TRUE);")
                 row_admin = cursor.fetchone()
                 if row_admin:
                     usuario_encontrado = dict(row_admin)
@@ -132,7 +132,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
             user_limpio = datos.username.strip().lower()
             pwd_limpio = datos.password.strip()
 
-            cursor.execute("SELECT * FROM usuarios WHERE LOWER(username) = ? AND activo = 1;", (user_limpio,))
+            cursor.execute("SELECT * FROM usuarios WHERE LOWER(username) = ? AND (activo IS TRUE OR activo = TRUE);", (user_limpio,))
             row = cursor.fetchone()
             if row:
                 u_dict = dict(row)
@@ -147,7 +147,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
             admin_master = os.environ.get("ADMIN_DELETE_PASSWORD", "samuelykim.")
             match_master = _verify_master_password_constant_time(pwd_limpio, admin_master)
             if not usuario_encontrado and user_limpio == "admin" and match_master:
-                cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND activo = 1;")
+                cursor.execute("SELECT * FROM usuarios WHERE username = 'admin' AND (activo IS TRUE OR activo = TRUE);")
                 row_admin = cursor.fetchone()
                 if row_admin:
                     usuario_encontrado = dict(row_admin)
@@ -196,7 +196,7 @@ def login(datos: LoginRequest, request: Request, response: Response) -> Dict[str
                 )
 
         if tenant_id and not sucursal_id:
-            c_t.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (tenant_id,))
+            c_t.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND (es_matriz IS TRUE OR es_matriz = TRUE) LIMIT 1;", (tenant_id,))
             s_row = c_t.fetchone()
             if s_row:
                 sucursal_id = s_row["id"]

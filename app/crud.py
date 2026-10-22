@@ -24,7 +24,7 @@ def _get_default_tenant_and_sucursal() -> Tuple[int, int]:
         c.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares' LIMIT 1;")
         r_t = c.fetchone()
         t_id = (r_t["id"] if isinstance(r_t, dict) or hasattr(r_t, '__getitem__') else r_t[0]) if r_t else 1
-        c.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (t_id,))
+        c.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND (es_matriz IS TRUE OR es_matriz = TRUE) LIMIT 1;", (t_id,))
         r_s = c.fetchone()
         s_id = (r_s["id"] if isinstance(r_s, dict) or hasattr(r_s, '__getitem__') else r_s[0]) if r_s else 1
         conn.close()

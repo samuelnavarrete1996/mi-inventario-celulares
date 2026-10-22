@@ -376,6 +376,7 @@ def init_db():
         conn.commit()
         conn.close()
         init_demo_tenant_if_empty()
+        seed_demo_data_if_empty()
         return
 
     # ==========================================================================
@@ -796,6 +797,7 @@ def init_db():
 
     # Inicializar el tenant de prueba y asignar registros existentes (Backfill)
     init_demo_tenant_if_empty()
+    seed_demo_data_if_empty()
 
 
 def init_demo_tenant_if_empty():
@@ -921,32 +923,44 @@ def seed_demo_data_if_empty():
     cursor.execute("SELECT id FROM tenants WHERE slug = 'demo-celulares' LIMIT 1;")
     row_t = cursor.fetchone()
     demo_t_id = (row_t["id"] if isinstance(row_t, dict) or hasattr(row_t, '__getitem__') else row_t[0]) if row_t else 1
-    cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (demo_t_id,))
+    cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND (es_matriz IS TRUE OR es_matriz = TRUE) LIMIT 1;", (demo_t_id,))
     row_s = cursor.fetchone()
     demo_s_id = (row_s["id"] if isinstance(row_s, dict) or hasattr(row_s, '__getitem__') else row_s[0]) if row_s else 1
 
-    cursor.execute("SELECT COUNT(*) as count FROM usuarios;")
-    user_count = cursor.fetchone()["count"]
-
-    if user_count == 0:
-        usuarios_init = [
-            ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, "dueno", 1, now, demo_t_id, demo_s_id),
-            ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, "vendedor", 1, now, demo_t_id, demo_s_id)
-        ]
-        cursor.executemany("""
+    # Asegurar usuario administrador inicial
+    cursor.execute("SELECT id FROM usuarios WHERE username = 'admin' LIMIT 1;")
+    admin_row = cursor.fetchone()
+    if not admin_row:
+        cursor.execute("""
         INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-        """, usuarios_init)
+        VALUES (?, ?, ?, ?, 'dueno', ?, ?, ?, ?);
+        """, ("Samuel Navarrete (Dueño)", "admin", admin_hash, admin_salt, True, now, demo_t_id, demo_s_id))
         conn.commit()
     else:
-        # Solo sincronizar si se proporcionó una variable de entorno explícita para evitar sobreescritura accidental
+        cursor.execute("UPDATE usuarios SET activo = ? WHERE username = 'admin' AND activo IS NULL;", (True,))
         if "ADMIN_DELETE_PASSWORD" in os.environ:
-            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'admin';", (admin_hash, admin_salt))
-        if "VENDEDOR_PASSWORD" in os.environ:
-            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ? WHERE username = 'vendedor';", (vendedor_hash, vendedor_salt))
-        # Garantizar que usuarios existentes tengan tenant_id y sucursal_id asignados
-        cursor.execute("UPDATE usuarios SET tenant_id = ?, sucursal_id = ? WHERE tenant_id IS NULL;", (demo_t_id, demo_s_id))
+            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ?, activo = ? WHERE username = 'admin';", (admin_hash, admin_salt, True))
         conn.commit()
+
+    # Asegurar usuario vendedor inicial
+    cursor.execute("SELECT id FROM usuarios WHERE username = 'vendedor' LIMIT 1;")
+    vendedor_row = cursor.fetchone()
+    if not vendedor_row:
+        cursor.execute("""
+        INSERT INTO usuarios (nombre, username, pin_hash, salt, rol, activo, fecha_creacion, tenant_id, sucursal_id)
+        VALUES (?, ?, ?, ?, 'vendedor', ?, ?, ?, ?);
+        """, ("Vendedor Mostrador", "vendedor", vendedor_hash, vendedor_salt, True, now, demo_t_id, demo_s_id))
+        conn.commit()
+    else:
+        cursor.execute("UPDATE usuarios SET activo = ? WHERE username = 'vendedor' AND activo IS NULL;", (True,))
+        if "VENDEDOR_PASSWORD" in os.environ:
+            cursor.execute("UPDATE usuarios SET pin_hash = ?, salt = ?, activo = ? WHERE username = 'vendedor';", (vendedor_hash, vendedor_salt, True))
+        conn.commit()
+
+    # Garantizar que usuarios existentes tengan tenant_id, sucursal_id y activo asignados
+    cursor.execute("UPDATE usuarios SET tenant_id = ?, sucursal_id = ? WHERE tenant_id IS NULL;", (demo_t_id, demo_s_id))
+    cursor.execute("UPDATE usuarios SET activo = ? WHERE activo IS NULL;", (True,))
+    conn.commit()
 
     # 2. Siembra de datos demo (solo en tests o con bandera explícita SEED_DEMO_DATA=1)
     debe_sembrar = os.environ.get("SEED_DEMO_DATA") == "1" or bool(os.environ.get("PYTEST_CURRENT_TEST"))

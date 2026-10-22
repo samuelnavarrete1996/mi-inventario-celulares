@@ -103,7 +103,7 @@ def get_current_tenant(user: dict = Depends(get_current_user)) -> TenantContext:
         # Resolución de sucursal_id
         sucursal_id = user.get("sucursal_id")
         if not sucursal_id:
-            cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND es_matriz = 1 LIMIT 1;", (tenant_id,))
+            cursor.execute("SELECT id FROM sucursales WHERE tenant_id = ? AND (es_matriz IS TRUE OR es_matriz = TRUE) LIMIT 1;", (tenant_id,))
             s_row = cursor.fetchone()
             if s_row:
                 sucursal_id = s_row["id"]
