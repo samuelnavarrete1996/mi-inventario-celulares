@@ -7,7 +7,10 @@ const Caja = {
     async abrirModalCorte() {
         try {
             const res = await fetch('/api/caja/resumen-actual');
-            if (!res.ok) throw new Error("Error al obtener balance de caja");
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || "Error al obtener balance de caja");
+            }
             this.datosCorte = await res.json();
             this.renderizarResumen();
             document.getElementById('modal-corte-caja').classList.remove('hidden');

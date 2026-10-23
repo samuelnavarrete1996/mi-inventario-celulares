@@ -293,16 +293,24 @@ def _init_postgres_db(conn, cursor):
         # 9. Cortes de Caja
         """CREATE TABLE IF NOT EXISTS cortes_caja (
             id SERIAL PRIMARY KEY,
-            fecha_hora TEXT NOT NULL,
-            total_ventas DOUBLE PRECISION NOT NULL,
-            monto_efectivo DOUBLE PRECISION NOT NULL,
-            monto_transferencia DOUBLE PRECISION NOT NULL,
-            monto_tarjeta DOUBLE PRECISION NOT NULL,
-            efectivo_esperado DOUBLE PRECISION NOT NULL,
-            efectivo_real DOUBLE PRECISION NOT NULL,
-            diferencia DOUBLE PRECISION NOT NULL,
-            usuario VARCHAR(100) NOT NULL,
+            fecha_corte TEXT,
+            fecha_inicio_periodo TEXT,
+            total_ventas DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total_efectivo DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total_transferencia DOUBLE PRECISION NOT NULL DEFAULT 0,
+            total_garantia DOUBLE PRECISION NOT NULL DEFAULT 0,
+            efectivo_declarado DOUBLE PRECISION NOT NULL DEFAULT 0,
+            diferencia DOUBLE PRECISION NOT NULL DEFAULT 0,
+            cantidad_ventas INTEGER NOT NULL DEFAULT 0,
             notas TEXT,
+            fecha_registro TEXT,
+            fecha_hora TEXT,
+            monto_efectivo DOUBLE PRECISION DEFAULT 0,
+            monto_transferencia DOUBLE PRECISION DEFAULT 0,
+            monto_tarjeta DOUBLE PRECISION DEFAULT 0,
+            efectivo_esperado DOUBLE PRECISION DEFAULT 0,
+            efectivo_real DOUBLE PRECISION DEFAULT 0,
+            usuario VARCHAR(100) DEFAULT 'Admin',
             equipos_vendidos INTEGER NOT NULL DEFAULT 0,
             accesorios_vendidos INTEGER NOT NULL DEFAULT 0,
             tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
@@ -453,6 +461,25 @@ def _init_postgres_db(conn, cursor):
         ("accesorios", "precio_20_pzs", "DOUBLE PRECISION DEFAULT 0"),
         ("accesorios", "precio_caja", "DOUBLE PRECISION DEFAULT 0"),
         ("accesorios", "color", "VARCHAR(60)"),
+        ("cortes_caja", "fecha_corte", "TEXT"),
+        ("cortes_caja", "fecha_inicio_periodo", "TEXT"),
+        ("cortes_caja", "total_ventas", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "total_efectivo", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "total_transferencia", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "total_garantia", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "efectivo_declarado", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "diferencia", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "cantidad_ventas", "INTEGER DEFAULT 0"),
+        ("cortes_caja", "fecha_registro", "TEXT"),
+        ("cortes_caja", "fecha_hora", "TEXT"),
+        ("cortes_caja", "monto_efectivo", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "monto_transferencia", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "monto_tarjeta", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "efectivo_esperado", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "efectivo_real", "DOUBLE PRECISION DEFAULT 0"),
+        ("cortes_caja", "usuario", "VARCHAR(100) DEFAULT 'Admin'"),
+        ("cortes_caja", "equipos_vendidos", "INTEGER DEFAULT 0"),
+        ("cortes_caja", "accesorios_vendidos", "INTEGER DEFAULT 0"),
         ("cortes_caja", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("cortes_caja", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
         ("clientes", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
@@ -853,7 +880,24 @@ def init_db():
     );
     """)
 
-    # 8. Tabla Reparaciones y Servicio Técnico (Taller)
+    cursor.execute("PRAGMA table_info(cortes_caja);")
+    corte_cols = [row["name"] for row in cursor.fetchall()]
+    for c_col, c_def in [
+        ("fecha_hora", "TEXT"),
+        ("monto_efectivo", "REAL DEFAULT 0"),
+        ("monto_transferencia", "REAL DEFAULT 0"),
+        ("monto_tarjeta", "REAL DEFAULT 0"),
+        ("efectivo_esperado", "REAL DEFAULT 0"),
+        ("efectivo_real", "REAL DEFAULT 0"),
+        ("usuario", "TEXT DEFAULT 'Admin'"),
+        ("equipos_vendidos", "INTEGER DEFAULT 0"),
+        ("accesorios_vendidos", "INTEGER DEFAULT 0"),
+    ]:
+        if c_col not in corte_cols:
+            try:
+                cursor.execute(f"ALTER TABLE cortes_caja ADD COLUMN {c_col} {c_def};")
+            except Exception:
+                pass
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS reparaciones (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

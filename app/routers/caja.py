@@ -12,10 +12,12 @@ def obtener_resumen_corte(tenant: TenantContext = Depends(get_current_tenant)):
     """Obtiene el acumulado de ventas del turno actual para el tenant en sesión."""
     try:
         return crud.obtener_resumen_corte_actual(tenant_id=tenant.tenant_id)
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.exception("Error al calcular resumen de corte de caja: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno al calcular el resumen de corte de caja."
+            detail=f"Error al calcular resumen de corte: {str(e)}"
         )
 
 @router.post("/corte", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
@@ -30,10 +32,12 @@ def realizar_corte_caja(datos: CorteCajaCreate, tenant: TenantContext = Depends(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.exception("Error al registrar corte de caja: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno al registrar el corte de caja."
+            detail=f"Error al registrar corte de caja: {str(e)}"
         )
 
 @router.get("/historial", response_model=List[Dict[str, Any]])

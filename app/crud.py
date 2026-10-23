@@ -2402,29 +2402,41 @@ def generar_sugerido_reabastecimiento(
 # ==============================================================================
 
 def obtener_resumen_corte_actual(
-    conn_ext: Optional[sqlite3.Connection] = None,
+    conn_ext: Optional[Any] = None,
     tenant_id: Optional[int] = None,
     sucursal_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """Calcula el balance acumulado de ventas desde el último corte de caja del tenant (o del día de hoy)."""
-    conn = conn_ext if conn_ext else get_db_connection()
+    conn = conn_ext if conn_ext else get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
-    q_corte = "SELECT fecha_corte FROM cortes_caja"
-    p_corte = []
-    if tenant_id is not None:
-        q_corte += " WHERE tenant_id = ?"
-        p_corte.append(tenant_id)
-    q_corte += " ORDER BY id DESC LIMIT 1"
-    cursor.execute(q_corte, p_corte)
-    ultimo_corte = cursor.fetchone()
+    try:
+        q_corte = "SELECT COALESCE(fecha_corte, fecha_hora, fecha_registro) as fecha_ult FROM cortes_caja"
+        p_corte = []
+        if tenant_id is not None:
+            q_corte += " WHERE tenant_id = ?"
+            p_corte.append(tenant_id)
+        q_corte += " ORDER BY id DESC LIMIT 1"
+        cursor.execute(q_corte, p_corte)
+        ultimo_corte = cursor.fetchone()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        ultimo_corte = None
 
     now = datetime.now()
     now_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-    if ultimo_corte and ultimo_corte["fecha_corte"]:
-        fecha_inicio = ultimo_corte["fecha_corte"]
-        op_comparacion = ">"
+    if ultimo_corte:
+        val_f = ultimo_corte.get("fecha_ult") if hasattr(ultimo_corte, "get") else (ultimo_corte["fecha_ult"] if hasattr(ultimo_corte, "__getitem__") else ultimo_corte[0])
+        if val_f:
+            fecha_inicio = str(val_f)
+            op_comparacion = ">"
+        else:
+            fecha_inicio = now.strftime("%Y-%m-%d 00:00:00")
+            op_comparacion = ">="
     else:
         fecha_inicio = now.strftime("%Y-%m-%d 00:00:00")
         op_comparacion = ">="
@@ -2463,14 +2475,20 @@ def obtener_resumen_corte_actual(
     if not conn_ext:
         conn.close()
 
+    total_ops = int((r["total_operaciones"] if r else 0) or 0)
+    tot_ventas = round(float((r["total_ventas"] if r else 0) or 0), 2)
+    tot_efectivo = round(float((r["total_efectivo"] if r else 0) or 0), 2)
+    tot_transf = round(float((r["total_transferencia"] if r else 0) or 0), 2)
+    tot_garantia = round(float((r["total_garantia"] if r else 0) or 0), 2)
+
     return {
         "fecha_corte": now_str,
         "fecha_inicio_periodo": fecha_inicio,
-        "cantidad_ventas": r["total_operaciones"],
-        "total_ventas": round(r["total_ventas"], 2),
-        "total_efectivo": round(r["total_efectivo"], 2),
-        "total_transferencia": round(r["total_transferencia"], 2),
-        "total_garantia": round(r["total_garantia"], 2),
+        "cantidad_ventas": total_ops,
+        "total_ventas": tot_ventas,
+        "total_efectivo": tot_efectivo,
+        "total_transferencia": tot_transf,
+        "total_garantia": tot_garantia,
         "ventas_periodo": ventas_rows
     }
 
@@ -2506,9 +2524,10 @@ def guardar_corte_caja(
         INSERT INTO cortes_caja (
             fecha_corte, fecha_inicio_periodo, total_ventas, total_efectivo, total_transferencia,
             total_garantia, efectivo_declarado, diferencia, cantidad_ventas, notas, fecha_registro,
-            tenant_id, sucursal_id
+            fecha_hora, monto_efectivo, monto_transferencia, efectivo_esperado, efectivo_real,
+            usuario, tenant_id, sucursal_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             now_str,
             resumen["fecha_inicio_periodo"],
@@ -2521,6 +2540,12 @@ def guardar_corte_caja(
             resumen["cantidad_ventas"],
             notas,
             now_str,
+            now_str,
+            total_efectivo_sistema,
+            resumen["total_transferencia"],
+            total_efectivo_sistema,
+            efectivo_declarado,
+            "Admin",
             final_tenant_id,
             final_sucursal_id
         ))
