@@ -209,7 +209,7 @@ def _init_postgres_db(conn, cursor):
             monto_tarjeta DOUBLE PRECISION NOT NULL DEFAULT 0,
             monto_garantia DOUBLE PRECISION NOT NULL DEFAULT 0,
             notas TEXT,
-            es_credito BOOLEAN NOT NULL DEFAULT FALSE,
+            es_credito INTEGER NOT NULL DEFAULT 0,
             plazo_dias INTEGER NOT NULL DEFAULT 0,
             fecha_vencimiento TEXT,
             monto_credito DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -278,8 +278,12 @@ def _init_postgres_db(conn, cursor):
             costo_compra DOUBLE PRECISION NOT NULL DEFAULT 0,
             precio_venta DOUBLE PRECISION NOT NULL DEFAULT 0,
             precio_mayoreo DOUBLE PRECISION NOT NULL DEFAULT 0,
+            precio_20_pzs DOUBLE PRECISION NOT NULL DEFAULT 0,
+            precio_caja DOUBLE PRECISION NOT NULL DEFAULT 0,
+            imagen_url VARCHAR(500),
+            color VARCHAR(60),
             stock INTEGER NOT NULL DEFAULT 0,
-            es_servicio BOOLEAN NOT NULL DEFAULT FALSE,
+            es_servicio INTEGER NOT NULL DEFAULT 0,
             fecha_registro TEXT NOT NULL,
             tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
             sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
@@ -424,6 +428,25 @@ def _init_postgres_db(conn, cursor):
         _validate_sql_identifier(tbl)
         _validate_sql_identifier(col)
         cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};")
+
+    # Migrar columnas booleanas con operadores enteros a INTEGER para compatibilidad total
+    for tbl, col, def_val in [("accesorios", "es_servicio", 0), ("ventas", "es_credito", 0)]:
+        try:
+            _validate_sql_identifier(tbl)
+            _validate_sql_identifier(col)
+            cursor.execute("""
+                SELECT data_type FROM information_schema.columns
+                WHERE table_name = %s AND column_name = %s;
+            """, (tbl, col))
+            row_col = cursor.fetchone()
+            if row_col and row_col["data_type"] == "boolean":
+                cursor.execute(f"""
+                    ALTER TABLE {tbl} ALTER COLUMN {col} DROP DEFAULT;
+                    ALTER TABLE {tbl} ALTER COLUMN {col} TYPE INTEGER USING (CASE WHEN {col} = true THEN 1 WHEN {col} = false THEN 0 ELSE {col}::text::integer END);
+                    ALTER TABLE {tbl} ALTER COLUMN {col} SET DEFAULT {def_val};
+                """)
+        except Exception:
+            pass
 
     # Índices únicos multi-tenant en PostgreSQL
     cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_equipos_tenant_imei ON equipos(tenant_id, imei);")

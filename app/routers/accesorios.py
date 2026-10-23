@@ -305,7 +305,8 @@ def crear_accesorio(
         return sanitizar_datos_sensibles(nuevo, user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
+    except Exception as e:
+        logger.error("Error al registrar accesorio: %s", repr(e), exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al registrar el accesorio.")
 
 @router.put("/{acc_id}", response_model=AccesorioResponse)
@@ -328,7 +329,8 @@ def actualizar_accesorio(
         raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
+    except Exception as e:
+        logger.error("Error al actualizar accesorio %s: %s", acc_id, repr(e), exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno al actualizar el accesorio.")
 
 @router.delete("/{acc_id}", status_code=status.HTTP_200_OK)
