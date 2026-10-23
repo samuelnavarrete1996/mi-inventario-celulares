@@ -107,6 +107,7 @@ def _convert_sql_for_postgres(sql: str) -> str:
     res = re.sub(r"strftime\s*\(\s*['\"]%Y-%m['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 7)", res, flags=re.I)
     res = re.sub(r"strftime\s*\(\s*['\"]%Y-%m-%d['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 10)", res, flags=re.I)
     res = re.sub(r"strftime\s*\(\s*['\"]%Y['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 4)", res, flags=re.I)
+    res = re.sub(r"substr\s*\(\s*([^,]+)\s*,\s*1\s*,\s*7\s*\)", r"SUBSTR((\1)::text, 1, 7)", res, flags=re.I)
     res = re.sub(r"date\('now',\s*'-30 days',\s*'localtime'\)", "(CURRENT_DATE - INTERVAL '30 days')", res, flags=re.I)
     res = re.sub(r"date\('now',\s*'localtime'\)", "CURRENT_DATE", res, flags=re.I)
     res = re.sub(r"date\('now'\)", "CURRENT_DATE", res, flags=re.I)
@@ -172,7 +173,8 @@ class PostgresCursor:
         has_returning = "RETURNING" in converted_sql.upper()
 
         if is_insert and not has_returning:
-            converted_sql = converted_sql.rstrip(";") + " RETURNING id;"
+            clean_insert_sql = converted_sql.strip().rstrip(";")
+            converted_sql = clean_insert_sql + " RETURNING id;"
             norm_params = tuple(params) if isinstance(params, (list, tuple)) else params
             if params is not None:
                 self.cursor.execute(converted_sql, norm_params)
@@ -181,7 +183,7 @@ class PostgresCursor:
             try:
                 res = self.cursor.fetchone()
                 if res:
-                    self.lastrowid = res[0]
+                    self.lastrowid = res[0] if isinstance(res, (tuple, list)) else (res.get("id") if hasattr(res, "get") else res[0])
             except Exception:
                 self.lastrowid = None
             self._rows = []

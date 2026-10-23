@@ -414,8 +414,23 @@ def _init_postgres_db(conn, cursor):
         "CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);"
     ]
 
+    def _safe_exec(sql_cmd: str, params: Optional[Any] = None) -> bool:
+        try:
+            if params is not None:
+                cursor.execute(sql_cmd, params)
+            else:
+                cursor.execute(sql_cmd)
+            conn.commit()
+            return True
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            return False
+
     for stmt in stmts:
-        cursor.execute(stmt)
+        _safe_exec(stmt)
 
     # Añadir columnas tenant_id / sucursal_id si no existen en caso de tablas existentes
     column_checks = [
@@ -426,6 +441,10 @@ def _init_postgres_db(conn, cursor):
         ("reparaciones", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("reparaciones", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
         ("reparaciones", "checklist_recepcion", "TEXT"),
+        ("gastos", "metodo_pago", "VARCHAR(50) DEFAULT 'Efectivo'"),
+        ("gastos", "comprobante_url", "VARCHAR(500)"),
+        ("gastos", "usuario", "VARCHAR(100) DEFAULT 'Admin'"),
+        ("gastos", "notas", "TEXT"),
         ("gastos", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("gastos", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
         ("accesorios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
@@ -447,9 +466,12 @@ def _init_postgres_db(conn, cursor):
         ("abonos_ventas_credito", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
     ]
     for tbl, col, col_def in column_checks:
-        _validate_sql_identifier(tbl)
-        _validate_sql_identifier(col)
-        cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};")
+        try:
+            _validate_sql_identifier(tbl)
+            _validate_sql_identifier(col)
+            _safe_exec(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};")
+        except Exception:
+            pass
 
     # Migrar columnas booleanas con operadores enteros a INTEGER para compatibilidad total
     for tbl, col, def_val in [("accesorios", "es_servicio", 0), ("ventas", "es_credito", 0)]:
@@ -467,12 +489,16 @@ def _init_postgres_db(conn, cursor):
                     ALTER TABLE {tbl} ALTER COLUMN {col} TYPE INTEGER USING (CASE WHEN {col} = true THEN 1 WHEN {col} = false THEN 0 ELSE {col}::text::integer END);
                     ALTER TABLE {tbl} ALTER COLUMN {col} SET DEFAULT {def_val};
                 """)
+                conn.commit()
         except Exception:
-            pass
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
     # Índices únicos multi-tenant en PostgreSQL
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_equipos_tenant_imei ON equipos(tenant_id, imei);")
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_reparaciones_tenant_folio ON reparaciones(tenant_id, folio);")
+    _safe_exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_equipos_tenant_imei ON equipos(tenant_id, imei);")
+    _safe_exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_reparaciones_tenant_folio ON reparaciones(tenant_id, folio);")
 
     # Activar y forzar Row Level Security (RLS) en todas las tablas operativas
     rls_tablas = [
@@ -499,8 +525,12 @@ def _init_postgres_db(conn, cursor):
                     USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER)
                     WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::INTEGER);
                 """)
+                conn.commit()
         except Exception:
-            pass
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
 
 def init_db():
@@ -865,6 +895,22 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_gastos_cat ON gastos(categoria);")
     except Exception:
         pass
+
+    cursor.execute("PRAGMA table_info(gastos);")
+    gas_cols = [row["name"] for row in cursor.fetchall()]
+    for col_n, col_def in [
+        ("metodo_pago", "TEXT NOT NULL DEFAULT 'Efectivo'"),
+        ("comprobante_url", "TEXT"),
+        ("usuario", "TEXT NOT NULL DEFAULT 'Admin'"),
+        ("notas", "TEXT"),
+        ("tenant_id", "INTEGER"),
+        ("sucursal_id", "INTEGER"),
+    ]:
+        if col_n not in gas_cols:
+            try:
+                cursor.execute(f"ALTER TABLE gastos ADD COLUMN {col_n} {col_def};")
+            except Exception:
+                pass
 
     # 9. Tabla Usuarios (Autenticación y Control de Acceso por Roles RBAC)
     cursor.execute("""

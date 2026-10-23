@@ -191,8 +191,11 @@ const Gastos = {
             this.cargar();
 
             // Refrescar métricas del dashboard si Reportes está cargado
-            if (typeof Reportes !== 'undefined' && Reportes.cargarDashboard) {
-                Reportes.cargarDashboard();
+            if (typeof Reportes !== 'undefined' && typeof Reportes.cargarDashboard === 'function') {
+                try {
+                    const p = Reportes.cargarDashboard();
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                } catch (_) {}
             }
         } catch (e) {
             App.showToast(e.message, "error");
@@ -215,8 +218,11 @@ const Gastos = {
             App.showToast("Gasto eliminado", "info");
             this.cargar();
 
-            if (typeof Reportes !== 'undefined' && Reportes.cargarDashboard) {
-                Reportes.cargarDashboard();
+            if (typeof Reportes !== 'undefined' && typeof Reportes.cargarDashboard === 'function') {
+                try {
+                    const p = Reportes.cargarDashboard();
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                } catch (_) {}
             }
         } catch (e) {
             App.showToast(e.message, "error");

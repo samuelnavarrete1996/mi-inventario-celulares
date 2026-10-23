@@ -673,6 +673,12 @@ class GastoResponse(BaseModel):
     tenant_id: Optional[int] = None
     sucursal_id: Optional[int] = None
 
+    @field_validator('fecha', mode='before')
+    def coerce_fecha_to_str(cls, v):
+        if v is not None and not isinstance(v, str):
+            return str(v)
+        return v or ""
+
 
 # ==============================================================================
 # MODELOS MULTI-TENANT SAAS (Tenants, Sucursales, Configuración Tienda)

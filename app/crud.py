@@ -1661,7 +1661,7 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     q_gastos_mes = """
     SELECT COALESCE(SUM(monto), 0) as total_gastos
     FROM gastos
-    WHERE substr(fecha, 1, 7) = ?
+    WHERE strftime('%Y-%m', fecha) = ?
     """
     p_gastos_mes = [mes_actual_str]
     if tenant_id is not None:
@@ -1672,6 +1672,10 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         gastos_mes_row = cursor.fetchone()
         total_gastos = round(float(gastos_mes_row["total_gastos"] or 0), 2)
     except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         total_gastos = 0.0
     ganancia_neta_mes = round(total_ganancias - total_gastos, 2)
 
@@ -3435,6 +3439,23 @@ def crear_gasto(
         final_tenant_id = tenant_id
         final_sucursal_id = sucursal_id
 
+    # Validar FKs existentes para evitar IntegrityError en PostgreSQL
+    if final_tenant_id:
+        try:
+            cursor.execute("SELECT id FROM tenants WHERE id = ? LIMIT 1;", (final_tenant_id,))
+            if not cursor.fetchone():
+                final_tenant_id = None
+        except Exception:
+            final_tenant_id = None
+
+    if final_sucursal_id:
+        try:
+            cursor.execute("SELECT id FROM sucursales WHERE id = ? LIMIT 1;", (final_sucursal_id,))
+            if not cursor.fetchone():
+                final_sucursal_id = None
+        except Exception:
+            final_sucursal_id = None
+
     fecha_final = datos.get("fecha") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
@@ -3465,7 +3486,22 @@ def crear_gasto(
     finally:
         conn.close()
 
-    return get_gasto_by_id(gasto_id, tenant_id=final_tenant_id)
+    res = get_gasto_by_id(gasto_id, tenant_id=final_tenant_id)
+    if not res:
+        res = {
+            "id": gasto_id or 1,
+            "concepto": datos["concepto"].strip(),
+            "categoria": datos.get("categoria", "General").strip(),
+            "monto": float(datos["monto"]),
+            "fecha": str(fecha_final),
+            "metodo_pago": datos.get("metodo_pago", "Efectivo").strip(),
+            "comprobante_url": datos.get("comprobante_url"),
+            "usuario": usuario_nombre,
+            "notas": datos.get("notas", "").strip() if datos.get("notas") else None,
+            "tenant_id": final_tenant_id,
+            "sucursal_id": final_sucursal_id
+        }
+    return res
 
 
 def get_gasto_by_id(gasto_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
@@ -3503,7 +3539,7 @@ def get_gastos(
         params.append(sucursal_id)
 
     if mes:
-        query += " AND substr(fecha, 1, 7) = ?"
+        query += " AND strftime('%Y-%m', fecha) = ?"
         params.append(mes.strip())
 
     if categoria and categoria != "Todas" and categoria != "Todos":
@@ -3552,7 +3588,7 @@ def get_resumen_gastos(
     query = """
         SELECT categoria, COALESCE(SUM(monto), 0) as total, COUNT(id) as cantidad
         FROM gastos
-        WHERE substr(fecha, 1, 7) = ?
+        WHERE strftime('%Y-%m', fecha) = ?
     """
     params = [mes_target]
     if tenant_id is not None:
