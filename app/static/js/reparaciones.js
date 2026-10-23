@@ -350,12 +350,7 @@ const Reparaciones = {
     },
 
     imprimirBoleta() {
-        const content = document.getElementById('boleta-modal-content');
-        if (content) content.classList.add('print-ticket-active');
-        window.print();
-        setTimeout(() => {
-            if (content) content.classList.remove('print-ticket-active');
-        }, 500);
+        App.imprimirElemento('boleta-modal-content', 'Boleta de Reparación');
     },
 
     enviarWhatsApp(id) {

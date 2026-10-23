@@ -91,75 +91,35 @@ body {
         size: auto;
     }
 
-    body * {
-        visibility: hidden !important;
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
-    /* Modal o contenedor activo de impresión */
-    .print-ticket-active,
-    .print-ticket-active * {
-        visibility: visible !important;
-    }
-
-    .print-ticket-active {
-        position: absolute !important;
-        left: 0 !important;
-        top: 0 !important;
-        margin: 0 auto !important;
-        background: white !important;
+    html, body {
+        background-color: white !important;
         color: black !important;
-        box-shadow: none !important;
-        border: none !important;
-        font-family: 'Courier New', Courier, monospace, monospace !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
     }
 
-    /* Ancho estándar 58mm (impresora portátil Bluetooth) */
-    .print-ticket-active.ticket-58mm,
-    .ticket-printable-container.ticket-58mm {
-        width: 54mm !important;
-        max-width: 54mm !important;
-        padding: 4px 2px !important;
-        font-size: 10px !important;
-        line-height: 1.2 !important;
-    }
-
-    /* Ancho estándar 80mm (impresora de mostrador USB/Ethernet) */
-    .print-ticket-active.ticket-80mm,
-    .ticket-printable-container.ticket-80mm {
-        width: 76mm !important;
-        max-width: 76mm !important;
-        padding: 8px 4px !important;
-        font-size: 12px !important;
-        line-height: 1.25 !important;
-    }
-
-    .no-print {
+    /* Ocultar interfaz no imprimible */
+    header, nav, aside, footer,
+    #sidebar, #main-content > header,
+    .no-print,
+    .modal-sheet-mobile:not(#modal-recibo-venta):not(#modal-boleta-reparacion) {
         display: none !important;
     }
 
-    body {
-        background-color: white !important;
-        color: black !important;
-    }
-
-    img.ticket-logo-img {
-        filter: grayscale(100%) contrast(150%) !important;
-        max-height: 48px !important;
-        margin: 0 auto 4px auto !important;
-        display: block !important;
-    }
-
-    .ticket-qr-box svg, .ticket-qr-box canvas, .ticket-qr-box img {
-        margin: 0 auto !important;
-        display: block !important;
-    }
-
+    /* Contenedores de modales de recibo/boleta activos */
     #modal-recibo-venta, #modal-boleta-reparacion {
         position: static !important;
+        display: block !important;
         background: transparent !important;
         padding: 0 !important;
-        margin: 0 !important;
-        display: block !important;
+        margin: 0 auto !important;
+        width: 100% !important;
         overflow: visible !important;
     }
 
@@ -169,6 +129,54 @@ body {
         width: 100% !important;
         max-width: 100% !important;
         padding: 0 !important;
-        margin: 0 !important;
+        margin: 0 auto !important;
+        animation: none !important;
+        transform: none !important;
+        overflow: visible !important;
+    }
+
+    /* Contenedor imprimible */
+    .ticket-printable-container {
+        display: block !important;
+        visibility: visible !important;
+        position: static !important;
+        margin: 0 auto !important;
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+        border: none !important;
+        padding: 8px 12px !important;
+    }
+
+    /* Ancho estándar 58mm (impresora portátil Bluetooth) */
+    .ticket-printable-container.ticket-58mm {
+        width: 54mm !important;
+        max-width: 54mm !important;
+        padding: 4px 2px !important;
+        font-size: 11px !important;
+        line-height: 1.2 !important;
+    }
+
+    /* Ancho estándar 80mm (impresora de mostrador USB/Ethernet) */
+    .ticket-printable-container.ticket-80mm {
+        width: 76mm !important;
+        max-width: 76mm !important;
+        padding: 8px 4px !important;
+        font-size: 12px !important;
+        line-height: 1.25 !important;
+    }
+
+    img.ticket-logo-img {
+        max-height: 48px !important;
+        margin: 0 auto 4px auto !important;
+        display: block !important;
+        object-fit: contain !important;
+    }
+
+    .ticket-qr-box svg, .ticket-qr-box canvas, .ticket-qr-box img {
+        margin: 0 auto !important;
+        display: block !important;
+        max-width: 100px !important;
+        height: auto !important;
     }
 }

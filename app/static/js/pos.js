@@ -959,14 +959,31 @@ const POS = {
         document.getElementById('recibo-cliente-telefono').textContent = datosVenta.cliente_telefono;
 
         const containerItems = document.getElementById('recibo-items-lista');
+        // Identificar artículos vendidos
         const items = datosVenta.items && datosVenta.items.length > 0 ? datosVenta.items : [{
             modelo: datosVenta.modelo,
             capacidad_gb: datosVenta.capacidad_gb,
             color: datosVenta.color,
             imei: datosVenta.imei,
             grado: datosVenta.grado,
-            precio_final: datosVenta.precio_final
+            precio_final: datosVenta.precio_final,
+            tipo_item: datosVenta.equipo_id ? 'equipo' : 'accesorio'
         }];
+
+        const hayEquipos = items.some(it => it.tipo_item === 'equipo' || (it.imei && it.imei !== 'N/A') || it.equipo_id);
+        const hayAccesorios = items.some(it => it.tipo_item === 'accesorio' || it.tipo_item === 'servicio' || it.accesorio_id || (!it.imei && !it.equipo_id));
+        const soloAccesorios = hayAccesorios && !hayEquipos;
+
+        const itemsTituloEl = document.getElementById('recibo-items-titulo');
+        if (itemsTituloEl) {
+            if (soloAccesorios) {
+                itemsTituloEl.textContent = 'Accesorios Entregados:';
+            } else if (hayEquipos && !hayAccesorios) {
+                itemsTituloEl.textContent = 'Equipos Entregados:';
+            } else {
+                itemsTituloEl.textContent = 'Artículos Entregados:';
+            }
+        }
 
         if (containerItems) {
             containerItems.innerHTML = items.map((it, idx) => {
@@ -1086,15 +1103,37 @@ const POS = {
             }
         }
 
+        const garantiaTituloEl = document.getElementById('recibo-garantia-titulo');
         const garantiaEl = document.getElementById('recibo-garantia-texto');
-        if (garantiaEl) {
-            if (esCredito) {
-                const venc = datosVenta.fecha_vencimiento ? App.formatDate(datosVenta.fecha_vencimiento) : 'A definir';
-                const saldo = datosVenta.saldo_pendiente !== undefined ? datosVenta.saldo_pendiente : 0;
+        const garantiaSubEl = document.getElementById('recibo-garantia-subtexto');
+        const cfgPie = typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.datos && ConfiguracionTienda.datos.pie_ticket_garantia;
+
+        if (esCredito) {
+            if (garantiaTituloEl) garantiaTituloEl.textContent = 'Compromiso de Pago / Garantía (30 Días)';
+            const venc = datosVenta.fecha_vencimiento ? App.formatDate(datosVenta.fecha_vencimiento) : 'A definir';
+            const saldo = datosVenta.saldo_pendiente !== undefined ? datosVenta.saldo_pendiente : 0;
+            if (garantiaEl) {
                 garantiaEl.innerHTML = `<strong>PAGARÉ / COMPROMISO DE PAGO:</strong> Reconozco deber y me obligo a pagar incondicionalmente a la orden de Samuel Navarrete la cantidad de <strong>${App.formatCurrency(saldo)}</strong> a más tardar el día <strong>${venc}</strong>. Garantía de 30 días condicionada a la liquidación puntual.`;
-            } else {
-                garantiaEl.textContent = "Garantía de 30 días válida únicamente con este comprobante original o número registrado. Aplica en placa base y componentes lógicos de fábrica (no cubre humedad, sobrecargas eléctricas, golpes o intervenciones ajenas).";
             }
+            if (garantiaSubEl) garantiaSubEl.textContent = 'Conserva esta nota de venta para validar tu garantía y registro de pagos.';
+        } else if (soloAccesorios) {
+            if (garantiaTituloEl) garantiaTituloEl.textContent = 'Póliza de Garantía - Accesorios (30 Días)';
+            if (garantiaEl) {
+                garantiaEl.textContent = 'Garantía de 30 días válida únicamente con este comprobante original o número registrado. Aplica exclusivamente por defectos de fábrica (no cubre cables trozados o pelados, accesorios rotos, mojados, quemados, sobrecargas eléctricas o daño físico por mal uso).';
+            }
+            if (garantiaSubEl) garantiaSubEl.textContent = 'Conserva esta nota de venta para hacer válida tu garantía de 30 días.';
+        } else if (hayEquipos && !hayAccesorios) {
+            if (garantiaTituloEl) garantiaTituloEl.textContent = 'Póliza de Garantía - Equipos (30 Días)';
+            if (garantiaEl) {
+                garantiaEl.textContent = cfgPie || 'Garantía de 30 días válida únicamente con este comprobante original o número registrado. Aplica en placa base y componentes lógicos de fábrica (no cubre humedad, sobrecargas eléctricas, golpes o intervenciones ajenas).';
+            }
+            if (garantiaSubEl) garantiaSubEl.textContent = 'Conserva esta nota de venta para validar tu garantía de 30 días.';
+        } else {
+            if (garantiaTituloEl) garantiaTituloEl.textContent = 'Póliza de Garantía (30 Días)';
+            if (garantiaEl) {
+                garantiaEl.textContent = cfgPie || 'Garantía de 30 días válida con este comprobante. En equipos: placa base y componentes lógicos. En accesorios: defectos de fábrica (no cubre productos rotos, mojados, quemados o con daño físico).';
+            }
+            if (garantiaSubEl) garantiaSubEl.textContent = 'Conserva esta nota de venta para validar tu garantía de 30 días.';
         }
 
         // Cajero
@@ -1134,12 +1173,7 @@ const POS = {
     },
 
     imprimirRecibo() {
-        const content = document.getElementById('receipt-modal-content');
-        if (content) content.classList.add('print-ticket-active');
-        window.print();
-        setTimeout(() => {
-            if (content) content.classList.remove('print-ticket-active');
-        }, 500);
+        App.imprimirElemento('receipt-modal-content', 'Ticket de Venta');
     },
 
     cerrarRecibo() {
@@ -1207,6 +1241,26 @@ ${itemsTexto}
             return;
         }
 
+        let garantiaWp = '';
+        const itemsVenta = v.items && v.items.length > 0 ? v.items : [{
+            tipo_item: v.equipo_id ? 'equipo' : 'accesorio',
+            imei: v.imei
+        }];
+        const hayEqWp = itemsVenta.some(it => it.tipo_item === 'equipo' || (it.imei && it.imei !== 'N/A') || it.equipo_id);
+        const hayAccWp = itemsVenta.some(it => it.tipo_item === 'accesorio' || it.tipo_item === 'servicio' || it.accesorio_id || (!it.imei && !it.equipo_id));
+        const soloAccWp = hayAccWp && !hayEqWp;
+
+        if (soloAccWp) {
+            garantiaWp = `🛡️ *PÓLIZA DE GARANTÍA - ACCESORIOS (30 DÍAS):*
+Garantía de 30 días válida presentando este comprobante. Aplica por defectos de fábrica. No cubre cables trozados o pelados, accesorios rotos, mojados, quemados o con daño físico por mal uso.`;
+        } else if (hayEqWp && !hayAccWp) {
+            garantiaWp = `🛡️ *PÓLIZA DE GARANTÍA - EQUIPOS (30 DÍAS):*
+Garantía de 30 días válida presentando este comprobante o tu número registrado. Aplica directamente en placa base y funcionamiento de fábrica. No aplica en daños por humedad, sobrecargas eléctricas, golpes o intervención ajena.`;
+        } else {
+            garantiaWp = `🛡️ *PÓLIZA DE GARANTÍA (30 DÍAS):*
+Garantía de 30 días con este comprobante. En equipos: placa base y funcionamiento de fábrica. En accesorios: defectos de fábrica (no cubre productos rotos, mojados, quemados o con daño físico).`;
+        }
+
         const mensaje = `¡Hola, *${v.cliente_nombre}*! 👋
 Muchas gracias por tu compra en *Mi Inventario Celulares*. Aquí tienes tu comprobante digital y póliza oficial:
 
@@ -1220,8 +1274,7 @@ Muchas gracias por tu compra en *Mi Inventario Celulares*. Aquí tienes tu compr
 🛒 *DETALLE DE ARTÍCULOS:*
 ${itemsTexto}
 
-🛡️ *PÓLIZA DE GARANTÍA (30 DÍAS):*
-Garantía de 30 días válida presentando este comprobante o tu número registrado. Aplica directamente en placa base y funcionamiento de fábrica. No aplica en daños por humedad, golpes o intervención ajena.
+${garantiaWp}
 
 ¡Estamos a tus órdenes para lo que necesites! 🚀`;
 

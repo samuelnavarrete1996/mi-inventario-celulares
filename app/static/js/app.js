@@ -820,6 +820,188 @@ const App = {
             toast.classList.add('opacity-0', 'translate-y-2');
             setTimeout(() => toast.remove(), 300);
         }, 4000);
+    },
+
+    imprimirElemento(elementoId, titulo = 'Ticket') {
+        const elemento = document.getElementById(elementoId);
+        if (!elemento) return;
+
+        // Detectar ancho configurado (58mm o 80mm)
+        const es58 = elemento.classList.contains('ticket-58mm');
+        const anchoClase = es58 ? 'ticket-58mm' : 'ticket-80mm';
+
+        // Clonar el nodo para no alterar el DOM original
+        const clone = elemento.cloneNode(true);
+
+        // Convertir cualquier elemento canvas (como el código QR) a imagen real con dataURL
+        const originalCanvases = elemento.querySelectorAll('canvas');
+        const cloneCanvases = clone.querySelectorAll('canvas');
+        originalCanvases.forEach((origCanvas, i) => {
+            try {
+                if (cloneCanvases[i]) {
+                    const img = document.createElement('img');
+                    img.src = origCanvas.toDataURL('image/png');
+                    img.style.maxWidth = '100px';
+                    img.style.height = 'auto';
+                    img.style.margin = '0 auto';
+                    img.style.display = 'block';
+                    cloneCanvases[i].parentNode.replaceChild(img, cloneCanvases[i]);
+                }
+            } catch (e) {
+                console.warn('No se pudo convertir canvas a img:', e);
+            }
+        });
+
+        // Crear o limpiar iframe oculto dedicado
+        let iframe = document.getElementById('iframe-ticket-printer');
+        if (iframe) iframe.remove();
+
+        iframe = document.createElement('iframe');
+        iframe.id = 'iframe-ticket-printer';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.style.visibility = 'hidden';
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="utf-8">
+                <title>${titulo}</title>
+                <style>
+                    @page {
+                        margin: 0;
+                        size: auto;
+                    }
+                    * {
+                        box-sizing: border-box;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    html, body {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: #ffffff !important;
+                        color: #000000 !important;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, monospace !important;
+                    }
+                    .ticket-body {
+                        margin: 0 auto;
+                        padding: 8px 12px;
+                        background: #fff;
+                        color: #000;
+                    }
+                    .ticket-body.ticket-58mm {
+                        width: 54mm;
+                        max-width: 54mm;
+                        font-size: 11px;
+                        line-height: 1.2;
+                    }
+                    .ticket-body.ticket-80mm {
+                        width: 76mm;
+                        max-width: 76mm;
+                        font-size: 12px;
+                        line-height: 1.25;
+                    }
+                    .text-center { text-align: center; }
+                    .text-right { text-align: right; }
+                    .text-left { text-align: left; }
+                    .font-bold { font-weight: bold; }
+                    .font-extrabold { font-weight: 800; }
+                    .font-black { font-weight: 900; }
+                    .font-semibold { font-weight: 600; }
+                    .font-medium { font-weight: 500; }
+                    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+                    .uppercase { text-transform: uppercase; }
+                    .italic { font-style: italic; }
+                    .flex { display: flex; }
+                    .justify-between { justify-content: space-between; }
+                    .justify-center { justify-content: center; }
+                    .items-center { align-items: center; }
+                    .items-start { align-items: flex-start; }
+                    .items-baseline { align-items: baseline; }
+                    .flex-col { flex-direction: column; }
+                    .space-y-0\\.5 > * + * { margin-top: 2px; }
+                    .space-y-1 > * + * { margin-top: 4px; }
+                    .space-y-2 > * + * { margin-top: 8px; }
+                    .py-1 { padding-top: 4px; padding-bottom: 4px; }
+                    .py-1\\.5 { padding-top: 6px; padding-bottom: 6px; }
+                    .py-2 { padding-top: 8px; padding-bottom: 8px; }
+                    .py-2\\.5 { padding-top: 10px; padding-bottom: 10px; }
+                    .py-3 { padding-top: 12px; padding-bottom: 12px; }
+                    .px-1 { padding-left: 4px; padding-right: 4px; }
+                    .px-1\\.5 { padding-left: 6px; padding-right: 6px; }
+                    .px-2 { padding-left: 8px; padding-right: 8px; }
+                    .px-3 { padding-left: 12px; padding-right: 12px; }
+                    .p-2 { padding: 8px; }
+                    .p-2\\.5 { padding: 10px; }
+                    .p-3 { padding: 12px; }
+                    .pt-0\\.5 { padding-top: 2px; }
+                    .pt-1 { padding-top: 4px; }
+                    .pt-1\\.5 { padding-top: 6px; }
+                    .pt-3 { padding-top: 12px; }
+                    .pb-4 { padding-bottom: 16px; }
+                    .mt-0\\.5 { margin-top: 2px; }
+                    .mt-1 { margin-top: 4px; }
+                    .mt-3 { margin-top: 12px; }
+                    .mb-2 { margin-bottom: 8px; }
+                    .ml-2 { margin-left: 8px; }
+                    .border-b { border-bottom: 1px dashed #64748b; }
+                    .border-t { border-top: 1px dashed #64748b; }
+                    .border-dashed { border-style: dashed; }
+                    .border { border: 1px solid #cbd5e1; }
+                    .rounded-lg { border-radius: 6px; }
+                    .rounded-xl { border-radius: 8px; }
+                    .rounded-full { border-radius: 9999px; }
+                    .rounded { border-radius: 4px; }
+                    .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+                    .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+                    .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+                    .text-xs { font-size: 0.75rem; line-height: 1rem; }
+                    .text-\\[11px\\] { font-size: 11px; }
+                    .text-\\[10px\\] { font-size: 10px; }
+                    .text-\\[9px\\] { font-size: 9px; }
+                    .hidden { display: none !important; }
+                    .no-print { display: none !important; }
+                    img.ticket-logo-img {
+                        max-height: 48px;
+                        margin: 0 auto 4px auto;
+                        display: block;
+                        object-fit: contain;
+                    }
+                    .ticket-qr-box svg, .ticket-qr-box canvas, .ticket-qr-box img {
+                        margin: 0 auto !important;
+                        display: block !important;
+                        max-width: 100px !important;
+                        height: auto !important;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="ticket-body ${anchoClase}">
+                    ${clone.innerHTML}
+                </div>
+            </body>
+            </html>
+        `);
+        doc.close();
+
+        setTimeout(() => {
+            try {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            } catch (err) {
+                console.error('Error al imprimir ticket con iframe:', err);
+                window.print();
+            }
+        }, 250);
     }
 };
 
