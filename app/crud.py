@@ -2257,7 +2257,11 @@ def actualizar_stock_masivo(
         _begin_immediate(cursor)
         for it in items:
             acc_id = int(it["id"])
-            nuevo_stock = max(0, int(it.get("stock", 0)))
+            nuevo_stock = it.get("stock")
+            p_menudeo = it.get("precio_venta")
+            p_mayoreo = it.get("precio_mayoreo")
+            p_caja = it.get("precio_caja")
+
             if tenant_id is not None:
                 cursor.execute("SELECT stock FROM accesorios WHERE id = ? AND tenant_id = ?", (acc_id, tenant_id))
             else:
@@ -2265,23 +2269,46 @@ def actualizar_stock_masivo(
             row = cursor.fetchone()
             if row:
                 stock_ant = int(row["stock"] or 0)
-                if stock_ant != nuevo_stock:
-                    dif = abs(nuevo_stock - stock_ant)
-                    tipo = "ENTRADA" if nuevo_stock > stock_ant else "AJUSTE"
+                hubo_cambio_stock = (nuevo_stock is not None and int(nuevo_stock) != stock_ant)
+                
+                updates = []
+                u_params = []
+                if nuevo_stock is not None:
+                    updates.append("stock = ?")
+                    u_params.append(max(0, int(nuevo_stock)))
+                if p_menudeo is not None and float(p_menudeo) >= 0:
+                    updates.append("precio_venta = ?")
+                    u_params.append(round(float(p_menudeo), 2))
+                if p_mayoreo is not None and float(p_mayoreo) >= 0:
+                    updates.append("precio_mayoreo = ?")
+                    u_params.append(round(float(p_mayoreo), 2))
+                if p_caja is not None and float(p_caja) >= 0:
+                    updates.append("precio_caja = ?")
+                    u_params.append(round(float(p_caja), 2))
+
+                if updates:
+                    u_params.append(acc_id)
                     if tenant_id is not None:
-                        cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ? AND tenant_id = ?", (nuevo_stock, acc_id, tenant_id))
+                        u_params.append(tenant_id)
+                        cursor.execute(f"UPDATE accesorios SET {', '.join(updates)} WHERE id = ? AND tenant_id = ?", u_params)
                     else:
-                        cursor.execute("UPDATE accesorios SET stock = ? WHERE id = ?", (nuevo_stock, acc_id))
+                        cursor.execute(f"UPDATE accesorios SET {', '.join(updates)} WHERE id = ?", u_params)
+
+                if hubo_cambio_stock:
+                    n_stk_int = max(0, int(nuevo_stock))
+                    dif = abs(n_stk_int - stock_ant)
+                    tipo = "ENTRADA" if n_stk_int > stock_ant else "AJUSTE"
                     registrar_movimiento_stock_accesorio(
                         accesorio_id=acc_id,
                         tipo_movimiento=tipo,
                         cantidad=dif,
                         stock_anterior=stock_ant,
-                        stock_nuevo=nuevo_stock,
+                        stock_nuevo=n_stk_int,
                         motivo=motivo_general,
                         usuario=usuario,
                         cursor=cursor
                     )
+                if hubo_cambio_stock or (len(updates) > (1 if nuevo_stock is not None else 0)):
                     total_actualizados += 1
         conn.commit()
         return {

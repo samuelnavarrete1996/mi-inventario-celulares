@@ -771,11 +771,14 @@
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
                     <input type="file" id="input-excel-stock" accept=".xlsx, .xls, .csv" class="hidden" onchange="Accesorios.procesarArchivoStockExcel(this)">
-                    <a href="/api/accesorios/plantilla-sheets" download="Carga_Stock_Accesorios_GoogleSheets.csv" class="admin-only px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Descargar plantilla lista para Google Sheets (.csv)">
+                    <a href="/api/accesorios/plantilla-sheets" download="Plantilla_Accesorios_GoogleSheets.csv" class="admin-only px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 border border-emerald-200 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Descargar plantilla limpia (solo encabezados) para Google Sheets (.csv)">
                         <span>📊</span> <span>Plantilla Google Sheets</span>
                     </a>
-                    <a href="/api/accesorios/plantilla-stock?formato=xlsx" download="Carga_Stock_Accesorios_Excel.xlsx" class="admin-only px-2.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1" title="Descargar plantilla para Microsoft Excel (.xlsx)">
-                        <span>📥</span> <span>Excel (.xlsx)</span>
+                    <a href="/api/accesorios/plantilla-stock?formato=xlsx" download="Plantilla_Accesorios_Excel.xlsx" class="admin-only px-2.5 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1" title="Descargar plantilla limpia (solo encabezados) para Microsoft Excel (.xlsx)">
+                        <span>📥</span> <span>Plantilla Excel (.xlsx)</span>
+                    </a>
+                    <a href="/api/accesorios/plantilla-stock?formato=xlsx&con_catalogo=true" download="Catalogo_Completo_Accesorios.xlsx" class="admin-only px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 font-semibold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1" title="Descargar catálogo completo de accesorios con stock actual">
+                        <span>📋</span> <span>Catálogo con Stock</span>
                     </a>
                     <button onclick="Accesorios.seleccionarArchivoStockExcel()" class="admin-only px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Subir archivo de Google Sheets (.csv) o Excel (.xlsx) para actualizar stock masivamente">
                         <span>📤</span> <span>Subir Archivo</span>

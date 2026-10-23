@@ -41,6 +41,18 @@ async def test_plantilla_stock_excel():
         csv_text = res_sheets.content.decode("utf-8-sig")
         assert "ID" in csv_text and "NUEVO STOCK" in csv_text
 
+        # Verificar que solo sale la fila superior con los 9 encabezados exactos
+        csv_lines = [line.strip() for line in csv_text.splitlines() if line.strip()]
+        assert len(csv_lines) == 1
+        headers_row = csv_lines[0].split(",")
+        assert headers_row == ["ID", "Nombre del Accesorio", "Color", "Categoría", "Stock Actual", "NUEVO STOCK", "Menudeo", "Mayoreo", "Caja"]
+
+        # Descarga con catálogo completo existente si se pide con_catalogo=true
+        res_cat = await client.get("/api/accesorios/plantilla-stock?formato=sheets&con_catalogo=true")
+        assert res_cat.status_code == 200
+        cat_lines = [line.strip() for line in res_cat.content.decode("utf-8-sig").splitlines() if line.strip()]
+        assert len(cat_lines) >= 1
+
         # Endpoint directo plantilla-sheets
         res_direct = await client.get("/api/accesorios/plantilla-sheets")
         assert res_direct.status_code == 200

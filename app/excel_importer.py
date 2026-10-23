@@ -272,31 +272,46 @@ def generar_plantilla_celulares_csv() -> bytes:
     return output.getvalue().encode('utf-8-sig')
 
 
-def generar_plantilla_stock_accesorios_excel() -> bytes:
-    """Genera un archivo Excel (.xlsx) con la lista completa de accesorios para carga masiva de stock."""
-    from app import crud
-    accesorios = crud.get_accesorios()
-    # Excluir servicios intangibles
-    accesorios_fisicos = [a for a in accesorios if not a.get("es_servicio")]
-
+def generar_plantilla_stock_accesorios_excel(
+    solo_encabezados: bool = True,
+    tenant_id: Optional[int] = None
+) -> bytes:
+    """Genera un archivo Excel (.xlsx) con la plantilla de accesorios. Por defecto solo incluye la fila superior de encabezados."""
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Carga Stock Accesorios"
+    ws.title = "Plantilla Accesorios"
 
-    # Encabezados
-    headers = ["ID", "Nombre del Accesorio", "Color", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
+    # Encabezados exactos solicitados
+    headers = [
+        "ID",
+        "Nombre del Accesorio",
+        "Color",
+        "Categoría",
+        "Stock Actual",
+        "NUEVO STOCK",
+        "Menudeo",
+        "Mayoreo",
+        "Caja"
+    ]
     ws.append(headers)
 
-    for a in accesorios_fisicos:
-        ws.append([
-            a["id"],
-            a["nombre"],
-            a.get("color") or "",
-            a["categoria"],
-            int(a.get("stock", 0) or 0),
-            int(a.get("stock", 0) or 0), # Prellenado con stock actual para fácil edición
-            float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0)
-        ])
+    accesorios_fisicos = []
+    if not solo_encabezados:
+        from app import crud
+        accesorios = crud.get_accesorios(tenant_id=tenant_id)
+        accesorios_fisicos = [a for a in accesorios if not a.get("es_servicio")]
+        for a in accesorios_fisicos:
+            ws.append([
+                a["id"],
+                a["nombre"],
+                a.get("color") or "",
+                a["categoria"],
+                int(a.get("stock", 0) or 0),
+                int(a.get("stock", 0) or 0),
+                float(a.get("precio_venta") or 0.0),
+                float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0),
+                float(a.get("precio_caja") or a.get("costo_compra") or 0.0)
+            ])
 
     # Estilos de encabezado
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -310,7 +325,7 @@ def generar_plantilla_stock_accesorios_excel() -> bytes:
         cell.fill = nuevo_stock_fill if col_idx == 6 else header_fill
         cell.alignment = alignment_center
 
-    # Resaltar la columna NUEVO STOCK en las filas de datos con fondo suave
+    # Resaltar la columna NUEVO STOCK en las filas de datos con fondo suave si hay datos
     editable_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
     for r in range(2, len(accesorios_fisicos) + 2):
         cell_stock = ws.cell(row=r, column=6)
@@ -319,7 +334,7 @@ def generar_plantilla_stock_accesorios_excel() -> bytes:
         cell_stock.font = Font(name="Calibri", size=11, bold=True)
 
     # Anchos de columna
-    anchos = [8, 44, 18, 22, 14, 18, 20]
+    anchos = [8, 44, 18, 22, 14, 18, 16, 16, 16]
     for col_idx, ancho in enumerate(anchos, start=1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = ancho
 
@@ -328,29 +343,44 @@ def generar_plantilla_stock_accesorios_excel() -> bytes:
     return out.getvalue()
 
 
-def generar_plantilla_stock_accesorios_csv() -> bytes:
-    """Genera un archivo CSV profesional optimizado al 100% para Google Sheets con el catálogo completo de accesorios y colores."""
-    from app import crud
-    accesorios = crud.get_accesorios()
-    accesorios_fisicos = [a for a in accesorios if not a.get("es_servicio")]
-
+def generar_plantilla_stock_accesorios_csv(
+    solo_encabezados: bool = True,
+    tenant_id: Optional[int] = None
+) -> bytes:
+    """Genera un archivo CSV optimizado al 100% para Google Sheets con la plantilla de accesorios."""
     output = io.StringIO()
     writer = csv.writer(output, lineterminator='\r\n')
 
-    # Encabezados compatibles con Google Sheets
-    headers = ["ID", "Nombre del Accesorio", "Color", "Categoría", "Stock Actual", "NUEVO STOCK", "Precio Mayoreo ($)"]
+    # Encabezados exactos solicitados
+    headers = [
+        "ID",
+        "Nombre del Accesorio",
+        "Color",
+        "Categoría",
+        "Stock Actual",
+        "NUEVO STOCK",
+        "Menudeo",
+        "Mayoreo",
+        "Caja"
+    ]
     writer.writerow(headers)
 
-    for a in accesorios_fisicos:
-        writer.writerow([
-            a["id"],
-            a["nombre"],
-            a.get("color") or "",
-            a["categoria"],
-            int(a.get("stock", 0) or 0),
-            int(a.get("stock", 0) or 0),
-            float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0)
-        ])
+    if not solo_encabezados:
+        from app import crud
+        accesorios = crud.get_accesorios(tenant_id=tenant_id)
+        accesorios_fisicos = [a for a in accesorios if not a.get("es_servicio")]
+        for a in accesorios_fisicos:
+            writer.writerow([
+                a["id"],
+                a["nombre"],
+                a.get("color") or "",
+                a["categoria"],
+                int(a.get("stock", 0) or 0),
+                int(a.get("stock", 0) or 0),
+                float(a.get("precio_venta") or 0.0),
+                float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0),
+                float(a.get("precio_caja") or a.get("costo_compra") or 0.0)
+            ])
 
     return output.getvalue().encode('utf-8-sig')
 
@@ -361,10 +391,11 @@ def importar_stock_accesorios_excel(
     usuario: str = "Admin",
     tenant_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Procesa el archivo de stock de accesorios (compatible con Google Sheets .csv y Excel .xlsx) y actualiza masivamente registrando Kardex."""
+    """Procesa el archivo de stock de accesorios (compatible con Google Sheets .csv y Excel .xlsx) y actualiza masivamente registrando Kardex y precios si aplican."""
     from app import crud
 
     items_to_update = []
+    items_to_create = []
     errores = []
 
     filename_lower = filename.lower()
@@ -392,28 +423,107 @@ def importar_stock_accesorios_excel(
         headers = [str(c).strip().lower().replace(" ", "").replace("_", "") for c in filas[0]]
         id_col = None
         stock_col = None
+        nom_col = None
+        col_col = None
+        cat_col = None
+        men_col = None
+        may_col = None
+        caj_col = None
 
         for idx, h in enumerate(headers):
             if h in ("id", "codigo", "clave"):
                 id_col = idx
             elif h in ("nuevostock", "stock", "stockfisico", "piezas", "cantidad"):
                 stock_col = idx
+            elif h in ("nombredelaccesorio", "nombre", "accesorio", "descripcion", "item"):
+                nom_col = idx
+            elif h in ("color", "variante"):
+                col_col = idx
+            elif h in ("categoria", "familia", "tipo"):
+                cat_col = idx
+            elif h in ("menudeo", "preciomenudeo", "precioventa", "precio"):
+                men_col = idx
+            elif h in ("mayoreo", "preciomayoreo"):
+                may_col = idx
+            elif h in ("caja", "preciocaja"):
+                caj_col = idx
 
-        if id_col is None or stock_col is None:
-            raise ValueError("El archivo de Google Sheets/CSV debe contener al menos las columnas 'ID' y 'NUEVO STOCK'.")
+        if id_col is None and stock_col is None and nom_col is None:
+            raise ValueError("El archivo debe contener al menos las columnas 'ID' y 'NUEVO STOCK' o 'Nombre del Accesorio'.")
 
         for row_idx, row in enumerate(filas[1:], start=2):
-            if not row or len(row) <= max(id_col, stock_col) or not str(row[id_col]).strip():
+            if not row:
                 continue
-            try:
-                acc_id = int(float(str(row[id_col]).strip()))
-                val_stock = str(row[stock_col]).strip()
-                if val_stock == "":
-                    continue
-                nuevo_stock = max(0, int(float(val_stock)))
-                items_to_update.append({"id": acc_id, "stock": nuevo_stock})
-            except Exception as e:
-                errores.append(f"Fila {row_idx}: {str(e)}")
+            acc_id = None
+            if id_col is not None and len(row) > id_col and str(row[id_col]).strip():
+                try:
+                    raw_id = int(float(str(row[id_col]).strip()))
+                    if raw_id > 0:
+                        acc_id = raw_id
+                except Exception:
+                    acc_id = None
+
+            val_stock = None
+            if stock_col is not None and len(row) > stock_col:
+                str_stk = str(row[stock_col]).strip()
+                if str_stk != "":
+                    try:
+                        val_stock = max(0, int(float(str_stk)))
+                    except Exception:
+                        pass
+
+            val_menudeo = None
+            if men_col is not None and len(row) > men_col:
+                str_m = str(row[men_col]).strip().replace("$", "").replace(",", "")
+                if str_m != "":
+                    try:
+                        val_menudeo = float(str_m)
+                    except Exception:
+                        pass
+
+            val_mayoreo = None
+            if may_col is not None and len(row) > may_col:
+                str_my = str(row[may_col]).strip().replace("$", "").replace(",", "")
+                if str_my != "":
+                    try:
+                        val_mayoreo = float(str_my)
+                    except Exception:
+                        pass
+
+            val_caja = None
+            if caj_col is not None and len(row) > caj_col:
+                str_cj = str(row[caj_col]).strip().replace("$", "").replace(",", "")
+                if str_cj != "":
+                    try:
+                        val_caja = float(str_cj)
+                    except Exception:
+                        pass
+
+            nom_item = str(row[nom_col]).strip() if nom_col is not None and len(row) > nom_col else ""
+            color_item = str(row[col_col]).strip() if col_col is not None and len(row) > col_col else ""
+            cat_item = str(row[cat_col]).strip() if cat_col is not None and len(row) > cat_col else ""
+
+            if acc_id is not None:
+                item_dict = {"id": acc_id}
+                if val_stock is not None:
+                    item_dict["stock"] = val_stock
+                if val_menudeo is not None:
+                    item_dict["precio_venta"] = val_menudeo
+                if val_mayoreo is not None:
+                    item_dict["precio_mayoreo"] = val_mayoreo
+                if val_caja is not None:
+                    item_dict["precio_caja"] = val_caja
+                items_to_update.append(item_dict)
+            elif nom_item:
+                items_to_create.append({
+                    "nombre": nom_item,
+                    "color": color_item,
+                    "categoria": cat_item or "General",
+                    "stock": val_stock or 0,
+                    "precio_venta": val_menudeo or val_mayoreo or 0.0,
+                    "precio_mayoreo": val_mayoreo or val_menudeo or 0.0,
+                    "precio_caja": val_caja or val_mayoreo or 0.0
+                })
     else:
         wb = openpyxl.load_workbook(io.BytesIO(contenido_bytes), data_only=True)
         ws = wb.active
@@ -423,38 +533,142 @@ def importar_stock_accesorios_excel(
 
         id_col = None
         stock_col = None
+        nom_col = None
+        col_col = None
+        cat_col = None
+        men_col = None
+        may_col = None
+        caj_col = None
 
         for idx, h in enumerate(norm_headers):
             if h in ("id", "codigo", "clave"):
                 id_col = idx
             elif h in ("nuevostock", "stock", "stockfisico", "piezas", "cantidad"):
                 stock_col = idx
+            elif h in ("nombredelaccesorio", "nombre", "accesorio", "descripcion", "item"):
+                nom_col = idx
+            elif h in ("color", "variante"):
+                col_col = idx
+            elif h in ("categoria", "familia", "tipo"):
+                cat_col = idx
+            elif h in ("menudeo", "preciomenudeo", "precioventa", "precio"):
+                men_col = idx
+            elif h in ("mayoreo", "preciomayoreo"):
+                may_col = idx
+            elif h in ("caja", "preciocaja"):
+                caj_col = idx
 
-        if id_col is None or stock_col is None:
-            raise ValueError("El archivo Excel debe contener al menos las columnas 'ID' y 'NUEVO STOCK'.")
+        if id_col is None and stock_col is None and nom_col is None:
+            raise ValueError("El archivo Excel debe contener al menos las columnas 'ID' y 'NUEVO STOCK' o 'Nombre del Accesorio'.")
 
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-            if not row or row[id_col] is None:
+            if not row:
                 continue
+            acc_id = None
+            if id_col is not None and len(row) > id_col and row[id_col] is not None:
+                try:
+                    raw_id = int(float(str(row[id_col]).strip()))
+                    if raw_id > 0:
+                        acc_id = raw_id
+                except Exception:
+                    acc_id = None
+
+            val_stock = None
+            if stock_col is not None and len(row) > stock_col and row[stock_col] is not None:
+                try:
+                    val_stock = max(0, int(float(str(row[stock_col]).strip())))
+                except Exception:
+                    pass
+
+            val_menudeo = None
+            if men_col is not None and len(row) > men_col and row[men_col] is not None:
+                try:
+                    val_menudeo = float(str(row[men_col]).strip().replace("$", "").replace(",", ""))
+                except Exception:
+                    pass
+
+            val_mayoreo = None
+            if may_col is not None and len(row) > may_col and row[may_col] is not None:
+                try:
+                    val_mayoreo = float(str(row[may_col]).strip().replace("$", "").replace(",", ""))
+                except Exception:
+                    pass
+
+            val_caja = None
+            if caj_col is not None and len(row) > caj_col and row[caj_col] is not None:
+                try:
+                    val_caja = float(str(row[caj_col]).strip().replace("$", "").replace(",", ""))
+                except Exception:
+                    pass
+
+            nom_item = str(row[nom_col]).strip() if nom_col is not None and len(row) > nom_col and row[nom_col] is not None else ""
+            color_item = str(row[col_col]).strip() if col_col is not None and len(row) > col_col and row[col_col] is not None else ""
+            cat_item = str(row[cat_col]).strip() if cat_col is not None and len(row) > cat_col and row[cat_col] is not None else ""
+
+            if acc_id is not None:
+                item_dict = {"id": acc_id}
+                if val_stock is not None:
+                    item_dict["stock"] = val_stock
+                if val_menudeo is not None:
+                    item_dict["precio_venta"] = val_menudeo
+                if val_mayoreo is not None:
+                    item_dict["precio_mayoreo"] = val_mayoreo
+                if val_caja is not None:
+                    item_dict["precio_caja"] = val_caja
+                items_to_update.append(item_dict)
+            elif nom_item:
+                items_to_create.append({
+                    "nombre": nom_item,
+                    "color": color_item,
+                    "categoria": cat_item or "General",
+                    "stock": val_stock or 0,
+                    "precio_venta": val_menudeo or val_mayoreo or 0.0,
+                    "precio_mayoreo": val_mayoreo or val_menudeo or 0.0,
+                    "precio_caja": val_caja or val_mayoreo or 0.0
+                })
+
+    if not items_to_update and not items_to_create:
+        raise ValueError("No se encontraron filas con datos válidos para procesar.")
+
+    total_creados = 0
+    if items_to_create:
+        for n_it in items_to_create:
             try:
-                acc_id = int(row[id_col])
-                val_stock = row[stock_col]
-                if val_stock is None or str(val_stock).strip() == "":
-                    continue
-                nuevo_stock = max(0, int(float(str(val_stock).strip())))
-                items_to_update.append({"id": acc_id, "stock": nuevo_stock})
-            except Exception as e:
-                errores.append(f"Fila {row_idx}: {str(e)}")
+                p_men = n_it.get("precio_venta") or 0.0
+                p_may = n_it.get("precio_mayoreo") or p_men
+                p_caj = n_it.get("precio_caja") or p_may
+                p_stk = n_it.get("stock") or 0
+                crud.create_accesorio(
+                    nombre=n_it["nombre"],
+                    categoria=n_it.get("categoria") or "General",
+                    costo_compra=p_caj or p_may or p_men,
+                    precio_venta=p_men or p_may,
+                    precio_mayoreo=p_may,
+                    precio_caja=p_caj,
+                    stock=p_stk,
+                    color=n_it.get("color") or "",
+                    tenant_id=tenant_id
+                )
+                total_creados += 1
+            except Exception as ex:
+                errores.append(f"Error creando '{n_it.get('nombre')}': {str(ex)}")
 
-    if not items_to_update:
-        raise ValueError("No se encontraron filas con datos válidos de ID y stock para procesar.")
+    res = {"total_actualizados": 0, "total_creados": total_creados, "mensaje": ""}
+    if items_to_update:
+        res_upd = crud.actualizar_stock_masivo(
+            items=items_to_update,
+            motivo_general="Importación masiva desde Google Sheets / Excel",
+            usuario=usuario,
+            tenant_id=tenant_id
+        )
+        res["total_actualizados"] = res_upd.get("total_actualizados", 0)
 
-    res = crud.actualizar_stock_masivo(
-        items=items_to_update,
-        motivo_general="Importación masiva desde Google Sheets / Excel",
-        usuario=usuario,
-        tenant_id=tenant_id
-    )
+    mensajes = []
+    if res["total_actualizados"] > 0:
+        mensajes.append(f"Se actualizaron {res['total_actualizados']} accesorios existentes")
+    if total_creados > 0:
+        mensajes.append(f"Se crearon {total_creados} nuevos accesorios")
+    res["mensaje"] = ". ".join(mensajes) + "." if mensajes else "Procesado sin cambios."
     res["errores_filas"] = errores
     return res
 

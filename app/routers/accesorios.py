@@ -45,37 +45,45 @@ def listar_accesorios(
 @router.get("/plantilla-stock")
 def descargar_plantilla_stock(
     formato: Optional[str] = Query(None, description="Formato: 'sheets' o 'csv' para Google Sheets, 'xlsx' para Excel"),
-    user: dict = Depends(require_role("dueno"))
+    con_catalogo: bool = Query(False, description="Si es True, incluye el catálogo completo. Por defecto False (solo encabezados)"),
+    user: dict = Depends(require_role("dueno")),
+    tenant: TenantContext = Depends(get_current_tenant)
 ):
-    """Descarga un archivo con los accesorios para conteo y carga masiva de stock compatible con Google Sheets y Excel."""
+    """Descarga la plantilla de accesorios con los 9 encabezados solicitados (ID, Nombre, Color, Categoría, Stock Actual, NUEVO STOCK, Menudeo, Mayoreo, Caja)."""
     try:
+        solo_enc = not con_catalogo
         if formato in ("sheets", "csv"):
-            contenido = generar_plantilla_stock_accesorios_csv()
+            contenido = generar_plantilla_stock_accesorios_csv(solo_encabezados=solo_enc, tenant_id=tenant.tenant_id)
             return Response(
                 content=contenido,
                 media_type="text/csv; charset=utf-8",
-                headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_GoogleSheets.csv"}
+                headers={"Content-Disposition": "attachment; filename=Plantilla_Accesorios_GoogleSheets.csv"}
             )
         else:
-            excel_bytes = generar_plantilla_stock_accesorios_excel()
+            excel_bytes = generar_plantilla_stock_accesorios_excel(solo_encabezados=solo_enc, tenant_id=tenant.tenant_id)
             return Response(
                 content=excel_bytes,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_Excel.xlsx"}
+                headers={"Content-Disposition": "attachment; filename=Plantilla_Accesorios_Excel.xlsx"}
             )
     except Exception as e:
         logger.error("Error generando plantilla: %s", repr(e))
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error generando plantilla.")
 
 @router.get("/plantilla-sheets")
-def descargar_plantilla_stock_sheets(user: dict = Depends(require_role("dueno"))):
+def descargar_plantilla_stock_sheets(
+    con_catalogo: bool = Query(False, description="Si es True, incluye el catálogo completo. Por defecto False (solo encabezados)"),
+    user: dict = Depends(require_role("dueno")),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
     """Descarga la plantilla de accesorios optimizada directamente para Google Sheets (.csv UTF-8 con BOM)."""
     try:
-        contenido = generar_plantilla_stock_accesorios_csv()
+        solo_enc = not con_catalogo
+        contenido = generar_plantilla_stock_accesorios_csv(solo_encabezados=solo_enc, tenant_id=tenant.tenant_id)
         return Response(
             content=contenido,
             media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=Carga_Stock_Accesorios_GoogleSheets.csv"}
+            headers={"Content-Disposition": "attachment; filename=Plantilla_Accesorios_GoogleSheets.csv"}
         )
     except Exception as e:
         logger.error("Error generando plantilla Google Sheets: %s", repr(e))

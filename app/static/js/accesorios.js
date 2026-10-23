@@ -454,7 +454,7 @@ const Accesorios = {
         const url = esSheets 
             ? '/api/accesorios/plantilla-sheets' 
             : '/api/accesorios/plantilla-stock?formato=xlsx';
-        const filename = esSheets ? 'Carga_Stock_Accesorios_GoogleSheets.csv' : 'Carga_Stock_Accesorios_Excel.xlsx';
+        const filename = esSheets ? 'Plantilla_Accesorios_GoogleSheets.csv' : 'Plantilla_Accesorios_Excel.xlsx';
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
