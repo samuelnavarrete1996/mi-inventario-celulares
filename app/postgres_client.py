@@ -82,24 +82,31 @@ def _convert_sql_for_postgres(sql: str) -> str:
     # 2. Traducción de tipos y constraints SQLite -> PostgreSQL
     res = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY", res, flags=re.I)
 
-    # 3. Traducción de funciones de fecha SQLite -> PostgreSQL
-    res = re.sub(r"date\('now',\s*'-30 days',\s*'localtime'\)", "(CURRENT_DATE - INTERVAL '30 days')", res, flags=re.I)
-    res = re.sub(r"date\('now',\s*'localtime'\)", "CURRENT_DATE", res, flags=re.I)
-    res = re.sub(r"date\('now'\)", "CURRENT_DATE", res, flags=re.I)
-    
-    # Diferencia de fechas julianday
+    # 3. Diferencia de fechas julianday SQLite -> PostgreSQL (debe procesarse ANTES de reemplazar date('now'...))
     res = re.sub(
-        r"CAST\(ROUND\(julianday\(date\(([^)]+)\)\)\s*-\s*julianday\(date\('now',\s*'localtime'\)\)\)\s*AS\s*INTEGER\)",
+        r"CAST\s*\(\s*ROUND\s*\(\s*julianday\s*\(\s*(?:date\s*\(\s*)?([^)]+?)\s*\)?\s*\)\s*-\s*julianday\s*\(\s*(?:date\s*\(\s*'now'\s*,\s*'localtime'\s*\)|CURRENT_DATE)\s*\)\s*\)\s*AS\s*INTEGER\s*\)",
         r"((\1)::date - CURRENT_DATE)::integer",
         res,
         flags=re.I
     )
     res = re.sub(
-        r"CAST\(ROUND\(julianday\(date\(([^)]+)\)\)\s*-\s*julianday\(date\(([^)]+)\)\)\)\s*AS\s*INTEGER\)",
+        r"CAST\s*\(\s*ROUND\s*\(\s*julianday\s*\(\s*date\(([^)]+)\)\s*\)\s*-\s*julianday\s*\(\s*date\(([^)]+)\)\s*\)\s*\)\s*AS\s*INTEGER\s*\)",
         r"((\1)::date - (\2)::date)::integer",
         res,
         flags=re.I
     )
+    # Limpieza de cualquier llamada residual a julianday(...)
+    res = re.sub(
+        r"julianday\s*\(\s*(?:date\s*\(\s*)?([^)]+?)\s*\)?\s*\)",
+        r"(\1)::date",
+        res,
+        flags=re.I
+    )
+
+    # 4. Traducción de funciones de fecha SQLite -> PostgreSQL
+    res = re.sub(r"date\('now',\s*'-30 days',\s*'localtime'\)", "(CURRENT_DATE - INTERVAL '30 days')", res, flags=re.I)
+    res = re.sub(r"date\('now',\s*'localtime'\)", "CURRENT_DATE", res, flags=re.I)
+    res = re.sub(r"date\('now'\)", "CURRENT_DATE", res, flags=re.I)
     return res
 
 

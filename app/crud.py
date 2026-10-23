@@ -70,7 +70,7 @@ def get_equipos(
     tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Obtiene equipos con filtros opcionales y aislamiento multi-tenant estricto."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     query = "SELECT * FROM equipos WHERE 1=1"
@@ -101,7 +101,7 @@ def get_equipos(
 
 def get_equipo_by_id(equipo_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Obtiene un equipo por su ID validando obligatoriamente el tenant_id si se proporciona."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     if tenant_id is not None:
         cursor.execute("SELECT * FROM equipos WHERE id = ? AND tenant_id = ?", (equipo_id, tenant_id))
@@ -113,7 +113,7 @@ def get_equipo_by_id(equipo_id: int, tenant_id: Optional[int] = None) -> Optiona
 
 def get_equipo_by_imei(imei: str, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Busca un equipo por IMEI dentro del tenant actual."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     if tenant_id is not None:
         cursor.execute("SELECT * FROM equipos WHERE imei = ? AND tenant_id = ?", (imei.strip(), tenant_id))
@@ -132,7 +132,7 @@ def create_equipo(
     Registra un nuevo teléfono inyectando automáticamente el tenant_id y sucursal_id
     del usuario en sesión para prevenir manipulación por parte del cliente.
     """
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     if tenant_id is None:
@@ -188,7 +188,7 @@ def update_equipo(
     tenant_id: Optional[int] = None
 ) -> Optional[Dict[str, Any]]:
     """Actualiza datos de un equipo validando que pertenezca al tenant del usuario en sesión."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     current = get_equipo_by_id(equipo_id, tenant_id=tenant_id)
@@ -221,7 +221,7 @@ def update_equipo(
 
 def delete_equipo(equipo_id: int, tenant_id: Optional[int] = None) -> bool:
     """Elimina un equipo si aún no ha sido vendido y pertenece al tenant en sesión."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     current = get_equipo_by_id(equipo_id, tenant_id=tenant_id)
@@ -290,7 +290,7 @@ def get_or_create_cliente(nombre: str, telefono: str, tenant_id: Optional[int] =
 
 def get_cliente_by_phone(telefono: str, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Obtiene un cliente por teléfono dentro del tenant especificado."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     if tenant_id is not None:
         cursor.execute("SELECT * FROM clientes WHERE telefono = ? AND tenant_id = ?", (telefono.strip(), tenant_id))
@@ -335,7 +335,7 @@ def registrar_venta_carrito(
         final_tenant_id = tenant_id
         final_sucursal_id = sucursal_id
 
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     try:
@@ -709,7 +709,7 @@ def get_historial_ventas(
     tipo: Optional[str] = "todos",
     tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     query = """
@@ -886,7 +886,7 @@ def get_notas_credito(
     estado_filtro: Optional[str] = None,
     tenant_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     # Actualización automática de estado Vencida si pasó la fecha límite
@@ -956,9 +956,16 @@ def get_notas_credito(
     for r in rows:
         d = dict(r)
         v_id = d["id"]
-        dias_rest = d.get("dias_restantes")
-        if dias_rest is None:
-            dias_rest = 0
+        # Cálculo seguro y consistente de días restantes
+        f_venc_raw = d.get("fecha_vencimiento")
+        if f_venc_raw:
+            try:
+                f_venc_date = datetime.strptime(str(f_venc_raw)[:10], "%Y-%m-%d").date()
+                dias_rest = (f_venc_date - datetime.now().date()).days
+            except Exception:
+                dias_rest = d.get("dias_restantes") or 0
+        else:
+            dias_rest = d.get("dias_restantes") or 0
         d["dias_restantes"] = dias_rest
 
         saldo = float(d["saldo_pendiente"] or 0)
@@ -1024,7 +1031,7 @@ def registrar_abono_credito(
     if monto <= 0:
         raise ValueError("El monto del abono debe ser mayor a $0.00.")
 
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     try:
@@ -1089,7 +1096,7 @@ DIAS_GARANTIA_POR_GRADO = {
 
 def buscar_equipo_para_garantia(imei: str, tenant_id: Optional[int] = None) -> Dict[str, Any]:
     """Busca un equipo vendido por IMEI para verificar si está dentro de su periodo de garantía y pertenece al tenant."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     clean_imei = imei.strip()
@@ -1189,7 +1196,7 @@ def procesar_devolucion_garantia(
     eq = info["equipo"]
     venta = info["venta"]
 
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     try:
@@ -1262,7 +1269,7 @@ def procesar_devolucion_garantia(
         conn.close()
 
 def get_historial_garantias(limit: int = 100, tenant_id: Optional[int] = None) -> List[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     query = """
@@ -1302,7 +1309,7 @@ MESES_ES = [
 ]
 
 def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     ahora = datetime.now()
@@ -1581,7 +1588,7 @@ def get_accesorios(
     search: Optional[str] = None,
     tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     query = "SELECT * FROM accesorios WHERE 1=1"
     params = []
@@ -1610,7 +1617,7 @@ def get_accesorios(
     return [format_accesorio_dict(r) for r in rows]
 
 def get_accesorio_by_id(acc_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     if tenant_id is not None:
         cursor.execute("SELECT * FROM accesorios WHERE id = ? AND tenant_id = ?", (acc_id, tenant_id))
@@ -1636,7 +1643,7 @@ def create_accesorio(
     tenant_id: Optional[int] = None,
     sucursal_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     if tenant_id is None:
@@ -1683,7 +1690,7 @@ COLUMNAS_PERMITIDAS_ACCESORIO = (
 )
 
 def update_accesorio(acc_id: int, datos: Dict[str, Any], tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     current = get_accesorio_by_id(acc_id, tenant_id=tenant_id)
     if not current:
@@ -1715,7 +1722,7 @@ def update_accesorio(acc_id: int, datos: Dict[str, Any], tenant_id: Optional[int
     return get_accesorio_by_id(acc_id, tenant_id=tenant_id)
 
 def delete_accesorio(acc_id: int, tenant_id: Optional[int] = None) -> bool:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     current = get_accesorio_by_id(acc_id, tenant_id=tenant_id)
     if not current:
@@ -1790,7 +1797,7 @@ def ajustar_stock_accesorio(
     """Ajusta el stock de un accesorio registrando el motivo en el Kardex (Auditoría Anti-Mermas)."""
     if nuevo_stock < 0:
         raise ValueError("El stock no puede ser un número negativo.")
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     try:
         _begin_immediate(cursor)
@@ -1837,7 +1844,7 @@ def actualizar_stock_masivo(
     tenant_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """Actualiza en masa el stock de múltiples accesorios en una sola transacción atómica."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     total_actualizados = 0
     try:
@@ -1885,7 +1892,7 @@ def get_historial_kardex_accesorios(
     tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Consulta la bitácora de movimientos de accesorios para auditoría."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     query = """
     SELECT 
@@ -1930,7 +1937,7 @@ def generar_sugerido_reabastecimiento(
     Analiza accesorios agotados o con stock bajo y genera una lista de compra inteligente
     con cantidades sugeridas para reordenar al proveedor y texto para WhatsApp.
     """
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     query = """
     SELECT id, nombre, categoria, costo_compra, precio_mayoreo, stock, imagen_url
@@ -2091,7 +2098,7 @@ def guardar_corte_caja(
         final_tenant_id = tenant_id
         final_sucursal_id = sucursal_id
 
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     try:
         _begin_immediate(cursor)
@@ -2145,7 +2152,7 @@ def guardar_corte_caja(
     return resumen
 
 def get_cortes_caja(limit: int = 50, tenant_id: Optional[int] = None) -> List[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     if tenant_id is not None:
         cursor.execute("SELECT * FROM cortes_caja WHERE tenant_id = ? ORDER BY id DESC LIMIT ?", (tenant_id, limit))
@@ -2161,7 +2168,7 @@ def get_cortes_caja(limit: int = 50, tenant_id: Optional[int] = None) -> List[Di
 
 def obtener_historial_imei(imei: str, tenant_id: Optional[int] = None) -> Dict[str, Any]:
     clean_imei = imei.strip().replace(" ", "").replace("-", "")
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     if tenant_id is not None:
@@ -2308,7 +2315,7 @@ TABLAS_PERMITIDAS_EXPORTACION = (
 )
 
 def exportar_todo_json(tenant_id: Optional[int] = None) -> Dict[str, Any]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     resultado = {
         "version": "2.0",
@@ -2372,7 +2379,7 @@ def get_reparaciones(
     search: Optional[str] = None,
     tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     query = "SELECT * FROM reparaciones WHERE 1=1"
     params = []
@@ -2401,7 +2408,7 @@ def get_reparaciones(
     return rows
 
 def get_reparacion_by_id(rep_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     if tenant_id is not None:
         cursor.execute("SELECT * FROM reparaciones WHERE id = ? AND tenant_id = ?", (rep_id, tenant_id))
@@ -2420,7 +2427,7 @@ def create_reparacion(
     tenant_id: Optional[int] = None,
     sucursal_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
     if tenant_id is None:
@@ -2493,7 +2500,7 @@ def update_reparacion(
     datos: Dict[str, Any],
     tenant_id: Optional[int] = None
 ) -> Optional[Dict[str, Any]]:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     existing = get_reparacion_by_id(rep_id, tenant_id=tenant_id)
     if not existing:
@@ -2552,7 +2559,7 @@ def abonar_reparacion(
     if monto_abono <= 0:
         raise ValueError("El monto del abono debe ser mayor a cero.")
 
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     try:
         _begin_immediate(cursor)
@@ -2592,7 +2599,7 @@ def abonar_reparacion(
     return get_reparacion_by_id(rep_id, tenant_id=tenant_id)
 
 def delete_reparacion(rep_id: int, tenant_id: Optional[int] = None) -> bool:
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     existing = get_reparacion_by_id(rep_id, tenant_id=tenant_id)
     if not existing:
@@ -2615,7 +2622,7 @@ def delete_reparacion(rep_id: int, tenant_id: Optional[int] = None) -> bool:
 
 def get_configuracion_general(tenant_id: int) -> Dict[str, Any]:
     """Obtiene la configuración visual, fiscal y de tickets para el tenant especificado."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT * FROM tenants WHERE id = ? LIMIT 1;", (tenant_id,))
@@ -2671,7 +2678,7 @@ def get_configuracion_general(tenant_id: int) -> Dict[str, Any]:
 
 def update_configuracion_general(tenant_id: int, datos: Dict[str, Any]) -> Dict[str, Any]:
     """Actualiza datos del negocio, sucursal matriz y configuración de tickets."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -2745,7 +2752,7 @@ def update_configuracion_general(tenant_id: int, datos: Dict[str, Any]) -> Dict[
 
 def update_logo_tienda(tenant_id: int, logo_url: str) -> str:
     """Actualiza la URL del logotipo de la tienda para el tenant especificado."""
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -2777,7 +2784,7 @@ def get_empleados(tenant_id: int) -> List[Dict[str, Any]]:
     """
     Retorna la lista de empleados y usuarios pertenecientes al tenant_id en sesión.
     """
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     try:
         cursor.execute("""
@@ -2801,7 +2808,7 @@ def get_empleado_by_id(empleado_id: int, tenant_id: int) -> Optional[Dict[str, A
     """
     Obtiene un usuario/empleado por ID garantizando aislamiento multi-tenant.
     """
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     try:
         cursor.execute("""
@@ -2841,7 +2848,7 @@ def create_empleado(
     if clean_rol not in ('vendedor', 'tecnico'):
         raise ValueError("El rol asignado debe ser 'vendedor' o 'tecnico'.")
 
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -2890,7 +2897,7 @@ def update_empleado_estado(empleado_id: int, activo: bool, tenant_id: int) -> Op
     """
     Activa o desactiva (suspende) un empleado perteneciente al tenant_id sin eliminar su historial.
     """
-    conn = get_db_connection()
+    conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
     try:
         _begin_immediate(cursor)

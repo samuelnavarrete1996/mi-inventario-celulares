@@ -149,3 +149,16 @@ async def test_flujo_completo_nota_credito():
         assert data_final["saldo_pendiente"] == 0.0
         assert data_final["estado_credito"] == "Liquidada"
         assert len(data_final["abonos"]) == 3  # Anticipo + Abono 1 + Abono 2
+
+def test_postgres_sql_conversion_julianday():
+    from app.postgres_client import _convert_sql_for_postgres
+    sql_sqlite = """
+        SELECT v.id,
+        CAST(ROUND(julianday(date(v.fecha_vencimiento)) - julianday(date('now', 'localtime'))) AS INTEGER) as dias_restantes
+        FROM ventas v
+        WHERE v.es_credito = 1
+    """
+    converted = _convert_sql_for_postgres(sql_sqlite)
+    assert "julianday" not in converted.lower()
+    assert "CURRENT_DATE" in converted
+
