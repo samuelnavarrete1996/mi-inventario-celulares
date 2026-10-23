@@ -20,6 +20,7 @@ const POS = {
         this.setupBarcodeScanner();
         this.renderCarrito();
         this.cargarAlertasCredito();
+        this.buscarAccesoriosPOS('');
         this.actualizarFechaVencimientoPreview();
     },
 
@@ -277,15 +278,20 @@ const POS = {
     async agregarAccesorioAlCarrito(accesorioOrId) {
         let accesorio = accesorioOrId;
         if (typeof accesorioOrId === 'number' || typeof accesorioOrId === 'string') {
-            if (typeof Accesorios !== 'undefined' && Accesorios.items && Accesorios.items.length > 0) {
-                accesorio = Accesorios.items.find(x => x.id === parseInt(accesorioOrId, 10));
+            const accIdNum = parseInt(accesorioOrId, 10);
+            if (this.accesorios && this.accesorios.length > 0) {
+                accesorio = this.accesorios.find(x => x.id === accIdNum);
+            }
+            if (!accesorio && typeof Accesorios !== 'undefined' && Accesorios.items && Accesorios.items.length > 0) {
+                accesorio = Accesorios.items.find(x => x.id === accIdNum);
             }
             if (!accesorio) {
                 try {
                     const res = await fetch(`/api/accesorios`);
                     if (res.ok) {
                         const lista = await res.json();
-                        accesorio = lista.find(x => x.id === parseInt(accesorioOrId, 10));
+                        this.accesorios = lista;
+                        accesorio = lista.find(x => x.id === accIdNum);
                     }
                 } catch (e) {
                     console.error(e);
@@ -335,8 +341,9 @@ const POS = {
             this.quitarDelCarrito(id, 'accesorio');
             return;
         }
-        if (nuevaCant > item.accesorio.stock) {
-            App.showToast(`Stock máximo alcanzado (${item.accesorio.stock} disponibles)`, "warning");
+        const latestAcc = (this.accesorios && this.accesorios.find(x => x.id === id)) || item.accesorio;
+        if (!latestAcc.es_servicio && nuevaCant > latestAcc.stock) {
+            App.showToast(`Stock máximo alcanzado (${latestAcc.stock} disponibles)`, "warning");
             return;
         }
 
@@ -432,7 +439,7 @@ const POS = {
                                     ${acc.color ? `<span class="bg-violet-100 text-violet-800 px-1.5 py-0.5 rounded text-[10px] font-bold border border-violet-200">🎨 ${App.escapeHtml(acc.color)}</span>` : ''}
                                     ${acc.codigo_barras ? `<span>•</span><span class="font-mono text-[10px] text-slate-500">${App.escapeHtml(acc.codigo_barras)}</span>` : ''}
                                     <span>•</span>
-                                    <span class="text-[10px] text-slate-500">Stock: ${acc.stock}</span>
+                                    <span class="text-[10px] text-slate-500">Stock: ${(this.accesorios && this.accesorios.find(x => x.id === acc.id)?.stock) ?? acc.stock}</span>
                                 </div>
                             </div>
                             <div class="flex items-center gap-1">
@@ -642,6 +649,7 @@ const POS = {
             const res = await fetch(url);
             if (!res.ok) throw new Error("Error cargando catálogo de accesorios");
             let items = await res.json();
+            this.accesorios = items;
 
             // Filtrado por compatibilidad de modelo / marca
             if (this.compatibilidadFiltro) {
@@ -938,7 +946,14 @@ const POS = {
             // Refrescar inventario, estadísticas de cabecera y alertas de crédito
             App.updateHeaderStats();
             this.cargarAlertasCredito();
-            if (typeof Accesorios !== 'undefined') Accesorios.cargarAccesorios();
+            this.buscarAccesoriosPOS(document.getElementById('pos-input-buscar')?.value?.trim() || '');
+            this.buscarEquipos(document.getElementById('pos-search-input')?.value?.trim() || '');
+            if (typeof Accesorios !== 'undefined' && typeof Accesorios.cargar === 'function') {
+                Accesorios.cargar();
+            }
+            if (typeof Inventario !== 'undefined' && typeof Inventario.cargarEquipos === 'function') {
+                Inventario.cargarEquipos();
+            }
 
         } catch (err) {
             App.showToast(err.message, "error");
@@ -1180,6 +1195,8 @@ const POS = {
         const modal = document.getElementById('modal-recibo-venta');
         if (modal) modal.classList.add('hidden');
         this.reciboActual = null;
+        this.buscarAccesoriosPOS(document.getElementById('pos-input-buscar')?.value?.trim() || '');
+        this.buscarEquipos(document.getElementById('pos-search-input')?.value?.trim() || '');
     },
 
     enviarWhatsApp() {

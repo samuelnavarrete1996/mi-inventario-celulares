@@ -471,6 +471,9 @@ const App = {
             Inventario.cargarEquipos();
         } else if (tabName === 'pos') {
             POS.buscarEquipos('');
+            if (typeof POS.buscarAccesoriosPOS === 'function') {
+                POS.buscarAccesoriosPOS('');
+            }
             if (typeof POS.cargarAlertasCredito === 'function') {
                 POS.cargarAlertasCredito();
             }
