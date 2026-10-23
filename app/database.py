@@ -500,6 +500,11 @@ def _init_postgres_db(conn, cursor):
         except Exception:
             pass
 
+    # Relajar restricciones NOT NULL heredadas en cortes_caja en PostgreSQL
+    for col_relax in ["fecha_hora", "monto_efectivo", "monto_transferencia", "monto_tarjeta", "efectivo_esperado", "efectivo_real", "usuario"]:
+        _safe_exec(f"ALTER TABLE cortes_caja ALTER COLUMN {col_relax} DROP NOT NULL;")
+        _safe_exec(f"ALTER TABLE cortes_caja ALTER COLUMN {col_relax} SET DEFAULT 0;" if "monto" in col_relax or "efectivo" in col_relax else f"ALTER TABLE cortes_caja ALTER COLUMN {col_relax} SET DEFAULT '';")
+
     # Migrar columnas booleanas con operadores enteros a INTEGER para compatibilidad total
     for tbl, col, def_val in [("accesorios", "es_servicio", 0), ("ventas", "es_credito", 0)]:
         try:

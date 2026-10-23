@@ -2524,10 +2524,10 @@ def guardar_corte_caja(
         INSERT INTO cortes_caja (
             fecha_corte, fecha_inicio_periodo, total_ventas, total_efectivo, total_transferencia,
             total_garantia, efectivo_declarado, diferencia, cantidad_ventas, notas, fecha_registro,
-            fecha_hora, monto_efectivo, monto_transferencia, efectivo_esperado, efectivo_real,
-            usuario, tenant_id, sucursal_id
+            fecha_hora, monto_efectivo, monto_transferencia, monto_tarjeta, efectivo_esperado, efectivo_real,
+            usuario, equipos_vendidos, accesorios_vendidos, tenant_id, sucursal_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             now_str,
             resumen["fecha_inicio_periodo"],
@@ -2543,9 +2543,12 @@ def guardar_corte_caja(
             now_str,
             total_efectivo_sistema,
             resumen["total_transferencia"],
+            0.0,
             total_efectivo_sistema,
             efectivo_declarado,
             "Admin",
+            0,
+            0,
             final_tenant_id,
             final_sucursal_id
         ))
