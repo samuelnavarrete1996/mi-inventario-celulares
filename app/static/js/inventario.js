@@ -390,9 +390,12 @@ const Inventario = {
             let botonesAccion = '';
             if (esGarantia) {
                 botonesAccion = `
-                    <button onclick="Garantias.abrirModalRestablecer(${JSON.stringify(equipo).replace(/"/g, '&quot;')})" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg shadow-2xs transition-all" title="Poner Funcional y Reingresar a Stock Disponible">
+                    <button onclick="Garantias.abrirModalRestablecer(${JSON.stringify(equipo).replace(/"/g, '&quot;')})" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-lg shadow-2xs transition-all" title="Quitar de garantía y regresar a inventario disponible">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                        <span>Poner Funcional</span>
+                        <span>Quitar de Garantía</span>
+                    </button>
+                    <button onclick="Garantias.quitarDeGarantiaRapido(${equipo.id}, '${App.escapeJsArg(equipo.imei)}')" class="inline-flex items-center p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200" title="Regreso rápido directo a Disponible (sin cambios)">
+                        ⚡
                     </button>
                     <button onclick="Garantias.consultarHistorialIMEI('${App.escapeJsArg(equipo.imei)}')" class="inline-flex items-center p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Ver Historial Universal 360°">
                         📋

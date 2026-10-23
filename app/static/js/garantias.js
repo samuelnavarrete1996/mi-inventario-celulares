@@ -272,6 +272,44 @@ const Garantias = {
                 badgeEstado.textContent = data.estado_actual;
             }
 
+            const boxAccion = document.getElementById('historial-imei-accion-container');
+            if (boxAccion) {
+                if (data.estado_actual === 'En Garantia') {
+                    boxAccion.classList.remove('hidden');
+                    const eqObj = {
+                        id: data.id,
+                        imei: data.imei,
+                        modelo: data.modelo,
+                        capacidad_gb: data.capacidad_gb,
+                        color: data.color,
+                        grado: data.grado,
+                        precio_venta: data.precio_venta || 0
+                    };
+                    const eqJson = JSON.stringify(eqObj).replace(/"/g, '&quot;');
+
+                    boxAccion.innerHTML = `
+                    <div class="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div class="text-xs text-amber-900">
+                            <span class="font-bold flex items-center gap-1">🛡️ Equipo marcado En Garantía</span>
+                            <p class="text-[11px] text-amber-700">Este equipo está fuera de venta hasta que se quite de garantía y regrese a inventario.</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onclick="Garantias.abrirModalRestablecer(${eqJson})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="Quitar de garantía y configurar nuevo grado o precio">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                <span>Quitar de Garantía</span>
+                            </button>
+                            <button type="button" onclick="Garantias.quitarDeGarantiaRapido(${data.id}, '${App.escapeJsArg(data.imei)}')" class="px-2.5 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-300 transition-all" title="Regreso rápido directo a Disponible (sin cambios)">
+                                ⚡ Rápido
+                            </button>
+                        </div>
+                    </div>
+                    `;
+                } else {
+                    boxAccion.classList.add('hidden');
+                    boxAccion.innerHTML = '';
+                }
+            }
+
             if (containerEventos) {
                 if (data.eventos.length === 0) {
                     containerEventos.innerHTML = `<div class="py-6 text-center text-slate-400">Sin eventos registrados para este IMEI</div>`;
@@ -400,7 +438,7 @@ const Garantias = {
                 throw new Error(data.detail || "Error al restablecer equipo.");
             }
 
-            App.showToast(`Equipo ${data.modelo} puesto funcional y reingresado a stock disponible.`, "success");
+            App.showToast(`Equipo ${data.modelo} retirado de garantía y reingresado a inventario disponible.`, "success");
             this.cerrarModalRestablecer();
 
             // Refrescar inventario y métricas
@@ -423,6 +461,52 @@ const Garantias = {
                 btnSubmit.disabled = false;
                 btnSubmit.innerHTML = originalText;
             }
+        }
+    },
+
+    async quitarDeGarantiaRapido(equipoId, imei) {
+        if (!equipoId) {
+            App.showToast("ID de equipo no especificado.", "error");
+            return;
+        }
+        if (!confirm("¿Deseas quitar este equipo de garantía y regresarlo inmediatamente al inventario disponible sin marca de garantía?")) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/garantias/restablecer-equipo/${equipoId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    notas: "Retirada marca de garantía y reingresado directamente a inventario disponible."
+                })
+            });
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || "Error al quitar de garantía.");
+            }
+
+            const data = await res.json();
+            App.showToast(`Equipo ${data.modelo} retirado de garantía y disponible para venta en inventario.`, "success");
+            this.cerrarModalRestablecer();
+
+            if (typeof Inventario !== 'undefined' && Inventario.cargarEquipos) {
+                Inventario.cargarEquipos();
+            }
+            if (typeof App !== 'undefined' && App.updateHeaderStats) {
+                App.updateHeaderStats();
+            }
+
+            const modalHistorial = document.getElementById('modal-historial-imei');
+            if (modalHistorial && !modalHistorial.classList.contains('hidden')) {
+                const targetImei = imei || data.imei;
+                if (targetImei) {
+                    this.consultarHistorialIMEI(targetImei);
+                }
+            }
+        } catch (err) {
+            App.showToast(err.message, "error");
         }
     }
 };

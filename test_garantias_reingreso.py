@@ -176,3 +176,67 @@ async def test_seguridad_vendedor_sanitizado_en_historial_imei():
         for ev in data.get("eventos", []):
             if "detalles" in ev:
                 assert ev["detalles"].get("costo_compra") is None
+
+@pytest.mark.anyio
+async def test_quitar_de_garantia_regreso_rapido_a_inventario():
+    """Valida el botón y flujo de quitar de garantía y reingresar a inventario sin marca de garantía."""
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await login_as_dueno(client)
+        suffix = str(int(time.time() * 1000))[-6:]
+        imei_test = f"357777000{suffix}"
+
+        # 1. Registrar y vender equipo
+        res_eq = await client.post("/api/equipos", json={
+            "modelo": "Xiaomi 13T Pro",
+            "capacidad_gb": 256,
+            "color": "Negro",
+            "imei": imei_test,
+            "grado": "A",
+            "costo_compra": 6500.0,
+            "precio_venta": 9200.0
+        })
+        assert res_eq.status_code == 201
+        eq_id = res_eq.json()["id"]
+
+        res_v = await client.post("/api/pos/vender", json={
+            "cliente_nombre": "Mario R.",
+            "cliente_telefono": f"55{suffix}",
+            "metodo_pago": "Efectivo",
+            "monto_efectivo": 9200.0,
+            "items": [{"equipo_id": eq_id, "precio_final": 9200.0}]
+        })
+        assert res_v.status_code == 201
+
+        # 2. Devolución por garantía
+        res_g = await client.post("/api/garantias/devolucion", json={
+            "imei": imei_test,
+            "motivo": "Revisión técnica",
+            "falla_descripcion": "Cliente reportó reinicios",
+            "estado_equipo_recibido": "En Garantia",
+            "solucion": "Reparación",
+            "monto_cubierto": 9200.0
+        })
+        assert res_g.status_code == 201
+
+        # Verificar que está marcado En Garantía
+        res_check1 = await client.get("/api/equipos?estado=En Garantia")
+        assert eq_id in [e["id"] for e in res_check1.json()]
+
+        # 3. Quitar de garantía (Regreso rápido directo sin cambios)
+        res_quitar = await client.post(
+            f"/api/garantias/restablecer-equipo/{eq_id}",
+            json={"notas": "Retirada marca de garantía y regresado a inventario disponible"}
+        )
+        assert res_quitar.status_code == 200
+        data_disp = res_quitar.json()
+        assert data_disp["estado"] == "Disponible"
+        assert data_disp["grado"] == "A"
+        assert data_disp["precio_venta"] == 9200.0
+
+        # 4. Validar que YA NO está en garantía y SÍ está en disponibles
+        res_en_gar = await client.get("/api/equipos?estado=En Garantia")
+        assert eq_id not in [e["id"] for e in res_en_gar.json()]
+
+        res_disp = await client.get("/api/equipos?solo_disponibles=true")
+        assert eq_id in [e["id"] for e in res_disp.json()]
+
