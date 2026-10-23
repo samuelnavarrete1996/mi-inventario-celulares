@@ -1046,7 +1046,7 @@
                     <div class="flex items-center gap-2.5">
                         <span class="text-xl">📊</span>
                         <div>
-                            <h4 class="font-bold text-sm text-white">Resumen Global Consolidado (Celulares + Accesorios)</h4>
+                            <h4 class="font-bold text-sm text-white">Resumen Global Consolidado (Celulares + Accesorios + Taller)</h4>
                             <p class="text-xs text-slate-400">Balance financiero unificado de la sucursal en el mes</p>
                         </div>
                     </div>
@@ -1059,7 +1059,7 @@
                     <div>
                         <span class="text-[11px] font-medium text-slate-400 block">Total Ganancias Mes</span>
                         <div id="dash-ganancias-mes" class="text-2xl font-black text-emerald-400">$0.00</div>
-                        <span class="text-[10px] text-slate-400">Celulares + Accesorios</span>
+                        <span class="text-[10px] text-slate-400">Celulares + Accesorios + Taller</span>
                     </div>
                     <div>
                         <span class="text-[11px] font-medium text-slate-400 block">Total Facturado Mes</span>
@@ -1128,6 +1128,9 @@
                             <button type="button" onclick="Reportes.filtrarPorTipoVenta('accesorios')" id="btn-filtro-tipo-accesorios" class="btn-tipo-venta px-3 py-1 font-bold rounded-lg text-slate-600 hover:text-slate-900">
                                 🎧 Accesorios (<span id="count-ventas-accesorios">0</span>)
                             </button>
+                            <button type="button" onclick="Reportes.filtrarPorTipoVenta('reparaciones')" id="btn-filtro-tipo-reparaciones" class="btn-tipo-venta px-3 py-1 font-bold rounded-lg text-slate-600 hover:text-slate-900">
+                                🔧 Taller (<span id="count-ventas-reparaciones">0</span>)
+                            </button>
                         </div>
 
                         <!-- Fechas -->
@@ -1156,6 +1159,8 @@
                         <span>📱 Ganancia Celulares: <strong id="lbl-filtro-ganancia-cel" class="text-blue-700">+$0.00</strong></span>
                         <span class="text-slate-300">|</span>
                         <span>🎧 Ganancia Accesorios: <strong id="lbl-filtro-ganancia-acc" class="text-purple-700">+$0.00</strong></span>
+                        <span class="text-slate-300">|</span>
+                        <span>🔧 Ganancia Taller: <strong id="lbl-filtro-ganancia-rep" class="text-amber-700">+$0.00</strong></span>
                     </div>
                     <div>
                         Ganancia Neta Total: <strong id="lbl-filtro-ganancia-total" class="text-emerald-700 font-bold text-sm">+$0.00</strong>
@@ -3001,6 +3006,10 @@
                     <div>
                         <span class="text-slate-400 block mb-0.5">Falla Reportada:</span>
                         <p id="boleta-falla" class="font-semibold text-slate-800 bg-slate-50 p-2 rounded-lg border border-slate-100">--</p>
+                    </div>
+                    <div id="boleta-container-diagnostico">
+                        <span class="text-slate-400 block mb-0.5">Diagnóstico Técnico / Refacción y Calidad:</span>
+                        <p id="boleta-diagnostico" class="font-semibold text-indigo-950 bg-indigo-50/70 p-2 rounded-lg border border-indigo-100 text-xs">--</p>
                     </div>
                     <div>
                         <span class="text-slate-400 block mb-0.5">Condición / Accesorios Dejados:</span>

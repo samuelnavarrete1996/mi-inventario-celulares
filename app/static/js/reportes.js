@@ -368,8 +368,9 @@ const Reportes = {
         const btnTodos = document.getElementById('btn-filtro-tipo-todos');
         const btnCel = document.getElementById('btn-filtro-tipo-celulares');
         const btnAcc = document.getElementById('btn-filtro-tipo-accesorios');
+        const btnRep = document.getElementById('btn-filtro-tipo-reparaciones');
 
-        [btnTodos, btnCel, btnAcc].forEach(btn => {
+        [btnTodos, btnCel, btnAcc, btnRep].forEach(btn => {
             if (btn) {
                 btn.className = "btn-tipo-venta px-3 py-1 font-bold rounded-lg text-slate-600 hover:text-slate-900 transition-all";
             }
@@ -379,6 +380,8 @@ const Reportes = {
             if (btnCel) btnCel.className = "btn-tipo-venta px-3 py-1 font-bold rounded-lg bg-white text-blue-700 shadow-2xs transition-all";
         } else if (tipo === 'accesorios') {
             if (btnAcc) btnAcc.className = "btn-tipo-venta px-3 py-1 font-bold rounded-lg bg-white text-purple-700 shadow-2xs transition-all";
+        } else if (tipo === 'reparaciones') {
+            if (btnRep) btnRep.className = "btn-tipo-venta px-3 py-1 font-bold rounded-lg bg-white text-indigo-700 shadow-2xs transition-all";
         } else {
             if (btnTodos) btnTodos.className = "btn-tipo-venta px-3 py-1 font-bold rounded-lg bg-white text-slate-800 shadow-2xs transition-all";
         }
@@ -403,8 +406,9 @@ const Reportes = {
 
             // Actualizar contadores en botones
             const totalCount = this.ventas.length;
-            const celCount = this.ventas.filter(v => (v.total_equipos || 0) > 0).length;
-            const accCount = this.ventas.filter(v => (v.total_accesorios || 0) > 0).length;
+            const celCount = this.ventas.filter(v => (v.total_equipos || 0) > 0 && v.tipo_venta !== 'reparacion').length;
+            const accCount = this.ventas.filter(v => (v.total_accesorios || 0) > 0 && v.tipo_venta !== 'reparacion').length;
+            const repCount = this.ventas.filter(v => v.tipo_venta === 'reparacion' || v.reparacion_id).length;
 
             if (document.getElementById('count-ventas-todos')) {
                 document.getElementById('count-ventas-todos').textContent = totalCount;
@@ -414,6 +418,9 @@ const Reportes = {
             }
             if (document.getElementById('count-ventas-accesorios')) {
                 document.getElementById('count-ventas-accesorios').textContent = accCount;
+            }
+            if (document.getElementById('count-ventas-reparaciones')) {
+                document.getElementById('count-ventas-reparaciones').textContent = repCount;
             }
 
             this.renderHistorialVentas();
@@ -430,21 +437,27 @@ const Reportes = {
 
         let filtradas = this.ventas;
         if (this.filtroTipo === 'celulares') {
-            filtradas = this.ventas.filter(v => (v.total_equipos || 0) > 0);
+            filtradas = this.ventas.filter(v => (v.total_equipos || 0) > 0 && v.tipo_venta !== 'reparacion');
         } else if (this.filtroTipo === 'accesorios') {
-            filtradas = this.ventas.filter(v => (v.total_accesorios || 0) > 0);
+            filtradas = this.ventas.filter(v => (v.total_accesorios || 0) > 0 && v.tipo_venta !== 'reparacion');
+        } else if (this.filtroTipo === 'reparaciones') {
+            filtradas = this.ventas.filter(v => v.tipo_venta === 'reparacion' || v.reparacion_id);
         }
 
         // Totales calculados de las ventas filtradas
         let totVentas = 0;
         let totGanCel = 0;
         let totGanAcc = 0;
+        let totGanRep = 0;
         let totGanTotal = 0;
 
         filtradas.forEach(v => {
             totVentas += (v.precio_final || 0);
             totGanCel += (v.ganancia_celulares || 0);
             totGanAcc += (v.ganancia_accesorios || 0);
+            if (v.tipo_venta === 'reparacion' || v.reparacion_id) {
+                totGanRep += (v.margen_ganancia || 0);
+            }
             totGanTotal += (v.margen_ganancia || 0);
         });
 
@@ -456,6 +469,9 @@ const Reportes = {
         }
         if (document.getElementById('lbl-filtro-ganancia-acc')) {
             document.getElementById('lbl-filtro-ganancia-acc').textContent = `+${App.formatCurrency(totGanAcc)}`;
+        }
+        if (document.getElementById('lbl-filtro-ganancia-rep')) {
+            document.getElementById('lbl-filtro-ganancia-rep').textContent = `+${App.formatCurrency(totGanRep)}`;
         }
         if (document.getElementById('lbl-filtro-ganancia-total')) {
             document.getElementById('lbl-filtro-ganancia-total').textContent = `+${App.formatCurrency(totGanTotal)}`;
@@ -484,11 +500,15 @@ const Reportes = {
 
             // Badge de Categoría
             let tipoBadge = '';
-            if (v.tipo_venta === 'mixta') {
+            if (v.tipo_venta === 'reparacion' || v.reparacion_id) {
+                tipoBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-200">
+                    🔧 Taller / Reparación
+                </span>`;
+            } else if (v.tipo_venta === 'mixta') {
                 tipoBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
                     🔀 Mixta (📱${totalEquipos} + 🎧${totalAccesorios})
                 </span>`;
-            } else if (v.tipo_venta === 'accesorios' || totalAccesorios > 0 && totalEquipos === 0) {
+            } else if (v.tipo_venta === 'accesorios' || (totalAccesorios > 0 && totalEquipos === 0)) {
                 tipoBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">
                     🎧 Accesorio (${totalAccesorios} pz${totalAccesorios > 1 ? 's' : ''})
                 </span>`;
@@ -523,7 +543,7 @@ const Reportes = {
             return `
             <tr class="hover:bg-slate-50 border-b border-slate-100 transition-colors">
                 <td class="py-3 px-4 font-mono text-xs font-bold text-slate-700">
-                    #${String(v.id).padStart(5, '0')}
+                    ${v.folio ? App.escapeHtml(v.folio) : '#' + String(v.id).padStart(5, '0')}
                 </td>
                 <td class="py-3 px-4 text-xs text-slate-600 whitespace-nowrap">
                     ${App.formatDate(v.fecha_venta)}
@@ -549,10 +569,15 @@ const Reportes = {
                 </td>
                 <td class="py-3 px-4 text-right">
                     <div class="inline-flex items-center gap-1.5">
+                        ${(v.tipo_venta === 'reparacion' || v.reparacion_id) ? `
+                        <button onclick="Reparaciones.abrirBoleta(${v.reparacion_id || (v.id > 900000 ? v.id - 900000 : v.id)})" class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-lg shadow-2xs transition-all gap-1" title="Ver / Imprimir Boleta de Taller">
+                            <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                            <span>Boleta Taller</span>
+                        </button>` : `
                         <button onclick="Reportes.reimprimirRecibo(${v.id})" class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg shadow-2xs transition-all gap-1" title="Ver / Imprimir Recibo">
                             <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                             <span>Recibo</span>
-                        </button>
+                        </button>`}
                         ${primerImei ? `
                         <button onclick="Garantias.abrirModal('${App.escapeJsArg(primerImei)}')" class="inline-flex items-center px-2.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-lg shadow-2xs transition-all gap-1" title="Regresar celular por garantía">
                             <span>🛡️</span>

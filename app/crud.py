@@ -760,124 +760,247 @@ def get_historial_ventas(
         query += " AND date(v.fecha_venta) <= date(?)"
         params.append(fecha_fin)
 
-    query += " ORDER BY v.id DESC LIMIT ?"
-    params.append(limit)
-
-    cursor.execute(query, params)
-    ventas_rows = cursor.fetchall()
-
+    tipo_filtro = (tipo or "todos").lower().strip()
     resultado = []
-    for vr in ventas_rows:
-        v_dict = dict(vr)
-        v_id = v_dict["id"]
 
-        cursor.execute("""
+    # 1. Ventas estándar de mostrador (si no se pide exclusivamente taller/reparaciones)
+    if tipo_filtro not in ("reparaciones", "taller"):
+        query += " ORDER BY v.id DESC LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(query, params)
+        ventas_rows = cursor.fetchall()
+
+        for vr in ventas_rows:
+            v_dict = dict(vr)
+            v_id = v_dict["id"]
+
+            cursor.execute("""
+            SELECT 
+                vi.id,
+                vi.venta_id,
+                vi.equipo_id,
+                vi.accesorio_id,
+                COALESCE(vi.tipo_item, CASE WHEN vi.equipo_id IS NOT NULL THEN 'equipo' ELSE 'accesorio' END) as tipo_item,
+                COALESCE(vi.nombre_item, e.modelo, a.nombre, 'Artículo') as nombre_item,
+                COALESCE(vi.cantidad, 1) as cantidad,
+                vi.precio_final,
+                vi.costo_compra,
+                vi.margen_ganancia,
+                COALESCE(e.modelo, a.nombre, vi.nombre_item, 'Artículo') as modelo,
+                e.capacidad_gb,
+                e.color,
+                e.imei,
+                e.grado
+            FROM venta_items vi
+            LEFT JOIN equipos e ON vi.equipo_id = e.id
+            LEFT JOIN accesorios a ON vi.accesorio_id = a.id
+            WHERE vi.venta_id = ?
+            ORDER BY vi.id ASC
+            """, (v_id,))
+            items = [dict(r) for r in cursor.fetchall()]
+
+            # Soporte para ventas históricas directas sin venta_items
+            if len(items) == 0 and v_dict.get("equipo_id"):
+                cursor.execute("SELECT * FROM equipos WHERE id = ?", (v_dict["equipo_id"],))
+                eq = cursor.fetchone()
+                if eq:
+                    items = [{
+                        "id": 1,
+                        "venta_id": v_id,
+                        "equipo_id": eq["id"],
+                        "accesorio_id": None,
+                        "tipo_item": "equipo",
+                        "nombre_item": eq["modelo"],
+                        "cantidad": 1,
+                        "precio_final": v_dict["precio_final"],
+                        "costo_compra": eq["costo_compra"],
+                        "margen_ganancia": v_dict["margen_ganancia"],
+                        "modelo": eq["modelo"],
+                        "capacidad_gb": eq["capacidad_gb"],
+                        "color": eq["color"],
+                        "imei": eq["imei"],
+                        "grado": eq["grado"]
+                    }]
+
+            cel_items = [it for it in items if (it.get("tipo_item") == "equipo" or it.get("equipo_id"))]
+            acc_items = [it for it in items if not (it.get("tipo_item") == "equipo" or it.get("equipo_id"))]
+
+            total_equipos = len(cel_items)
+            total_accesorios = sum(int(it.get("cantidad", 1) or 1) for it in acc_items)
+
+            # Filtro de tipo si se especificó
+            if tipo_filtro == "celulares" and total_equipos == 0:
+                continue
+            if tipo_filtro == "accesorios" and total_accesorios == 0:
+                continue
+
+            ganancia_celulares = round(sum(float(it.get("margen_ganancia", 0) or 0) for it in cel_items), 2)
+            ganancia_accesorios = round(sum(float(it.get("margen_ganancia", 0) or 0) for it in acc_items), 2)
+            venta_celulares = round(sum(float(it.get("precio_final", 0) or 0) for it in cel_items), 2)
+            venta_accesorios = round(sum(float(it.get("precio_final", 0) or 0) for it in acc_items), 2)
+
+            if total_equipos > 0 and total_accesorios > 0:
+                tipo_venta = "mixta"
+            elif total_equipos > 0:
+                tipo_venta = "celulares"
+            else:
+                tipo_venta = "accesorios"
+
+            resumen_partes = []
+            if cel_items:
+                nombres_cel = [f"{it['modelo']}" for it in cel_items]
+                resumen_partes.append(", ".join(nombres_cel))
+            if acc_items:
+                nombres_acc = [f"{it['nombre_item']} (x{it.get('cantidad', 1)})" for it in acc_items]
+                resumen_partes.append(", ".join(nombres_acc))
+
+            v_dict["items"] = items
+            v_dict["total_equipos"] = total_equipos
+            v_dict["total_accesorios"] = total_accesorios
+            v_dict["ganancia_celulares"] = ganancia_celulares
+            v_dict["ganancia_accesorios"] = ganancia_accesorios
+            v_dict["venta_celulares"] = venta_celulares
+            v_dict["venta_accesorios"] = venta_accesorios
+            v_dict["tipo_venta"] = tipo_venta
+            v_dict["resumen_modelos"] = " + ".join(resumen_partes) if resumen_partes else "Venta"
+
+            if cel_items:
+                v_dict["modelo"] = cel_items[0]["modelo"]
+                v_dict["capacidad_gb"] = cel_items[0]["capacidad_gb"]
+                v_dict["color"] = cel_items[0]["color"]
+                v_dict["imei"] = cel_items[0]["imei"]
+                v_dict["grado"] = cel_items[0]["grado"]
+                v_dict["costo_compra"] = cel_items[0]["costo_compra"]
+            elif items:
+                v_dict["modelo"] = items[0]["nombre_item"]
+                v_dict["costo_compra"] = items[0]["costo_compra"]
+                v_dict["imei"] = None
+                v_dict["grado"] = None
+                v_dict["color"] = None
+                v_dict["capacidad_gb"] = None
+
+            resultado.append(v_dict)
+
+    # 2. Órdenes de Reparación de Taller (cuando el filtro sea "todos", "reparaciones" o "taller")
+    if tipo_filtro in ("todos", "reparaciones", "taller"):
+        q_rep = """
         SELECT 
-            vi.id,
-            vi.venta_id,
-            vi.equipo_id,
-            vi.accesorio_id,
-            COALESCE(vi.tipo_item, CASE WHEN vi.equipo_id IS NOT NULL THEN 'equipo' ELSE 'accesorio' END) as tipo_item,
-            COALESCE(vi.nombre_item, e.modelo, a.nombre, 'Artículo') as nombre_item,
-            COALESCE(vi.cantidad, 1) as cantidad,
-            vi.precio_final,
-            vi.costo_compra,
-            vi.margen_ganancia,
-            COALESCE(e.modelo, a.nombre, vi.nombre_item, 'Artículo') as modelo,
-            e.capacidad_gb,
-            e.color,
-            e.imei,
-            e.grado
-        FROM venta_items vi
-        LEFT JOIN equipos e ON vi.equipo_id = e.id
-        LEFT JOIN accesorios a ON vi.accesorio_id = a.id
-        WHERE vi.venta_id = ?
-        ORDER BY vi.id ASC
-        """, (v_id,))
-        items = [dict(r) for r in cursor.fetchall()]
+            r.id,
+            r.folio,
+            r.cliente_nombre,
+            r.cliente_telefono,
+            r.dispositivo_modelo,
+            r.color,
+            r.imei_serie,
+            r.falla_reportada,
+            r.diagnostico_tecnico,
+            r.costo_refaccion,
+            r.precio_servicio,
+            r.anticipo,
+            r.saldo_pendiente,
+            r.estado,
+            COALESCE(r.fecha_entrega, r.fecha_ingreso) as fecha_operacion,
+            r.fecha_ingreso,
+            r.fecha_entrega,
+            r.tecnico_responsable,
+            r.tenant_id,
+            r.sucursal_id
+        FROM reparaciones r
+        WHERE r.estado != 'Cancelado'
+        """
+        p_rep = []
+        if tenant_id is not None:
+            q_rep += " AND r.tenant_id = ?"
+            p_rep.append(tenant_id)
+        if fecha_inicio:
+            q_rep += " AND date(COALESCE(r.fecha_entrega, r.fecha_ingreso)) >= date(?)"
+            p_rep.append(fecha_inicio)
+        if fecha_fin:
+            q_rep += " AND date(COALESCE(r.fecha_entrega, r.fecha_ingreso)) <= date(?)"
+            p_rep.append(fecha_fin)
+        q_rep += " ORDER BY r.id DESC LIMIT ?"
+        p_rep.append(limit)
 
-        # Soporte para ventas históricas directas sin venta_items
-        if len(items) == 0 and v_dict.get("equipo_id"):
-            cursor.execute("SELECT * FROM equipos WHERE id = ?", (v_dict["equipo_id"],))
-            eq = cursor.fetchone()
-            if eq:
-                items = [{
-                    "id": 1,
-                    "venta_id": v_id,
-                    "equipo_id": eq["id"],
-                    "accesorio_id": None,
-                    "tipo_item": "equipo",
-                    "nombre_item": eq["modelo"],
-                    "cantidad": 1,
-                    "precio_final": v_dict["precio_final"],
-                    "costo_compra": eq["costo_compra"],
-                    "margen_ganancia": v_dict["margen_ganancia"],
-                    "modelo": eq["modelo"],
-                    "capacidad_gb": eq["capacidad_gb"],
-                    "color": eq["color"],
-                    "imei": eq["imei"],
-                    "grado": eq["grado"]
-                }]
+        cursor.execute(q_rep, p_rep)
+        rep_rows = cursor.fetchall()
+        for rr in rep_rows:
+            r = dict(rr)
+            costo = float(r.get("costo_refaccion") or 0.0)
+            precio = float(r.get("precio_servicio") or 0.0)
+            ganancia = round(precio - costo, 2)
+            r_id = int(r["id"])
+            virtual_venta_id = 900000 + r_id
 
-        cel_items = [it for it in items if (it.get("tipo_item") == "equipo" or it.get("equipo_id"))]
-        acc_items = [it for it in items if not (it.get("tipo_item") == "equipo" or it.get("equipo_id"))]
+            rep_item = {
+                "id": 1,
+                "venta_id": virtual_venta_id,
+                "equipo_id": None,
+                "accesorio_id": None,
+                "tipo_item": "reparacion",
+                "nombre_item": f"Reparación: {r.get('dispositivo_modelo', 'Equipo')} ({r.get('falla_reportada', 'Falla')})",
+                "cantidad": 1,
+                "precio_final": precio,
+                "costo_compra": costo,
+                "margen_ganancia": ganancia,
+                "modelo": r.get("dispositivo_modelo", "Reparación"),
+                "capacidad_gb": None,
+                "color": r.get("color"),
+                "imei": r.get("imei_serie"),
+                "grado": None
+            }
 
-        total_equipos = len(cel_items)
-        total_accesorios = sum(int(it.get("cantidad", 1) or 1) for it in acc_items)
+            diag_txt = f" [{r['diagnostico_tecnico']}]" if r.get("diagnostico_tecnico") else ""
+            resumen = f"🔧 {r.get('dispositivo_modelo', 'Equipo')} - {r.get('falla_reportada', 'Servicio')}{diag_txt}"
 
-        # Filtro de tipo si se especificó
-        tipo_filtro = (tipo or "todos").lower().strip()
-        if tipo_filtro == "celulares" and total_equipos == 0:
-            continue
-        if tipo_filtro == "accesorios" and total_accesorios == 0:
-            continue
+            rep_dict = {
+                "id": virtual_venta_id,
+                "cliente_id": None,
+                "precio_final": precio,
+                "margen_ganancia": ganancia,
+                "fecha_venta": str(r.get("fecha_operacion") or r.get("fecha_ingreso") or ""),
+                "metodo_pago": "Taller",
+                "monto_efectivo": float(r.get("anticipo") or 0.0),
+                "monto_transferencia": 0.0,
+                "monto_tarjeta": 0.0,
+                "monto_garantia": 0.0,
+                "notas": f"Folio: {r.get('folio')} | Técnico: {r.get('tecnico_responsable') or 'Samuel N.'}",
+                "cliente_nombre": r.get("cliente_nombre") or "Cliente Taller",
+                "cliente_telefono": r.get("cliente_telefono") or "",
+                "items": [rep_item],
+                "total_equipos": 0,
+                "total_accesorios": 0,
+                "ganancia_celulares": 0.0,
+                "ganancia_accesorios": 0.0,
+                "venta_celulares": 0.0,
+                "venta_accesorios": 0.0,
+                "tipo_venta": "reparacion",
+                "resumen_modelos": resumen,
+                "es_credito": False,
+                "plazo_dias": 0,
+                "fecha_vencimiento": None,
+                "monto_credito": 0.0,
+                "monto_anticipo": float(r.get("anticipo") or 0.0),
+                "saldo_pendiente": float(r.get("saldo_pendiente") or 0.0),
+                "estado_credito": None,
+                "abonos": [],
+                "equipo_id": None,
+                "modelo": r.get("dispositivo_modelo"),
+                "capacidad_gb": None,
+                "color": r.get("color"),
+                "imei": r.get("imei_serie"),
+                "grado": None,
+                "costo_compra": costo,
+                "folio": r.get("folio"),
+                "reparacion_id": r_id,
+                "diagnostico_tecnico": r.get("diagnostico_tecnico")
+            }
+            resultado.append(rep_dict)
 
-        ganancia_celulares = round(sum(float(it.get("margen_ganancia", 0) or 0) for it in cel_items), 2)
-        ganancia_accesorios = round(sum(float(it.get("margen_ganancia", 0) or 0) for it in acc_items), 2)
-        venta_celulares = round(sum(float(it.get("precio_final", 0) or 0) for it in cel_items), 2)
-        venta_accesorios = round(sum(float(it.get("precio_final", 0) or 0) for it in acc_items), 2)
-
-        if total_equipos > 0 and total_accesorios > 0:
-            tipo_venta = "mixta"
-        elif total_equipos > 0:
-            tipo_venta = "celulares"
-        else:
-            tipo_venta = "accesorios"
-
-        resumen_partes = []
-        if cel_items:
-            nombres_cel = [f"{it['modelo']}" for it in cel_items]
-            resumen_partes.append(", ".join(nombres_cel))
-        if acc_items:
-            nombres_acc = [f"{it['nombre_item']} (x{it.get('cantidad', 1)})" for it in acc_items]
-            resumen_partes.append(", ".join(nombres_acc))
-
-        v_dict["items"] = items
-        v_dict["total_equipos"] = total_equipos
-        v_dict["total_accesorios"] = total_accesorios
-        v_dict["ganancia_celulares"] = ganancia_celulares
-        v_dict["ganancia_accesorios"] = ganancia_accesorios
-        v_dict["venta_celulares"] = venta_celulares
-        v_dict["venta_accesorios"] = venta_accesorios
-        v_dict["tipo_venta"] = tipo_venta
-        v_dict["resumen_modelos"] = " + ".join(resumen_partes) if resumen_partes else "Venta"
-
-        if cel_items:
-            v_dict["modelo"] = cel_items[0]["modelo"]
-            v_dict["capacidad_gb"] = cel_items[0]["capacidad_gb"]
-            v_dict["color"] = cel_items[0]["color"]
-            v_dict["imei"] = cel_items[0]["imei"]
-            v_dict["grado"] = cel_items[0]["grado"]
-            v_dict["costo_compra"] = cel_items[0]["costo_compra"]
-        elif items:
-            v_dict["modelo"] = items[0]["nombre_item"]
-            v_dict["costo_compra"] = items[0]["costo_compra"]
-            v_dict["imei"] = None
-            v_dict["grado"] = None
-            v_dict["color"] = None
-            v_dict["capacidad_gb"] = None
-
-        resultado.append(v_dict)
+    # Ordenar unificado por fecha descendente
+    resultado.sort(key=lambda x: str(x.get("fecha_venta", "")), reverse=True)
+    if len(resultado) > limit:
+        resultado = resultado[:limit]
 
     conn.close()
     return resultado
@@ -1506,9 +1629,31 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     acc_unidades = int(acc_items_row["total_unidades"])
     acc_margen_pct = round((acc_ganancias / acc_ventas * 100), 1) if acc_ventas > 0 else 0.0
 
-    # 3. Totales Consolidados del Mes
-    total_ventas = round(cel_ventas + acc_ventas, 2)
-    total_ganancias = round(cel_ganancias + acc_ganancias, 2)
+    # 2.5 Métricas de Taller / Reparaciones en el mes actual
+    q_rep_mes = """
+    SELECT 
+        COALESCE(SUM(precio_servicio), 0) as total_ventas,
+        COALESCE(SUM(precio_servicio - costo_refaccion), 0) as total_ganancias,
+        COUNT(id) as total_unidades
+    FROM reparaciones
+    WHERE estado != 'Cancelado'
+      AND strftime('%Y-%m', COALESCE(fecha_entrega, fecha_ingreso)) = ?
+    """
+    p_rep_mes = [mes_actual_str]
+    if tenant_id is not None:
+        q_rep_mes += " AND tenant_id = ?"
+        p_rep_mes.append(tenant_id)
+    cursor.execute(q_rep_mes, p_rep_mes)
+    rep_mes_row = cursor.fetchone()
+
+    rep_ventas = round(float(rep_mes_row["total_ventas"] or 0), 2)
+    rep_ganancias = round(float(rep_mes_row["total_ganancias"] or 0), 2)
+    rep_unidades = int(rep_mes_row["total_unidades"] or 0)
+    rep_margen_pct = round((rep_ganancias / rep_ventas * 100), 1) if rep_ventas > 0 else 0.0
+
+    # 3. Totales Consolidados del Mes (Celulares + Accesorios + Taller)
+    total_ventas = round(cel_ventas + acc_ventas + rep_ventas, 2)
+    total_ganancias = round(cel_ganancias + acc_ganancias + rep_ganancias, 2)
     eq_vendidos = cel_unidades
     margen_promedio = round((total_ganancias / total_ventas * 100), 1) if total_ventas > 0 else 0.0
 
@@ -1584,6 +1729,66 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         if "dia" in d and d["dia"] is not None:
             d["dia"] = str(d["dia"])
         ventas_dias.append(d)
+
+    # 6b. Ventas de Taller de los últimos 30 días para integrar al gráfico
+    q_rep_dias = """
+    SELECT 
+        date(COALESCE(fecha_entrega, fecha_ingreso)) as dia,
+        COALESCE(SUM(precio_servicio), 0) as ventas_taller,
+        COALESCE(SUM(precio_servicio - costo_refaccion), 0) as ganancias_taller,
+        COUNT(id) as unidades_taller
+    FROM reparaciones
+    WHERE estado != 'Cancelado'
+      AND date(COALESCE(fecha_entrega, fecha_ingreso)) >= date('now', '-30 days', 'localtime')
+    """
+    p_rep_dias = []
+    if tenant_id is not None:
+        q_rep_dias += " AND tenant_id = ?"
+        p_rep_dias.append(tenant_id)
+    q_rep_dias += " GROUP BY date(COALESCE(fecha_entrega, fecha_ingreso)) ORDER BY dia ASC"
+    cursor.execute(q_rep_dias, p_rep_dias)
+    rep_dias_map = {str(r["dia"]): dict(r) for r in cursor.fetchall() if r["dia"]}
+
+    dias_seen = set()
+    for d in ventas_dias:
+        dia_str = str(d.get("dia", ""))
+        dias_seen.add(dia_str)
+        if dia_str in rep_dias_map:
+            r_data = rep_dias_map[dia_str]
+            v_t = round(float(r_data.get("ventas_taller", 0) or 0), 2)
+            g_t = round(float(r_data.get("ganancias_taller", 0) or 0), 2)
+            u_t = int(r_data.get("unidades_taller", 0) or 0)
+            d["ventas_taller"] = v_t
+            d["ganancias_taller"] = g_t
+            d["unidades_taller"] = u_t
+            d["ventas"] = round(float(d.get("ventas", 0) or 0) + v_t, 2)
+            d["ganancias"] = round(float(d.get("ganancias", 0) or 0) + g_t, 2)
+        else:
+            d["ventas_taller"] = 0.0
+            d["ganancias_taller"] = 0.0
+            d["unidades_taller"] = 0
+
+    for dia_str, r_data in rep_dias_map.items():
+        if dia_str not in dias_seen:
+            v_t = round(float(r_data.get("ventas_taller", 0) or 0), 2)
+            g_t = round(float(r_data.get("ganancias_taller", 0) or 0), 2)
+            u_t = int(r_data.get("unidades_taller", 0) or 0)
+            ventas_dias.append({
+                "dia": dia_str,
+                "ventas_celulares": 0.0,
+                "ganancias_celulares": 0.0,
+                "unidades_celulares": 0,
+                "ventas_accesorios": 0.0,
+                "ganancias_accesorios": 0.0,
+                "unidades_accesorios": 0,
+                "ventas_taller": v_t,
+                "ganancias_taller": g_t,
+                "unidades_taller": u_t,
+                "ventas": v_t,
+                "ganancias": g_t,
+                "unidades": u_t
+            })
+    ventas_dias.sort(key=lambda x: str(x.get("dia", "")))
 
     # 7. Distribución por Grados
     q_grados = "SELECT grado, COUNT(id) as total FROM equipos WHERE estado = 'Disponible'"
@@ -1711,7 +1916,13 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         "accesorios_stock_disponible": acc_stock,
         "accesorios_capital_inventario": acc_capital,
         "accesorios_valor_venta_inventario": acc_valor,
-        "accesorios_top_vendidos": top_accesorios
+        "accesorios_top_vendidos": top_accesorios,
+
+        # 🔧 SECCIÓN 3: ANALÍTICA Y GANANCIAS DE REPARACIONES / TALLER
+        "reparaciones_ventas_mes": rep_ventas,
+        "reparaciones_ganancias_mes": rep_ganancias,
+        "reparaciones_unidades_mes": rep_unidades,
+        "reparaciones_margen_pct": rep_margen_pct
     }
 
 # ==============================================================================

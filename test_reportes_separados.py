@@ -41,9 +41,13 @@ async def test_dashboard_metricas_separadas_dueno():
         assert "total_ventas_mes" in data
         assert "capital_inventario_total" in data
 
+        # Métricas de Taller / Reparaciones
+        assert "reparaciones_ventas_mes" in data
+        assert "reparaciones_ganancias_mes" in data
+
         # Validar consistencia matemática
-        assert round(data["total_ventas_mes"], 2) == round(data["celulares_ventas_mes"] + data["accesorios_ventas_mes"], 2)
-        assert round(data["total_ganancias_mes"], 2) == round(data["celulares_ganancias_mes"] + data["accesorios_ganancias_mes"], 2)
+        assert round(data["total_ventas_mes"], 2) == round(data["celulares_ventas_mes"] + data["accesorios_ventas_mes"] + data.get("reparaciones_ventas_mes", 0.0), 2)
+        assert round(data["total_ganancias_mes"], 2) == round(data["celulares_ganancias_mes"] + data["accesorios_ganancias_mes"] + data.get("reparaciones_ganancias_mes", 0.0), 2)
 
 @pytest.mark.anyio
 async def test_historial_ventas_filtro_tipo():
@@ -91,6 +95,7 @@ async def test_dashboard_separado_sanitizado_vendedor():
         # Confidencialidad
         assert data["celulares_ganancias_mes"] is None
         assert data["accesorios_ganancias_mes"] is None
+        assert data["reparaciones_ganancias_mes"] is None
         assert data["celulares_capital_inventario"] is None
         assert data["accesorios_capital_inventario"] is None
         assert data["capital_inventario_total"] is None

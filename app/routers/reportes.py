@@ -25,7 +25,9 @@ def obtener_metricas_dashboard(tenant: TenantContext = Depends(get_current_tenan
             "celulares_valor_venta_inventario", "celulares_top_vendidos",
             "accesorios_ventas_mes", "accesorios_ganancias_mes", "accesorios_unidades_mes",
             "accesorios_margen_pct", "accesorios_capital_inventario",
-            "accesorios_valor_venta_inventario", "accesorios_top_vendidos"
+            "accesorios_valor_venta_inventario", "accesorios_top_vendidos",
+            "reparaciones_ventas_mes", "reparaciones_ganancias_mes", "reparaciones_unidades_mes",
+            "reparaciones_margen_pct"
         ]
         for k in campos_a_ocultar:
             if k == "ventas_por_dia":

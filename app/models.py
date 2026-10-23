@@ -338,7 +338,7 @@ class VentaItemResponse(BaseModel):
 
 class VentaDetalleResponse(BaseModel):
     id: int
-    cliente_id: int
+    cliente_id: Optional[int] = None
     precio_final: float
     margen_ganancia: Optional[float] = None
     fecha_venta: str
@@ -378,6 +378,11 @@ class VentaDetalleResponse(BaseModel):
     imei: Optional[str] = None
     grado: Optional[str] = None
     costo_compra: Optional[float] = None
+
+    # Taller / Reparaciones
+    folio: Optional[str] = None
+    reparacion_id: Optional[int] = None
+    diagnostico_tecnico: Optional[str] = None
 
 class AbonoCreditoCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")

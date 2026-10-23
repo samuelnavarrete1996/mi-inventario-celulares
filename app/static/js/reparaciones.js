@@ -289,8 +289,18 @@ const Reparaciones = {
         }
     },
 
-    abrirBoleta(id) {
-        const rep = this.reparaciones.find(r => r.id === id);
+    async abrirBoleta(id) {
+        let rep = this.reparaciones ? this.reparaciones.find(r => r.id === id || r.id === parseInt(id)) : null;
+        if (!rep) {
+            try {
+                const res = await fetch(`/api/reparaciones/${id}`);
+                if (res.ok) {
+                    rep = await res.json();
+                }
+            } catch (e) {
+                console.error("Error al obtener detalle de orden de reparación:", e);
+            }
+        }
         if (!rep) return;
         this.reparacionActual = rep;
 
@@ -300,6 +310,12 @@ const Reparaciones = {
         document.getElementById('boleta-cliente-telefono').textContent = rep.cliente_telefono;
         document.getElementById('boleta-modelo').textContent = rep.dispositivo_modelo + (rep.color ? ` (${rep.color})` : '');
         document.getElementById('boleta-falla').textContent = rep.falla_reportada;
+
+        const elDiag = document.getElementById('boleta-diagnostico');
+        if (elDiag) {
+            elDiag.textContent = rep.diagnostico_tecnico || 'Diagnóstico y servicio general de taller';
+        }
+
         document.getElementById('boleta-condicion').textContent = rep.condicion_recepcion || 'Sin detalles estéticos reportados';
         document.getElementById('boleta-total').textContent = App.formatCurrency(rep.precio_servicio);
         document.getElementById('boleta-anticipo').textContent = App.formatCurrency(rep.anticipo);
@@ -372,7 +388,7 @@ Tu dispositivo ya está reparado y probado con éxito:
 
 📱 *Equipo:* ${rep.dispositivo_modelo}
 📋 *Folio:* ${rep.folio}
-🔧 *Servicio realizado:* ${rep.falla_reportada}
+🔧 *Servicio realizado:* ${rep.falla_reportada}${rep.diagnostico_tecnico ? `\n🛠️ *Diagnóstico / Refacción:* ${rep.diagnostico_tecnico}` : ''}
 💵 *Saldo pendiente a liquidar:* $${rep.saldo_pendiente.toLocaleString('es-MX', {minimumFractionDigits: 2})}
 
 ¡Ya puedes pasar a recogerlo en nuestro horario de atención! Muchas gracias por tu confianza. 🚀`;
