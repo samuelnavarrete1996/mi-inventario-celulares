@@ -1722,10 +1722,12 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     acc_capital = round(float(acc_inv_row["capital_invertido"] or 0), 2)
     acc_valor = round(float(acc_inv_row["valor_venta"] or 0), 2)
 
+    fecha_hace_30_dias = (ahora - timedelta(days=30)).strftime("%Y-%m-%d")
+
     # 6. Ventas de los últimos 30 días para gráfico (desglosado por celulares y accesorios)
     q_ventas_dias = """
     SELECT 
-        date(v.fecha_venta) as dia,
+        substr(v.fecha_venta, 1, 10) as dia,
         COALESCE(SUM(CASE WHEN vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL THEN vi.precio_final ELSE 0 END), 0) as ventas_celulares,
         COALESCE(SUM(CASE WHEN vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL THEN vi.margen_ganancia ELSE 0 END), 0) as ganancias_celulares,
         COALESCE(SUM(CASE WHEN vi.tipo_item = 'equipo' OR vi.equipo_id IS NOT NULL THEN vi.cantidad ELSE 0 END), 0) as unidades_celulares,
@@ -1737,13 +1739,13 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         COUNT(vi.id) as unidades
     FROM ventas v
     LEFT JOIN venta_items vi ON v.id = vi.venta_id
-    WHERE date(v.fecha_venta) >= date('now', '-30 days', 'localtime')
+    WHERE substr(v.fecha_venta, 1, 10) >= ?
     """
-    p_ventas_dias = []
+    p_ventas_dias = [fecha_hace_30_dias]
     if tenant_id is not None:
         q_ventas_dias += " AND v.tenant_id = ?"
         p_ventas_dias.append(tenant_id)
-    q_ventas_dias += " GROUP BY date(v.fecha_venta) ORDER BY dia ASC"
+    q_ventas_dias += " GROUP BY substr(v.fecha_venta, 1, 10) ORDER BY dia ASC"
     cursor.execute(q_ventas_dias, p_ventas_dias)
     ventas_dias = []
     for r in cursor.fetchall():
@@ -1755,19 +1757,19 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     # 6b. Ventas de Taller de los últimos 30 días para integrar al gráfico
     q_rep_dias = """
     SELECT 
-        date(COALESCE(fecha_entrega, fecha_ingreso)) as dia,
+        substr(COALESCE(fecha_entrega, fecha_ingreso), 1, 10) as dia,
         COALESCE(SUM(precio_servicio), 0) as ventas_taller,
         COALESCE(SUM(precio_servicio - costo_refaccion), 0) as ganancias_taller,
         COUNT(id) as unidades_taller
     FROM reparaciones
     WHERE estado != 'Cancelado'
-      AND date(COALESCE(fecha_entrega, fecha_ingreso)) >= date('now', '-30 days', 'localtime')
+      AND substr(COALESCE(fecha_entrega, fecha_ingreso), 1, 10) >= ?
     """
-    p_rep_dias = []
+    p_rep_dias = [fecha_hace_30_dias]
     if tenant_id is not None:
         q_rep_dias += " AND tenant_id = ?"
         p_rep_dias.append(tenant_id)
-    q_rep_dias += " GROUP BY date(COALESCE(fecha_entrega, fecha_ingreso)) ORDER BY dia ASC"
+    q_rep_dias += " GROUP BY substr(COALESCE(fecha_entrega, fecha_ingreso), 1, 10) ORDER BY dia ASC"
     cursor.execute(q_rep_dias, p_rep_dias)
     rep_dias_map = {str(r["dia"]): dict(r) for r in cursor.fetchall() if r["dia"]}
 
@@ -1839,9 +1841,9 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     p_row = cursor.fetchone()
 
     desglose_pagos = {
-        "Efectivo": round(p_row["total_efectivo"], 2),
-        "Transferencia": round(p_row["total_transferencia"], 2),
-        "Equipo Garantía": round(p_row["total_garantia"], 2)
+        "Efectivo": round(float((p_row["total_efectivo"] if p_row else 0) or 0), 2),
+        "Transferencia": round(float((p_row["total_transferencia"] if p_row else 0) or 0), 2),
+        "Equipo Garantía": round(float((p_row["total_garantia"] if p_row else 0) or 0), 2)
     }
 
     # 9. Top Celulares Más Vendidos en el Mes
@@ -1861,7 +1863,7 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     if tenant_id is not None:
         q_top_cel += " AND v.tenant_id = ?"
         p_top_cel.append(tenant_id)
-    q_top_cel += " GROUP BY 1 ORDER BY unidades DESC, ganancia DESC LIMIT 5"
+    q_top_cel += " GROUP BY 1 ORDER BY 2 DESC, 4 DESC LIMIT 5"
     cursor.execute(q_top_cel, p_top_cel)
     top_celulares = [
         {
@@ -1890,7 +1892,7 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     if tenant_id is not None:
         q_top_acc += " AND v.tenant_id = ?"
         p_top_acc.append(tenant_id)
-    q_top_acc += " GROUP BY 1 ORDER BY unidades DESC, ganancia DESC LIMIT 5"
+    q_top_acc += " GROUP BY 1 ORDER BY 2 DESC, 4 DESC LIMIT 5"
     cursor.execute(q_top_acc, p_top_acc)
     top_accesorios = [
         {
@@ -1904,17 +1906,21 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
 
     conn.close()
 
+    disp_val = int((stats_inv["disponibles"] if stats_inv else 0) or 0)
+    cap_val = round(float((stats_inv["capital_invertido"] if stats_inv else 0) or 0), 2)
+    val_val = round(float((stats_inv["valor_venta"] if stats_inv else 0) or 0), 2)
+
     return {
         # Métricas Consolidadas (Retrocompatibilidad)
         "total_ganancias_mes": total_ganancias,
         "total_ventas_mes": total_ventas,
         "equipos_vendidos_mes": eq_vendidos,
         "margen_promedio_mes": margen_promedio,
-        "equipos_disponibles": stats_inv["disponibles"],
-        "equipos_en_garantia": equipos_en_garantia,
-        "capital_inventario": round(stats_inv["capital_invertido"], 2),
-        "valor_venta_inventario": round(stats_inv["valor_venta"], 2),
-        "capital_inventario_total": round(stats_inv["capital_invertido"] + acc_capital, 2),
+        "equipos_disponibles": disp_val,
+        "equipos_en_garantia": int(equipos_en_garantia or 0),
+        "capital_inventario": cap_val,
+        "valor_venta_inventario": val_val,
+        "capital_inventario_total": round(cap_val + acc_capital, 2),
         "mes_actual_nombre": nombre_mes,
         "ventas_por_dia": ventas_dias,
         "distribucion_grados": grados_inv,
@@ -1925,9 +1931,9 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         "celulares_ganancias_mes": cel_ganancias,
         "celulares_unidades_mes": cel_unidades,
         "celulares_margen_pct": cel_margen_pct,
-        "celulares_stock_disponible": stats_inv["disponibles"],
-        "celulares_capital_inventario": round(stats_inv["capital_invertido"], 2),
-        "celulares_valor_venta_inventario": round(stats_inv["valor_venta"], 2),
+        "celulares_stock_disponible": disp_val,
+        "celulares_capital_inventario": cap_val,
+        "celulares_valor_venta_inventario": val_val,
         "celulares_top_vendidos": top_celulares,
 
         # 🎧 SECCIÓN 2: ANALÍTICA Y GANANCIAS DE ACCESORIOS

@@ -500,6 +500,23 @@ def _init_postgres_db(conn, cursor):
     _safe_exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_equipos_tenant_imei ON equipos(tenant_id, imei);")
     _safe_exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_reparaciones_tenant_folio ON reparaciones(tenant_id, folio);")
 
+    # Funciones auxiliares de compatibilidad SQLite -> PostgreSQL
+    _safe_exec("""
+        CREATE OR REPLACE FUNCTION date(val text) RETURNS text IMMUTABLE LANGUAGE sql AS $$
+            SELECT SUBSTR(val, 1, 10);
+        $$;
+    """)
+    _safe_exec("""
+        CREATE OR REPLACE FUNCTION date(val timestamp) RETURNS text IMMUTABLE LANGUAGE sql AS $$
+            SELECT TO_CHAR(val, 'YYYY-MM-DD');
+        $$;
+    """)
+    _safe_exec("""
+        CREATE OR REPLACE FUNCTION date(val timestamp with time zone) RETURNS text IMMUTABLE LANGUAGE sql AS $$
+            SELECT TO_CHAR(val, 'YYYY-MM-DD');
+        $$;
+    """)
+
     # Activar y forzar Row Level Security (RLS) en todas las tablas operativas
     rls_tablas = [
         'sucursales', 'configuracion_tienda', 'usuarios', 'equipos', 'accesorios',
