@@ -326,6 +326,7 @@ def _init_postgres_db(conn, cursor):
             falla_reportada TEXT NOT NULL,
             diagnostico_tecnico TEXT,
             condicion_recepcion TEXT,
+            checklist_recepcion TEXT,
             costo_refaccion DOUBLE PRECISION NOT NULL DEFAULT 0,
             precio_servicio DOUBLE PRECISION NOT NULL DEFAULT 0,
             anticipo DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -393,7 +394,24 @@ def _init_postgres_db(conn, cursor):
             fecha TEXT NOT NULL,
             tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE
         );""",
-        "CREATE INDEX IF NOT EXISTS idx_mov_stock_tenant ON movimientos_stock_accesorios(tenant_id);"
+        "CREATE INDEX IF NOT EXISTS idx_mov_stock_tenant ON movimientos_stock_accesorios(tenant_id);",
+
+        # 15. Gastos Operativos de Sucursal
+        """CREATE TABLE IF NOT EXISTS gastos (
+            id SERIAL PRIMARY KEY,
+            concepto VARCHAR(200) NOT NULL,
+            categoria VARCHAR(60) NOT NULL DEFAULT 'General',
+            monto DOUBLE PRECISION NOT NULL,
+            fecha TEXT NOT NULL,
+            metodo_pago VARCHAR(50) NOT NULL DEFAULT 'Efectivo',
+            comprobante_url VARCHAR(500),
+            usuario VARCHAR(100) NOT NULL DEFAULT 'Admin',
+            notas TEXT,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_gastos_tenant_sucursal ON gastos(tenant_id, sucursal_id);",
+        "CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);"
     ]
 
     for stmt in stmts:
@@ -407,6 +425,9 @@ def _init_postgres_db(conn, cursor):
         ("ventas", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
         ("reparaciones", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("reparaciones", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
+        ("reparaciones", "checklist_recepcion", "TEXT"),
+        ("gastos", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("gastos", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
         ("accesorios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("accesorios", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
         ("accesorios", "imagen_url", "VARCHAR(500)"),
@@ -458,7 +479,7 @@ def _init_postgres_db(conn, cursor):
         'sucursales', 'configuracion_tienda', 'usuarios', 'equipos', 'accesorios',
         'clientes', 'ventas', 'venta_items', 'abonos_ventas_credito',
         'movimientos_stock_accesorios', 'reparaciones', 'garantias', 'cortes_caja',
-        'garantias_historial', 'historial_ventas_cambios'
+        'garantias_historial', 'historial_ventas_cambios', 'gastos'
     ]
     for tbl in rls_tablas:
         try:
@@ -799,6 +820,7 @@ def init_db():
         falla_reportada TEXT NOT NULL,
         diagnostico_tecnico TEXT,
         condicion_recepcion TEXT,
+        checklist_recepcion TEXT,
         costo_refaccion REAL NOT NULL DEFAULT 0,
         precio_servicio REAL NOT NULL DEFAULT 0,
         anticipo REAL NOT NULL DEFAULT 0,
@@ -811,6 +833,38 @@ def init_db():
         notas TEXT
     );
     """)
+
+    cursor.execute("PRAGMA table_info(reparaciones);")
+    rep_cols = [row["name"] for row in cursor.fetchall()]
+    if "checklist_recepcion" not in rep_cols:
+        try:
+            cursor.execute("ALTER TABLE reparaciones ADD COLUMN checklist_recepcion TEXT;")
+        except Exception:
+            pass
+
+    # 8b. Tabla Gastos Operativos de Sucursal
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS gastos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        concepto TEXT NOT NULL,
+        categoria TEXT NOT NULL DEFAULT 'General',
+        monto REAL NOT NULL,
+        fecha TEXT NOT NULL,
+        metodo_pago TEXT NOT NULL DEFAULT 'Efectivo',
+        comprobante_url TEXT,
+        usuario TEXT NOT NULL DEFAULT 'Admin',
+        notas TEXT,
+        tenant_id INTEGER,
+        sucursal_id INTEGER,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+        FOREIGN KEY (sucursal_id) REFERENCES sucursales(id) ON DELETE SET NULL
+    );
+    """)
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_gastos_cat ON gastos(categoria);")
+    except Exception:
+        pass
 
     # 9. Tabla Usuarios (Autenticación y Control de Acceso por Roles RBAC)
     cursor.execute("""
@@ -859,6 +913,7 @@ def init_db():
         ("usuarios", True),
         ("garantias", True),
         ("garantias_historial", False),
+        ("gastos", True),
     ]
 
     for tabla, tiene_sucursal in tablas_multitenant:

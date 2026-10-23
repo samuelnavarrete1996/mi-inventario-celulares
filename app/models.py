@@ -545,6 +545,7 @@ class ReparacionCreate(BaseModel):
     falla_reportada: str = Field(..., min_length=2, max_length=500, description="Problema que reporta el cliente")
     diagnostico_tecnico: Optional[str] = Field(None, max_length=500)
     condicion_recepcion: Optional[str] = Field(None, max_length=500, description="Detalles estéticos con los que ingresa")
+    checklist_recepcion: Optional[str] = Field(None, description="Checklist JSON o resumen de inspección digital inicial")
     costo_refaccion: float = Field(0.0, ge=0)
     precio_servicio: float = Field(..., ge=0, description="Precio total a cobrar al cliente")
     anticipo: float = Field(0.0, ge=0, description="Monto dejado a cuenta")
@@ -569,6 +570,7 @@ class ReparacionUpdate(BaseModel):
     falla_reportada: Optional[str] = Field(None, min_length=2, max_length=500)
     diagnostico_tecnico: Optional[str] = Field(None, max_length=500)
     condicion_recepcion: Optional[str] = Field(None, max_length=500)
+    checklist_recepcion: Optional[str] = None
     costo_refaccion: Optional[float] = Field(None, ge=0)
     precio_servicio: Optional[float] = Field(None, ge=0)
     anticipo: Optional[float] = Field(None, ge=0)
@@ -613,6 +615,7 @@ class ReparacionResponse(BaseModel):
     falla_reportada: str
     diagnostico_tecnico: Optional[str] = None
     condicion_recepcion: Optional[str] = None
+    checklist_recepcion: Optional[str] = None
     costo_refaccion: Optional[float] = None
     precio_servicio: float
     anticipo: float
@@ -624,6 +627,49 @@ class ReparacionResponse(BaseModel):
     tecnico_responsable: Optional[str] = None
     notas: Optional[str] = None
     margen_ganancia: Optional[float] = None
+    tenant_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
+
+# --- MODELOS DE GASTOS OPERATIVOS ---
+
+CATEGORIAS_GASTO_VALIDAS = (
+    'Renta', 'Luz / Servicios', 'Sueldos', 'Publicidad',
+    'Refacciones', 'Comida / Viáticos', 'Mantenimiento',
+    'Herramientas', 'General', 'Otro'
+)
+
+class GastoCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    concepto: str = Field(..., min_length=2, max_length=200, description="Concepto o descripción del gasto")
+    categoria: str = Field("General", max_length=60, description="Categoría del gasto")
+    monto: float = Field(..., gt=0, description="Monto del gasto")
+    fecha: Optional[str] = Field(None, max_length=40, description="Fecha del gasto (YYYY-MM-DD o YYYY-MM-DD HH:MM:SS)")
+    metodo_pago: str = Field("Efectivo", max_length=50, description="Método de pago (Efectivo, Transferencia, Tarjeta)")
+    comprobante_url: Optional[str] = Field(None, max_length=500, description="URL o referencia de comprobante")
+    notas: Optional[str] = Field(None, max_length=500, description="Notas complementarias")
+    tenant_id: Optional[int] = Field(None, description="ID del tenant")
+    sucursal_id: Optional[int] = Field(None, description="ID de la sucursal")
+
+    @field_validator('monto')
+    def validate_monto_gasto(cls, v):
+        return _check_finite_float(v, "monto del gasto")
+
+    @field_validator('categoria')
+    def validate_categoria_gasto(cls, v):
+        if not v or not v.strip():
+            return "General"
+        return v.strip()[:60]
+
+class GastoResponse(BaseModel):
+    id: int
+    concepto: str
+    categoria: str
+    monto: float
+    fecha: str
+    metodo_pago: str
+    comprobante_url: Optional[str] = None
+    usuario: str
+    notas: Optional[str] = None
     tenant_id: Optional[int] = None
     sucursal_id: Optional[int] = None
 

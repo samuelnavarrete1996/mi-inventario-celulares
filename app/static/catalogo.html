@@ -43,6 +43,12 @@
             </div>
 
             <div class="flex items-center gap-2">
+                <!-- Botón Rastrear Reparación -->
+                <button onclick="Catalogo.abrirModalRastreo()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 active:bg-purple-200 border border-purple-200 rounded-xl text-xs font-bold transition-all cursor-pointer" title="Consulta el estatus de tu equipo en taller">
+                    <span>🔧</span>
+                    <span class="hidden sm:inline">Rastrear Reparación</span>
+                </button>
+
                 <!-- Botón Ver Carrito Header -->
                 <button onclick="Catalogo.abrirCarrito()" class="relative inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer">
                     <span class="text-sm">🛒</span>
@@ -215,6 +221,137 @@
     </div>
 
     <!-- ==================================================== -->
+    <!-- MODAL: PORTAL DE RASTREO DE REPARACIÓN EN TIEMPO REAL -->
+    <!-- ==================================================== -->
+    <div id="modal-rastreo-reparacion" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto hidden">
+        <div class="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+            <!-- Header -->
+            <div class="p-4 bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-700 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-xl shadow-inner">
+                        🔧
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-base leading-tight">Rastreo de Reparación</h3>
+                        <p class="text-xs text-purple-200 font-medium">Consulta el estatus de tu equipo en tiempo real</p>
+                    </div>
+                </div>
+                <button type="button" onclick="Catalogo.cerrarModalRastreo()" class="p-1.5 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Buscador de Folio -->
+            <div class="p-4 bg-slate-50 border-b border-slate-200">
+                <form onsubmit="event.preventDefault(); Catalogo.consultarReparacion();" class="flex gap-2">
+                    <div class="relative flex-1">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            🔍
+                        </span>
+                        <input type="text" id="input-rastreo-folio" placeholder="Ingresa tu folio (ej. REP-202610-001)" class="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold bg-white border border-slate-300 rounded-xl uppercase tracking-wider focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                    </div>
+                    <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1">
+                        <span>Consultar</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Contenido del Estado de Reparación -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="rastreo-resultado-container">
+                <div id="rastreo-initial-state" class="py-12 text-center text-slate-400 text-xs">
+                    <span class="text-3xl block mb-2">📋</span>
+                    Ingresa tu número de folio o escanea el código QR de tu boleta para ver el avance técnico.
+                </div>
+
+                <div id="rastreo-loading-state" class="hidden py-12 text-center text-slate-500 text-xs">
+                    <span class="inline-block animate-spin text-2xl mb-2">⏳</span>
+                    <p class="font-semibold">Buscando tu orden en el taller...</p>
+                </div>
+
+                <div id="rastreo-error-state" class="hidden p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs text-center font-medium">
+                    <span id="rastreo-error-msg">No se encontró información con el folio ingresado.</span>
+                </div>
+
+                <div id="rastreo-data-state" class="hidden space-y-4">
+                    <!-- Banner de Estado Destacado -->
+                    <div id="rastreo-banner-estado" class="p-3.5 rounded-2xl flex items-center justify-between">
+                        <!-- Inyectado por JS -->
+                    </div>
+
+                    <!-- Stepper Visual de 5 Pasos -->
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-2">Progreso del Servicio</span>
+                        <div class="grid grid-cols-5 gap-1 text-center" id="rastreo-stepper">
+                            <!-- Inyectado por JS -->
+                        </div>
+                    </div>
+
+                    <!-- Datos del Dispositivo y Diagnóstico -->
+                    <div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 text-xs">
+                        <div class="flex justify-between items-baseline border-b border-slate-100 pb-2">
+                            <div>
+                                <span class="text-[10px] uppercase font-bold text-slate-400 block">Equipo Registrado</span>
+                                <h4 id="rastreo-dispositivo" class="font-extrabold text-sm text-slate-900 leading-snug">--</h4>
+                            </div>
+                            <span id="rastreo-folio-badge" class="font-mono text-xs font-black text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200">--</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                                <span class="text-slate-400 block">Fecha de Ingreso:</span>
+                                <span id="rastreo-fecha-ingreso" class="font-bold text-slate-800">--</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block">Fecha Prometida:</span>
+                                <span id="rastreo-fecha-prometida" class="font-bold text-slate-800">--</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100">
+                            <span class="text-slate-400 block mb-1">Falla Reportada:</span>
+                            <p id="rastreo-falla" class="font-medium text-slate-800 bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed text-xs">--</p>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100" id="rastreo-container-diagnostico">
+                            <span class="text-slate-400 block mb-1">Diagnóstico & Calidad de Refacción:</span>
+                            <p id="rastreo-diagnostico" class="font-semibold text-indigo-950 bg-indigo-50/70 p-2.5 rounded-xl border border-indigo-100 leading-relaxed text-xs">--</p>
+                        </div>
+
+                        <!-- Resumen Financiero -->
+                        <div class="pt-2 border-t border-slate-100 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Costo Total del Servicio:</span>
+                                <span id="rastreo-total" class="font-bold text-slate-900">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Anticipo Pagado:</span>
+                                <span id="rastreo-anticipo" class="font-bold text-emerald-600">--</span>
+                            </div>
+                            <div class="flex justify-between pt-1 border-t border-slate-200 text-sm font-black">
+                                <span class="text-slate-800">Saldo Restante al Recoger:</span>
+                                <span id="rastreo-saldo" class="text-purple-700">--</span>
+                            </div>
+                        </div>
+
+                        <!-- Checklist de Entrada -->
+                        <div id="rastreo-container-checklist" class="pt-2 border-t border-slate-100 hidden">
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Inspección de Entrada Registrada</span>
+                            <div id="rastreo-checklist-badges" class="grid grid-cols-2 gap-1 text-[10px]">
+                                <!-- Inyectado dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botón Contactar Taller por WhatsApp -->
+                    <button type="button" id="btn-rastreo-whatsapp" onclick="Catalogo.contactarTallerWhatsApp()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2">
+                        <span>💬 Preguntar sobre mi Reparación por WhatsApp</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================== -->
     <!-- SLIDE-OVER DRAWER DEL CARRITO DE COMPRAS MAYORISTA   -->
     <!-- ==================================================== -->
     <div id="drawer-carrito" class="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs transition-opacity duration-300 hidden">
@@ -332,10 +469,188 @@
                 await this.cargarEquipos();
                 this.actualizarBadges();
 
+                // Verificar si se solicitó rastreo por URL (?check_rep=REP-XXXX)
+                const urlParams = new URLSearchParams(window.location.search);
+                const checkRep = urlParams.get('check_rep') || urlParams.get('reparacion') || urlParams.get('folio');
+                if (checkRep) {
+                    this.abrirModalRastreo(checkRep);
+                }
+
                 // Cerrar con Escape
                 document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape') this.cerrarCarrito();
+                    if (e.key === 'Escape') {
+                        this.cerrarCarrito();
+                        this.cerrarModalRastreo();
+                    }
                 });
+            },
+
+            reparacionConsultada: null,
+
+            abrirModalRastreo(folioInicial = '') {
+                const modal = document.getElementById('modal-rastreo-reparacion');
+                if (!modal) return;
+                modal.classList.remove('hidden');
+                const inp = document.getElementById('input-rastreo-folio');
+                if (folioInicial && inp) {
+                    inp.value = folioInicial;
+                    this.consultarReparacion(folioInicial);
+                } else if (inp) {
+                    inp.focus();
+                }
+            },
+
+            cerrarModalRastreo() {
+                const modal = document.getElementById('modal-rastreo-reparacion');
+                if (modal) modal.classList.add('hidden');
+            },
+
+            async consultarReparacion(folioParam = null) {
+                const folio = (folioParam || document.getElementById('input-rastreo-folio')?.value || '').trim();
+                if (!folio) {
+                    this.mostrarToast("Ingresa un número de folio para consultar", "warning");
+                    return;
+                }
+
+                const sInitial = document.getElementById('rastreo-initial-state');
+                const sLoading = document.getElementById('rastreo-loading-state');
+                const sError = document.getElementById('rastreo-error-state');
+                const sData = document.getElementById('rastreo-data-state');
+
+                sInitial.classList.add('hidden');
+                sError.classList.add('hidden');
+                sData.classList.add('hidden');
+                sLoading.classList.remove('hidden');
+
+                try {
+                    const res = await fetch(`/api/catalogo/reparacion/${encodeURIComponent(folio)}`);
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.detail || "No encontramos una orden con ese folio. Revisa el número e intenta nuevamente.");
+                    }
+                    const rep = await res.json();
+                    this.reparacionConsultada = rep;
+                    this.renderDetalleRastreo(rep);
+                    sLoading.classList.add('hidden');
+                    sData.classList.remove('hidden');
+                } catch (e) {
+                    sLoading.classList.add('hidden');
+                    sError.classList.remove('hidden');
+                    document.getElementById('rastreo-error-msg').textContent = e.message;
+                }
+            },
+
+            renderDetalleRastreo(rep) {
+                const pasos = [
+                    { key: 'Recibido', nombre: 'Recibido', icono: '📥' },
+                    { key: 'En Revision', nombre: 'En Revisión', icono: '🔬' },
+                    { key: 'Esperando Refaccion', nombre: 'Refacción', icono: '📦' },
+                    { key: 'Listo para Entrega', nombre: 'Listo', icono: '✨' },
+                    { key: 'Entregado', nombre: 'Entregado', icono: '🤝' }
+                ];
+
+                let idxActual = pasos.findIndex(p => p.key === rep.estado);
+                if (idxActual === -1) idxActual = 0;
+
+                const banner = document.getElementById('rastreo-banner-estado');
+                let bannerClass = "bg-purple-50 text-purple-900 border border-purple-200";
+                let bannerIcon = "🔧";
+                let bannerTxt = "Tu equipo está siendo atendido en nuestro taller.";
+
+                if (rep.estado === 'Listo para Entrega') {
+                    bannerClass = "bg-emerald-50 text-emerald-900 border border-emerald-300 animate-pulse";
+                    bannerIcon = "🎉";
+                    bannerTxt = "¡Tu equipo está LISTO PARA ENTREGA! Puedes pasar a recogerlo.";
+                } else if (rep.estado === 'Entregado') {
+                    bannerClass = "bg-blue-50 text-blue-900 border border-blue-200";
+                    bannerIcon = "✅";
+                    bannerTxt = "Equipo entregado con satisfacción y garantía.";
+                } else if (rep.estado === 'Esperando Refaccion') {
+                    bannerClass = "bg-amber-50 text-amber-900 border border-amber-200";
+                    bannerIcon = "📦";
+                    bannerTxt = "En espera de refacción de alta calidad.";
+                }
+
+                banner.className = `p-3.5 rounded-2xl flex items-center gap-3 ${bannerClass}`;
+                banner.innerHTML = `
+                    <span class="text-2xl">${bannerIcon}</span>
+                    <div class="flex-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider block opacity-75">Estado Actual: ${rep.estado}</span>
+                        <p class="text-xs font-bold leading-snug">${bannerTxt}</p>
+                    </div>
+                `;
+
+                const stepper = document.getElementById('rastreo-stepper');
+                stepper.innerHTML = pasos.map((p, idx) => {
+                    const completado = idx < idxActual;
+                    const esActual = idx === idxActual;
+
+                    let circleClass = "bg-slate-200 text-slate-500 border border-slate-300";
+                    let textClass = "text-slate-400";
+
+                    if (completado) {
+                        circleClass = "bg-emerald-500 text-white shadow-xs font-bold";
+                        textClass = "text-emerald-700 font-bold";
+                    } else if (esActual) {
+                        circleClass = "bg-purple-600 text-white ring-4 ring-purple-200 shadow-md animate-pulse font-bold";
+                        textClass = "text-purple-700 font-extrabold";
+                    }
+
+                    return `
+                        <div class="flex flex-col items-center">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs ${circleClass} mb-1">
+                                ${completado ? '✓' : p.icono}
+                            </div>
+                            <span class="text-[9px] leading-tight text-center ${textClass}">${p.nombre}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('rastreo-dispositivo').textContent = rep.dispositivo_modelo + (rep.color ? ` (${rep.color})` : '');
+                document.getElementById('rastreo-folio-badge').textContent = rep.folio;
+                document.getElementById('rastreo-fecha-ingreso').textContent = rep.fecha_ingreso || '--';
+                document.getElementById('rastreo-fecha-prometida').textContent = rep.fecha_prometida || 'Pendiente de definir';
+                document.getElementById('rastreo-falla').textContent = rep.falla_reportada || '--';
+
+                const contDiag = document.getElementById('rastreo-container-diagnostico');
+                if (rep.diagnostico_tecnico) {
+                    contDiag.classList.remove('hidden');
+                    document.getElementById('rastreo-diagnostico').textContent = rep.diagnostico_tecnico;
+                } else {
+                    contDiag.classList.add('hidden');
+                }
+
+                document.getElementById('rastreo-total').textContent = `$${(rep.precio_servicio || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+                document.getElementById('rastreo-anticipo').textContent = `$${(rep.anticipo || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+                document.getElementById('rastreo-saldo').textContent = `$${(rep.saldo_pendiente || 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+
+                const contChk = document.getElementById('rastreo-container-checklist');
+                const badgesChk = document.getElementById('rastreo-checklist-badges');
+                if (badgesChk && rep.checklist_recepcion) {
+                    try {
+                        const chk = typeof rep.checklist_recepcion === 'string' ? JSON.parse(rep.checklist_recepcion) : rep.checklist_recepcion;
+                        contChk.classList.remove('hidden');
+                        badgesChk.innerHTML = Object.entries(chk).map(([k, v]) => `
+                            <div class="p-1.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                                <span class="capitalize text-slate-500 font-semibold">${k}:</span>
+                                <span class="font-bold text-slate-800">${this.escapeHtml(v)}</span>
+                            </div>
+                        `).join('');
+                    } catch (e) {
+                        contChk.classList.add('hidden');
+                    }
+                } else {
+                    contChk.classList.add('hidden');
+                }
+            },
+
+            contactarTallerWhatsApp() {
+                if (!this.reparacionConsultada) return;
+                const rep = this.reparacionConsultada;
+                const tel = (rep.telefono_tienda || this.whatsappTienda || '').replace(/\D/g, '');
+                const numWA = tel ? (tel.length === 10 ? '52' + tel : tel) : '';
+                const msg = `Hola, quisiera consultar dudas sobre mi orden de reparación *${rep.folio}* correspondiente a un *${rep.dispositivo_modelo}*. ¡Gracias!`;
+                window.open(`https://wa.me/${numWA}?text=${encodeURIComponent(msg)}`, '_blank');
             },
 
             async cargarConfiguracionPublica() {

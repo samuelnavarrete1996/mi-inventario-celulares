@@ -97,6 +97,10 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                             <span>Reportes</span>
                         </button>
+                        <button data-tab="gastos" class="admin-only nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all" title="Control de Gastos Operativos y Ganancia Neta Real">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>Gastos</span>
+                        </button>
                         <button data-tab="configuracion" class="admin-only nav-tab-btn flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 transition-all" title="Ajustes de tienda, logotipo y formato de tickets">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                             <span>Ajustes</span>
@@ -1077,6 +1081,27 @@
                         <span class="text-[10px] text-slate-400">Valor venta: <span id="dash-valor-venta-inventario">$0.00</span></span>
                     </div>
                 </div>
+
+                <!-- Resumen de Ganancia Neta Real (Descontando Gastos Operativos) -->
+                <div class="mt-4 pt-3.5 border-t border-slate-700/80 grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                    <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-300 block">1. Ganancia Bruta del Mes</span>
+                        <div id="dash-ganancia-bruta-mes" class="text-xl font-black text-white mt-0.5">$0.00</div>
+                        <span class="text-[10px] text-slate-400">Total ventas - costos directos</span>
+                    </div>
+                    <div class="bg-rose-500/10 rounded-xl p-3 border border-rose-500/20">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-rose-300 block">2. Gastos Operativos del Mes</span>
+                        <div id="dash-total-gastos-mes" class="text-xl font-black text-rose-400 mt-0.5">$0.00</div>
+                        <span class="text-[10px] text-rose-300/80">Renta, servicios, sueldos, refacciones</span>
+                    </div>
+                    <div class="bg-gradient-to-r from-emerald-600/30 to-teal-600/30 rounded-xl p-3 border border-emerald-400/40">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-emerald-300 block flex items-center gap-1">
+                            <span>✨</span> 3. Ganancia Neta Real (En Bolsillo)
+                        </span>
+                        <div id="dash-ganancia-neta-real" class="text-2xl font-black text-emerald-300 mt-0.5">$0.00</div>
+                        <span class="text-[10px] text-emerald-200/90 font-medium">Ganancia bruta menos gastos</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Gráfico Comparativo de Ventas y Ganancias -->
@@ -1275,6 +1300,96 @@
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">Diagnóstico / Refacción requerida</label>
                                 <input type="text" id="rep-input-diag" placeholder="ej. Pantalla OLED GX + TrueTone" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:bg-white focus:outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Checklist Digital de Inspección de Entrada -->
+                        <div class="space-y-3 pt-2 border-t border-slate-100">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Inspección de Entrada (Checklist)</h4>
+                                <span class="text-[10px] text-purple-600 font-semibold cursor-pointer hover:underline" onclick="Reparaciones.marcarTodoChecklist('OK')">Marcar todo OK</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Enciende</label>
+                                    <select id="rep-chk-enciende" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="Sí" selected>✅ Sí Enciende</option>
+                                        <option value="No">❌ Apagado / Muerto</option>
+                                        <option value="Bootloop">⚠️ Reinicios continuos</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Pantalla / Touch</label>
+                                    <select id="rep-chk-touch" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="OK" selected>✅ Touch & Display OK</option>
+                                        <option value="Cristal Roto">⚠️ Cristal roto / Da imagen</option>
+                                        <option value="Sin Imagen">❌ Pantalla negra / Sin imagen</option>
+                                        <option value="Touch Dañado">❌ Touch no responde</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Face ID / Huella</label>
+                                    <select id="rep-chk-biometria" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="OK" selected>✅ Funcional</option>
+                                        <option value="No Funciona">❌ Dañado / Desactivado</option>
+                                        <option value="No Aplica">⚪ No Aplica</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Cámaras (Front/Tras)</label>
+                                    <select id="rep-chk-camaras" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="OK" selected>✅ Ambas OK</option>
+                                        <option value="Falla Trasera">⚠️ Falla Trasera</option>
+                                        <option value="Falla Frontal">⚠️ Falla Frontal</option>
+                                        <option value="Lente Roto">❌ Lente estrellado</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Audio / Micrófono</label>
+                                    <select id="rep-chk-audio" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="OK" selected>✅ Bocinas & Mic OK</option>
+                                        <option value="Distorsión">⚠️ Audio bajo / distorsión</option>
+                                        <option value="No Suena">❌ No suena bocina</option>
+                                        <option value="Mic Dañado">❌ No escuchan mi voz</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Puerto de Carga</label>
+                                    <select id="rep-chk-carga" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="OK" selected>✅ Carga Normal</option>
+                                        <option value="Falso Contacto">⚠️ Falso contacto</option>
+                                        <option value="Dañado">❌ No carga / Dañado</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Señal / WiFi / SIM</label>
+                                    <select id="rep-chk-senial" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="OK" selected>✅ Lee SIM y WiFi OK</option>
+                                        <option value="Sin Señal">❌ Sin servicio / Sin señal</option>
+                                        <option value="WiFi Dañado">❌ WiFi gris / no activa</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Tapa Trasera / Chasis</label>
+                                    <select id="rep-chk-chasis" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="Impecable" selected>✨ Impecable</option>
+                                        <option value="Rayones Leves">⚠️ Rayones de uso</option>
+                                        <option value="Golpeado">⚠️ Chasis doblado/golpeado</option>
+                                        <option value="Tapa Rota">❌ Tapa trasera estrellada</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Botones Físicos</label>
+                                    <select id="rep-chk-botones" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                        <option value="OK" selected>✅ Suaves y funcionales</option>
+                                        <option value="Duros">⚠️ Duros / Falso</option>
+                                        <option value="Hundidos">❌ Hundidos / No funcionan</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-600 mb-0.5">Batería Salud / Carga</label>
+                                    <input type="text" id="rep-chk-bateria" placeholder="ej. 85% / 50% carga" class="w-full px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium">
+                                </div>
                             </div>
                         </div>
 
@@ -1547,6 +1662,104 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ============================================================== -->
+        <!-- PESTAÑA 7: CONTROL DE GASTOS OPERATIVOS Y GANANCIA NETA REAL   -->
+        <!-- ============================================================== -->
+        <section id="view-gastos" class="tab-view hidden space-y-6">
+            <!-- Header de Gastos -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-rose-600 uppercase tracking-wider bg-rose-50 px-2.5 py-1 rounded-full">Finanzas & Egresos</span>
+                        <span class="text-xs font-semibold text-slate-400">Multi-tenant RLS</span>
+                    </div>
+                    <h2 class="text-2xl font-black text-slate-900 mt-1">Control de Gastos Operativos</h2>
+                    <p class="text-xs text-slate-500">Registra renta, luz, sueldos, refacciones y viáticos para calcular tu ganancia neta real.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="Gastos.abrirModalNuevo()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition-all flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <span>+ Registrar Gasto</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPI Cards de Gastos -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-gradient-to-br from-rose-600 to-red-700 rounded-2xl p-5 text-white shadow-md shadow-rose-500/20">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-rose-200 block mb-1">Total Gastos (Mes Actual)</span>
+                    <div id="gastos-stat-mes" class="text-3xl font-black tracking-tight">$0.00</div>
+                    <p class="text-xs text-rose-100 mt-2">Deducible del margen bruto de ventas</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Gastos Registrados Hoy</span>
+                    <div id="gastos-stat-hoy" class="text-2xl font-black text-slate-900 tracking-tight">$0.00</div>
+                    <p class="text-xs text-slate-500 mt-2"><span id="gastos-stat-count-hoy">0</span> egresos reportados</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Mayor Categoría de Gasto</span>
+                    <div id="gastos-stat-top-cat" class="text-xl font-black text-slate-900 tracking-tight">--</div>
+                    <p class="text-xs text-slate-500 mt-2" id="gastos-stat-top-monto">$0.00 acumulado</p>
+                </div>
+            </div>
+
+            <!-- Filtros y Tabla de Gastos -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Filtrar por Mes</label>
+                            <input type="month" id="gastos-filtro-mes" onchange="Gastos.cargar()" class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-400 mb-1">Categoría</label>
+                            <select id="gastos-filtro-categoria" onchange="Gastos.cargar()" class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-slate-700">
+                                <option value="Todas" selected>Todas las categorías</option>
+                                <option value="Renta">Renta</option>
+                                <option value="Luz / Servicios">Luz / Servicios</option>
+                                <option value="Sueldos">Sueldos</option>
+                                <option value="Publicidad">Publicidad</option>
+                                <option value="Refacciones">Refacciones</option>
+                                <option value="Comida / Viáticos">Comida / Viáticos</option>
+                                <option value="Mantenimiento">Mantenimiento</option>
+                                <option value="Herramientas">Herramientas</option>
+                                <option value="General">General</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                    </div>
+                    <span id="gastos-total-filtrado-txt" class="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                        Total filtrado: $0.00
+                    </span>
+                </div>
+
+                <!-- Tabla -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                                <th class="p-3 rounded-l-xl">Fecha</th>
+                                <th class="p-3">Concepto</th>
+                                <th class="p-3">Categoría</th>
+                                <th class="p-3">Método de Pago</th>
+                                <th class="p-3">Monto</th>
+                                <th class="p-3">Registrado por</th>
+                                <th class="p-3 text-right rounded-r-xl">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-gastos" class="divide-y divide-slate-100">
+                            <!-- Inyectado dinámicamente -->
+                        </tbody>
+                    </table>
+                    <div id="gastos-empty-state" class="hidden py-12 text-center text-slate-400 text-xs">
+                        <span class="text-3xl block mb-2">💸</span>
+                        No hay gastos registrados para este mes o categoría.
+                    </div>
                 </div>
             </div>
         </section>
@@ -2627,11 +2840,14 @@
                     <input type="text" id="corte-notas" placeholder="Ej. Se dejaron $500 de fondo de caja para cambio..." class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none">
                 </div>
 
-                <div class="flex justify-between items-center pt-3 border-t border-slate-100">
+                <div class="flex justify-between items-center pt-3 border-t border-slate-100 flex-wrap gap-2">
                     <button type="button" onclick="Caja.verHistorial()" class="text-xs text-blue-600 hover:text-blue-700 font-bold">
                         📜 Ver Cortes Anteriores
                     </button>
-                    <div class="flex gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button type="button" onclick="Caja.enviarCorteWhatsApp()" class="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold rounded-xl text-xs flex items-center gap-1 transition-all" title="Enviar balance del corte por WhatsApp al dueño">
+                            <span>📲 WhatsApp Dueño</span>
+                        </button>
                         <button type="button" onclick="Caja.cerrarModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">Cancelar</button>
                         <button type="button" onclick="Caja.confirmarCorte()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 transition-all">
                             Finalizar y Cerrar Turno
@@ -2679,6 +2895,83 @@
             <div class="flex justify-end pt-3 border-t border-slate-100 mt-4">
                 <button type="button" onclick="Caja.cerrarHistorial()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all">Cerrar</button>
             </div>
+        </div>
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MODAL: REGISTRAR GASTO OPERATIVO                     -->
+    <!-- ==================================================== -->
+    <div id="modal-nuevo-gasto" class="modal-sheet-mobile hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in duration-150">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="p-2 bg-rose-50 text-rose-600 rounded-xl text-lg font-black">💸</span>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base leading-tight">Registrar Gasto</h3>
+                        <p class="text-xs text-slate-400">Salida de dinero de la sucursal</p>
+                    </div>
+                </div>
+                <button type="button" onclick="Gastos.cerrarModal()" class="text-slate-400 hover:text-slate-700 p-1 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <form id="form-nuevo-gasto" onsubmit="event.preventDefault(); Gastos.guardar();" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Concepto o Descripción *</label>
+                    <input type="text" id="gasto-concepto" required placeholder="Ej. Pago de luz de la sucursal / Refacciones de pantalla" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Categoría *</label>
+                        <select id="gasto-categoria" required class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none font-semibold">
+                            <option value="Renta">Renta</option>
+                            <option value="Luz / Servicios">Luz / Servicios</option>
+                            <option value="Sueldos">Sueldos</option>
+                            <option value="Publicidad">Publicidad</option>
+                            <option value="Refacciones">Refacciones</option>
+                            <option value="Comida / Viáticos">Comida / Viáticos</option>
+                            <option value="Mantenimiento">Mantenimiento</option>
+                            <option value="Herramientas">Herramientas</option>
+                            <option value="General" selected>General</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Monto ($) *</label>
+                        <input type="number" id="gasto-monto" step="any" min="0.01" required placeholder="0.00" class="w-full px-3 py-2 text-xs font-black text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Método de Pago</label>
+                        <select id="gasto-metodo-pago" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none font-semibold">
+                            <option value="Efectivo" selected>Efectivo</option>
+                            <option value="Transferencia">Transferencia</option>
+                            <option value="Tarjeta">Tarjeta</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Fecha</label>
+                        <input type="date" id="gasto-fecha" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Notas u Observaciones (opcional)</label>
+                    <input type="text" id="gasto-notas" placeholder="Ej. Factura #4421 / Comprobante en caja" class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white focus:outline-none">
+                </div>
+
+                <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                    <button type="button" onclick="Gastos.cerrarModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-all">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold rounded-xl shadow-md shadow-rose-600/20 transition-all">
+                        Guardar Gasto
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -3021,6 +3314,14 @@
                         <span class="text-slate-400 block mb-0.5">Condición / Accesorios Dejados:</span>
                         <p id="boleta-condicion" class="text-slate-600 italic bg-slate-50 p-2 rounded-lg border border-slate-100 text-[11px]">--</p>
                     </div>
+
+                    <!-- Checklist de Inspección Inicial Impreso -->
+                    <div id="boleta-container-checklist" class="mt-2 pt-2 border-t border-slate-200">
+                        <span class="text-slate-500 font-bold block mb-1 text-[11px] uppercase tracking-wider">Inspección de Entrada (Checklist Táctil):</span>
+                        <div id="boleta-checklist-grid" class="grid grid-cols-2 gap-1 text-[10px] bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            <!-- Se renderiza dinámicamente -->
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Presupuesto y Saldos -->
@@ -3045,6 +3346,13 @@
                     <p class="italic">Toda reparación cuenta con garantía sobre el componente reemplazado. Equipos no reclamados después de 30 días generarán cargo por almacenaje. Indispensable presentar esta boleta física o digital para su entrega.</p>
                     <div class="pt-1 font-mono text-[9px] text-slate-400 uppercase tracking-widest">
                         ¡Gracias por tu confianza!
+                    </div>
+
+                    <!-- Firma de Conformidad del Cliente (Blindaje contra reclamos) -->
+                    <div class="mt-4 pt-4 border-t border-dashed border-slate-400 text-center">
+                        <div class="h-10 border-b border-slate-800 w-4/5 mx-auto mb-1"></div>
+                        <p class="text-[10px] font-black text-slate-800 uppercase tracking-wider">Firma de Conformidad del Cliente</p>
+                        <p class="text-[9px] text-slate-500 italic mt-0.5">Acepto el diagnóstico preliminar, los términos del taller y el estado físico de recepción asentado en esta orden.</p>
                     </div>
 
                     <!-- Código QR para consulta de reparación -->
@@ -3236,5 +3544,6 @@
     <script src="/static/js/qrcode.min.js"></script>
     <script src="/static/js/configuracion.js?v=20261019_v18"></script>
     <script src="/static/js/empleados.js?v=20261021_v1"></script>
+    <script src="/static/js/gastos.js?v=20261023_v1"></script>
 </body>
 </html>

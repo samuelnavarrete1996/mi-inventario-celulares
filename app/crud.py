@@ -1657,6 +1657,24 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     eq_vendidos = cel_unidades
     margen_promedio = round((total_ganancias / total_ventas * 100), 1) if total_ventas > 0 else 0.0
 
+    # 3.5 Gastos Operativos y Ganancia Neta Real del mes actual
+    q_gastos_mes = """
+    SELECT COALESCE(SUM(monto), 0) as total_gastos
+    FROM gastos
+    WHERE substr(fecha, 1, 7) = ?
+    """
+    p_gastos_mes = [mes_actual_str]
+    if tenant_id is not None:
+        q_gastos_mes += " AND tenant_id = ?"
+        p_gastos_mes.append(tenant_id)
+    try:
+        cursor.execute(q_gastos_mes, p_gastos_mes)
+        gastos_mes_row = cursor.fetchone()
+        total_gastos = round(float(gastos_mes_row["total_gastos"] or 0), 2)
+    except Exception:
+        total_gastos = 0.0
+    ganancia_neta_mes = round(total_ganancias - total_gastos, 2)
+
     # 4. Inventario Activo de Celulares
     q_stats_inv = """
     SELECT 
@@ -1922,7 +1940,11 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         "reparaciones_ventas_mes": rep_ventas,
         "reparaciones_ganancias_mes": rep_ganancias,
         "reparaciones_unidades_mes": rep_unidades,
-        "reparaciones_margen_pct": rep_margen_pct
+        "reparaciones_margen_pct": rep_margen_pct,
+
+        # 💰 SECCIÓN 4: GASTOS OPERATIVOS Y GANANCIA NETA REAL
+        "total_gastos_mes": total_gastos,
+        "ganancia_neta_mes": ganancia_neta_mes
     }
 
 # ==============================================================================
@@ -2859,6 +2881,29 @@ def get_reparacion_by_id(rep_id: int, tenant_id: Optional[int] = None) -> Option
     res["margen_ganancia"] = round(res["precio_servicio"] - res["costo_refaccion"], 2)
     return res
 
+def get_reparacion_publica_by_folio(folio: str) -> Optional[Dict[str, Any]]:
+    """Consulta segura y pública del estado de una orden de servicio para clientes (portal web / QR)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT r.folio, r.dispositivo_modelo, r.color, r.estado, r.falla_reportada,
+               r.diagnostico_tecnico, r.fecha_ingreso, r.fecha_prometida, r.fecha_entrega,
+               r.precio_servicio, r.anticipo, r.saldo_pendiente, r.checklist_recepcion,
+               r.tenant_id,
+               COALESCE(t.nombre_comercial, 'Taller Técnico') as nombre_tienda,
+               COALESCE(cfg.whatsapp_notificaciones, t.telefono, '') as telefono_tienda
+        FROM reparaciones r
+        LEFT JOIN tenants t ON r.tenant_id = t.id
+        LEFT JOIN configuracion_tienda cfg ON (cfg.tenant_id = r.tenant_id)
+        WHERE UPPER(TRIM(r.folio)) = UPPER(TRIM(?))
+        ORDER BY cfg.id DESC LIMIT 1;
+    """, (folio,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return dict(row)
+
 def create_reparacion(
     datos: Dict[str, Any],
     tenant_id: Optional[int] = None,
@@ -2888,11 +2933,11 @@ def create_reparacion(
         INSERT INTO reparaciones (
             folio, cliente_nombre, cliente_telefono, dispositivo_modelo, color,
             imei_serie, codigo_patron, falla_reportada, diagnostico_tecnico,
-            condicion_recepcion, costo_refaccion, precio_servicio, anticipo,
+            condicion_recepcion, checklist_recepcion, costo_refaccion, precio_servicio, anticipo,
             saldo_pendiente, estado, fecha_ingreso, fecha_prometida,
             tecnico_responsable, notas, tenant_id, sucursal_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido', ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Recibido', ?, ?, ?, ?, ?, ?)
         """, (
             folio,
             datos["cliente_nombre"].strip(),
@@ -2904,6 +2949,7 @@ def create_reparacion(
             datos["falla_reportada"].strip(),
             datos.get("diagnostico_tecnico", "").strip() if datos.get("diagnostico_tecnico") else None,
             datos.get("condicion_recepcion", "").strip() if datos.get("condicion_recepcion") else None,
+            datos.get("checklist_recepcion", "").strip() if datos.get("checklist_recepcion") else None,
             float(datos.get("costo_refaccion", 0)),
             precio,
             anticipo,
@@ -2927,7 +2973,7 @@ def create_reparacion(
 COLUMNAS_PERMITIDAS_REPARACION = {
     "cliente_nombre", "cliente_telefono", "dispositivo_modelo", "color",
     "imei_serie", "codigo_patron", "falla_reportada", "diagnostico_tecnico",
-    "condicion_recepcion", "costo_refaccion", "precio_servicio", "anticipo",
+    "condicion_recepcion", "checklist_recepcion", "costo_refaccion", "precio_servicio", "anticipo",
     "saldo_pendiente", "estado", "fecha_ingreso", "fecha_prometida",
     "fecha_entrega", "tecnico_responsable", "notas"
 }
@@ -3365,4 +3411,164 @@ def update_empleado_estado(empleado_id: int, activo: bool, tenant_id: int) -> Op
         raise
     finally:
         conn.close()
+
+
+# ==============================================================================
+# GASTOS OPERATIVOS Y CONTROL DE GANANCIA NETA REAL
+# ==============================================================================
+
+def crear_gasto(
+    datos: Dict[str, Any],
+    usuario_nombre: str = "Admin",
+    tenant_id: Optional[int] = None,
+    sucursal_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """Registra un nuevo gasto operativo con aislamiento multi-tenant."""
+    conn = get_db_connection(tenant_id=tenant_id)
+    cursor = conn.cursor()
+
+    if tenant_id is None:
+        def_t, def_s = _get_default_tenant_and_sucursal()
+        final_tenant_id = def_t
+        final_sucursal_id = def_s
+    else:
+        final_tenant_id = tenant_id
+        final_sucursal_id = sucursal_id
+
+    fecha_final = datos.get("fecha") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        _begin_immediate(cursor)
+        cursor.execute("""
+            INSERT INTO gastos (
+                concepto, categoria, monto, fecha, metodo_pago,
+                comprobante_url, usuario, notas, tenant_id, sucursal_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datos["concepto"].strip(),
+            datos.get("categoria", "General").strip(),
+            float(datos["monto"]),
+            fecha_final,
+            datos.get("metodo_pago", "Efectivo").strip(),
+            datos.get("comprobante_url"),
+            usuario_nombre,
+            datos.get("notas", "").strip() if datos.get("notas") else None,
+            final_tenant_id,
+            final_sucursal_id
+        ))
+        conn.commit()
+        gasto_id = cursor.lastrowid
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return get_gasto_by_id(gasto_id, tenant_id=final_tenant_id)
+
+
+def get_gasto_by_id(gasto_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene un gasto por su ID verificando tenant_id."""
+    conn = get_db_connection(tenant_id=tenant_id)
+    cursor = conn.cursor()
+    if tenant_id is not None:
+        cursor.execute("SELECT * FROM gastos WHERE id = ? AND tenant_id = ?", (gasto_id, tenant_id))
+    else:
+        cursor.execute("SELECT * FROM gastos WHERE id = ?", (gasto_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_gastos(
+    tenant_id: Optional[int] = None,
+    mes: Optional[str] = None,
+    categoria: Optional[str] = None,
+    sucursal_id: Optional[int] = None,
+    limit: int = 500
+) -> List[Dict[str, Any]]:
+    """Obtiene la lista de gastos operativos con filtros opcionales por mes y categoría."""
+    conn = get_db_connection(tenant_id=tenant_id)
+    cursor = conn.cursor()
+    query = "SELECT * FROM gastos WHERE 1=1"
+    params: List[Any] = []
+
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
+
+    if sucursal_id is not None:
+        query += " AND sucursal_id = ?"
+        params.append(sucursal_id)
+
+    if mes:
+        query += " AND substr(fecha, 1, 7) = ?"
+        params.append(mes.strip())
+
+    if categoria and categoria != "Todas" and categoria != "Todos":
+        query += " AND categoria = ?"
+        params.append(categoria.strip())
+
+    query += " ORDER BY fecha DESC, id DESC LIMIT ?"
+    params.append(limit)
+
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def eliminar_gasto(gasto_id: int, tenant_id: Optional[int] = None) -> bool:
+    """Elimina un gasto operativo."""
+    conn = get_db_connection(tenant_id=tenant_id)
+    cursor = conn.cursor()
+    try:
+        _begin_immediate(cursor)
+        if tenant_id is not None:
+            cursor.execute("DELETE FROM gastos WHERE id = ? AND tenant_id = ?", (gasto_id, tenant_id))
+        else:
+            cursor.execute("DELETE FROM gastos WHERE id = ?", (gasto_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        return deleted
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def get_resumen_gastos(
+    tenant_id: Optional[int] = None,
+    mes: Optional[str] = None
+) -> Dict[str, Any]:
+    """Calcula totales y desglose por categoría de gastos para un mes específico."""
+    conn = get_db_connection(tenant_id=tenant_id)
+    cursor = conn.cursor()
+
+    mes_target = mes or datetime.now().strftime("%Y-%m")
+
+    query = """
+        SELECT categoria, COALESCE(SUM(monto), 0) as total, COUNT(id) as cantidad
+        FROM gastos
+        WHERE substr(fecha, 1, 7) = ?
+    """
+    params = [mes_target]
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
+    query += " GROUP BY categoria ORDER BY total DESC"
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    desglose = {r["categoria"]: round(float(r["total"]), 2) for r in rows}
+    total_mes = round(sum(desglose.values()), 2)
+    conn.close()
+
+    return {
+        "mes": mes_target,
+        "total_mes": total_mes,
+        "desglose_por_categoria": desglose
+    }
 

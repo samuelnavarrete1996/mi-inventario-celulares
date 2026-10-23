@@ -170,6 +170,33 @@ const Reparaciones = {
         }).join('');
     },
 
+    marcarTodoChecklist(val) {
+        const selects = ['rep-chk-enciende', 'rep-chk-touch', 'rep-chk-biometria', 'rep-chk-camaras', 'rep-chk-audio', 'rep-chk-carga', 'rep-chk-senial', 'rep-chk-chasis', 'rep-chk-botones'];
+        selects.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.options.length > 0) el.selectedIndex = 0;
+        });
+        const bat = document.getElementById('rep-chk-bateria');
+        if (bat && !bat.value) bat.value = '100% OK';
+        App.showToast("Checklist marcado en óptimas condiciones", "info");
+    },
+
+    obtenerChecklistJSON() {
+        const obj = {
+            enciende: document.getElementById('rep-chk-enciende')?.value || 'Sí',
+            touch: document.getElementById('rep-chk-touch')?.value || 'OK',
+            biometria: document.getElementById('rep-chk-biometria')?.value || 'OK',
+            camaras: document.getElementById('rep-chk-camaras')?.value || 'OK',
+            audio: document.getElementById('rep-chk-audio')?.value || 'OK',
+            carga: document.getElementById('rep-chk-carga')?.value || 'OK',
+            senial: document.getElementById('rep-chk-senial')?.value || 'OK',
+            chasis: document.getElementById('rep-chk-chasis')?.value || 'Impecable',
+            botones: document.getElementById('rep-chk-botones')?.value || 'OK',
+            bateria: document.getElementById('rep-chk-bateria')?.value.trim() || 'No verificada'
+        };
+        return JSON.stringify(obj);
+    },
+
     async guardar() {
         const nombre = document.getElementById('rep-input-cliente')?.value.trim();
         const telefono = document.getElementById('rep-input-telefono')?.value.trim();
@@ -184,6 +211,7 @@ const Reparaciones = {
         const precio = parseFloat(document.getElementById('rep-input-precio')?.value) || 0;
         const anticipo = parseFloat(document.getElementById('rep-input-anticipo')?.value) || 0;
         const fechaProm = document.getElementById('rep-input-fecha-prom')?.value || null;
+        const checklist = this.obtenerChecklistJSON();
 
         if (!nombre || !telefono || !modelo || !falla) {
             App.showToast("Completa los campos obligatorios (*).", "warning");
@@ -204,6 +232,7 @@ const Reparaciones = {
                     falla_reportada: falla,
                     diagnostico_tecnico: diag,
                     condicion_recepcion: condicion,
+                    checklist_recepcion: checklist,
                     costo_refaccion: costo,
                     precio_servicio: precio,
                     anticipo: anticipo,
@@ -317,6 +346,68 @@ const Reparaciones = {
         }
 
         document.getElementById('boleta-condicion').textContent = rep.condicion_recepcion || 'Sin detalles estéticos reportados';
+
+        // Renderizar Checklist en la Boleta
+        const contChecklist = document.getElementById('boleta-container-checklist');
+        const gridChecklist = document.getElementById('boleta-checklist-grid');
+        if (gridChecklist) {
+            let chk = null;
+            if (rep.checklist_recepcion) {
+                try {
+                    chk = typeof rep.checklist_recepcion === 'string' ? JSON.parse(rep.checklist_recepcion) : rep.checklist_recepcion;
+                } catch (e) {
+                    chk = null;
+                }
+            }
+            if (chk && typeof chk === 'object') {
+                if (contChecklist) contChecklist.classList.remove('hidden');
+                gridChecklist.innerHTML = `
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Enciende:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.enciende || 'Sí')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Pantalla/Touch:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.touch || 'OK')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Huella/Face ID:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.biometria || 'OK')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Cámaras:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.camaras || 'OK')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Audio/Mic:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.audio || 'OK')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Puerto Carga:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.carga || 'OK')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Señal/WiFi:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.senial || 'OK')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Tapa/Chasis:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.chasis || 'Impecable')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Botones:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.botones || 'OK')}</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-0.5">
+                        <span class="text-slate-500">Batería:</span>
+                        <span class="font-bold text-slate-800">${App.escapeHtml(chk.bateria || 'OK')}</span>
+                    </div>
+                `;
+            } else {
+                if (contChecklist) contChecklist.classList.add('hidden');
+            }
+        }
+
         document.getElementById('boleta-total').textContent = App.formatCurrency(rep.precio_servicio);
         document.getElementById('boleta-anticipo').textContent = App.formatCurrency(rep.anticipo);
         document.getElementById('boleta-saldo').textContent = App.formatCurrency(rep.saldo_pendiente);
@@ -329,15 +420,11 @@ const Reparaciones = {
         const elTecnico = document.getElementById('boleta-tecnico');
         if (elTecnico) elTecnico.textContent = rep.tecnico_responsable || 'Samuel N.';
 
-        // Generar QR para la boleta de servicio (consulta en línea o WhatsApp con folio)
+        // Generar QR para la boleta de servicio (consulta en línea del estatus en portal web)
         const qrContainer = document.getElementById('boleta-qr-container');
         if (qrContainer && typeof QRCode !== 'undefined') {
             qrContainer.innerHTML = '';
-            const wsp = (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.datos && ConfiguracionTienda.datos.whatsapp_notificaciones) || '';
-            const telLimpio = wsp.replace(/\D/g, '');
-            const qrUrl = telLimpio
-                ? 'https://wa.me/' + telLimpio + '?text=' + encodeURIComponent('Hola, quisiera consultar el estatus de mi orden #' + rep.folio)
-                : window.location.origin + '/catalogo?check_rep=' + encodeURIComponent(rep.folio);
+            const qrUrl = window.location.origin + '/catalogo?check_rep=' + encodeURIComponent(rep.folio);
             try {
                 new QRCode(qrContainer, {
                     text: qrUrl,

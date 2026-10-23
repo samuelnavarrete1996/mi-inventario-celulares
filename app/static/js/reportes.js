@@ -105,6 +105,18 @@ const Reportes = {
                 document.getElementById('dash-valor-venta-inventario').textContent = App.formatCurrency(totalValor);
             }
 
+            // Resumen de Ganancia Bruta vs Gastos vs Ganancia Neta Real
+            if (document.getElementById('dash-ganancia-bruta-mes')) {
+                document.getElementById('dash-ganancia-bruta-mes').textContent = App.formatCurrency(data.total_ganancias_mes);
+            }
+            if (document.getElementById('dash-total-gastos-mes')) {
+                document.getElementById('dash-total-gastos-mes').textContent = App.formatCurrency(data.total_gastos_mes || 0);
+            }
+            if (document.getElementById('dash-ganancia-neta-real')) {
+                const neta = data.ganancia_neta_mes != null ? data.ganancia_neta_mes : data.total_ganancias_mes;
+                document.getElementById('dash-ganancia-neta-real').textContent = App.formatCurrency(neta);
+            }
+
             // 2. 📱 Métricas Separadas de Celulares
             if (document.getElementById('dash-cel-ganancias')) {
                 document.getElementById('dash-cel-ganancias').textContent = App.formatCurrency(data.celulares_ganancias_mes);

@@ -160,3 +160,21 @@ def obtener_accesorios_catalogo(
         return rows
     finally:
         conn.close()
+
+
+@router.get("/api/catalogo/reparacion/{folio}")
+def rastrear_reparacion_publica(folio: str):
+    """
+    Permite a los clientes rastrear el estado en tiempo real de su equipo en reparación
+    usando su número de folio (ej. REP-202610-001) o escaneando el código QR de su boleta.
+    Muestra únicamente información segura y no confidencial.
+    """
+    from app import crud
+    rep = crud.get_reparacion_publica_by_folio(folio)
+    if not rep:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontró ninguna orden de servicio con el folio proporcionado. Verifique el número e intente de nuevo."
+        )
+    return rep
+

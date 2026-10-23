@@ -426,8 +426,8 @@ const App = {
     },
 
     switchTab(tabName) {
-        if ((tabName === 'reportes' || tabName === 'configuracion') && !this.isAdmin) {
-            this.showToast(`El módulo de ${tabName === 'reportes' ? 'Reportes' : 'Configuración'} requiere permisos de Dueño.`, "warning");
+        if ((tabName === 'reportes' || tabName === 'configuracion' || tabName === 'gastos') && !this.isAdmin) {
+            this.showToast(`El módulo de ${tabName} requiere permisos de Dueño.`, "warning");
             return;
         }
         this.currentTab = tabName;
@@ -487,6 +487,8 @@ const App = {
         } else if (tabName === 'configuracion') {
             if (typeof ConfiguracionTienda !== 'undefined') ConfiguracionTienda.cargar();
             if (typeof Empleados !== 'undefined') Empleados.cargar();
+        } else if (tabName === 'gastos') {
+            if (typeof Gastos !== 'undefined') Gastos.cargar();
         }
 
         // Si estamos en POS móvil, verificar visibilidad del carrito flotante

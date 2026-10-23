@@ -96,11 +96,68 @@ const Caja = {
 
             const corteGuardado = await res.json();
             App.showToast(`¡Corte de caja guardado con éxito! Folio #${corteGuardado.id}`, "success");
+            this.enviarCorteWhatsApp(corteGuardado);
             this.cerrarModal();
             App.updateHeaderStats();
         } catch (e) {
             App.showToast(e.message, "error");
         }
+    },
+
+    enviarCorteWhatsApp(corte = null) {
+        const d = corte || this.datosCorte;
+        if (!d) {
+            App.showToast("No hay datos de balance de caja para enviar", "warning");
+            return;
+        }
+
+        const inputDeclarado = document.getElementById('corte-efectivo-declarado');
+        const declarado = corte ? (corte.efectivo_declarado != null ? corte.efectivo_declarado : corte.total_efectivo) : (parseFloat(inputDeclarado?.value) || d.total_efectivo);
+        const diff = declarado - (d.total_efectivo || 0);
+
+        const fechaStr = App.formatDate(d.fecha_corte || new Date().toISOString());
+        const usuario = (App.currentUser?.nombre || App.currentUser?.username || 'Cajero de Turno');
+        const tiendaNombre = (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.datos && ConfiguracionTienda.datos.nombre_comercial) || 'Mi Inventario Celulares';
+        
+        let diffEmoji = '✅';
+        let diffTexto = 'Caja Cuadrada ($0.00)';
+        if (Math.abs(diff) >= 0.05) {
+            if (diff > 0) {
+                diffEmoji = '🟢';
+                diffTexto = `Sobrante: +${App.formatCurrency(diff)}`;
+            } else {
+                diffEmoji = '🔴';
+                diffTexto = `Faltante: -${App.formatCurrency(Math.abs(diff))}`;
+            }
+        }
+
+        let msg = `📊 *CORTE DE CAJA DIARIO*\n`;
+        msg += `🏪 *${tiendaNombre}*\n`;
+        msg += `📅 *Fecha:* ${fechaStr}\n`;
+        msg += `👤 *Cajero:* ${usuario}\n`;
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `💵 *TOTAL VENTAS:* *${App.formatCurrency(d.total_ventas || 0)}*\n`;
+        msg += `  • Efectivo en Sistema: ${App.formatCurrency(d.total_efectivo || 0)}\n`;
+        msg += `  • Transferencia: ${App.formatCurrency(d.total_transferencia || 0)}\n`;
+        if (d.total_garantia) {
+            msg += `  • Garantía / Otros: ${App.formatCurrency(d.total_garantia)}\n`;
+        }
+        msg += `🛍️ *Operaciones:* ${d.cantidad_ventas || 0} transacciones\n`;
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `💰 *Efectivo Esperado:* ${App.formatCurrency(d.total_efectivo || 0)}\n`;
+        msg += `💵 *Efectivo Real Físico:* ${App.formatCurrency(declarado)}\n`;
+        msg += `${diffEmoji} *Diferencia de Arqueo:* *${diffTexto}*\n`;
+        const notas = d.notas || document.getElementById('corte-notas')?.value.trim();
+        if (notas) {
+            msg += `📝 *Observaciones:* ${notas}\n`;
+        }
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `_Reporte automático enviado desde Sistema POS_`;
+
+        const telDueno = ((typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.datos && (ConfiguracionTienda.datos.whatsapp_notificaciones || ConfiguracionTienda.datos.telefono)) || '').replace(/\D/g, '');
+        const targetTel = telDueno ? (telDueno.length === 10 ? '52' + telDueno : telDueno) : '';
+        const url = `https://wa.me/${targetTel}?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
     },
 
     async verHistorial() {
@@ -113,7 +170,7 @@ const Caja = {
             if (res.ok) {
                 const cortes = await res.json();
                 if (cortes.length === 0) {
-                    container.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">No hay cortes previos registrados</td></tr>`;
+                    container.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-400">No hay cortes previos registrados</td></tr>`;
                 } else {
                     container.innerHTML = cortes.map(c => `
                         <tr class="border-b border-slate-100 text-xs">
@@ -126,6 +183,11 @@ const Caja = {
                                 ${c.diferencia >= 0 ? '+' : ''}${App.formatCurrency(c.diferencia)}
                             </td>
                             <td class="py-2.5 px-3 text-slate-500 italic">${App.escapeHtml(c.notas || '--')}</td>
+                            <td class="py-2.5 px-3 text-right">
+                                <button type="button" onclick='Caja.enviarCorteWhatsApp(${JSON.stringify(c).replace(/'/g, "&#39;")})' class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg font-bold text-[11px] transition-all" title="Reenviar a WhatsApp del dueño">
+                                    📲 WA
+                                </button>
+                            </td>
                         </tr>
                     `).join('');
                 }

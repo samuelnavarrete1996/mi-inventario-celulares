@@ -94,8 +94,28 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'reparaciones' AND column_name = 'sucursal_id') THEN
         ALTER TABLE reparaciones ADD COLUMN sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'reparaciones' AND column_name = 'checklist_recepcion') THEN
+        ALTER TABLE reparaciones ADD COLUMN checklist_recepcion TEXT;
+    END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS idx_reparaciones_tenant_sucursal ON reparaciones(tenant_id, sucursal_id);
+
+-- 3.3b Tabla Gastos Operativos
+CREATE TABLE IF NOT EXISTS gastos (
+    id SERIAL PRIMARY KEY,
+    concepto VARCHAR(200) NOT NULL,
+    categoria VARCHAR(60) NOT NULL DEFAULT 'General',
+    monto DOUBLE PRECISION NOT NULL,
+    fecha TEXT NOT NULL,
+    metodo_pago VARCHAR(50) NOT NULL DEFAULT 'Efectivo',
+    comprobante_url VARCHAR(500),
+    usuario VARCHAR(100) NOT NULL DEFAULT 'Admin',
+    notas TEXT,
+    tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+    sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gastos_tenant_sucursal ON gastos(tenant_id, sucursal_id);
+CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);
 
 -- 3.4 Tabla Accesorios
 DO $$
@@ -206,7 +226,7 @@ DECLARE
     tablas_rls TEXT[] := ARRAY[
         'sucursales', 'configuracion_tienda', 'usuarios', 'equipos', 'accesorios',
         'clientes', 'ventas', 'venta_accesorios', 'abonos_credito', 'pagos_credito',
-        'movimientos_stock', 'reparaciones', 'garantias', 'cortes_caja'
+        'movimientos_stock', 'reparaciones', 'garantias', 'cortes_caja', 'gastos'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tablas_rls LOOP
