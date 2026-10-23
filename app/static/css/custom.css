@@ -146,6 +146,9 @@ body {
         box-shadow: none !important;
         border: none !important;
         padding: 8px 12px !important;
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
     }
 
     /* Ancho estándar 58mm (impresora portátil Bluetooth) */

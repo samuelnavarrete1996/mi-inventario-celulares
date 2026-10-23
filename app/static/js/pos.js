@@ -1179,8 +1179,9 @@ const POS = {
             }
         }
 
-        if (typeof ConfiguracionTienda !== 'undefined' && ConfiguracionTienda.aplicarClasesAnchoTickets) {
-            ConfiguracionTienda.aplicarClasesAnchoTickets();
+        if (typeof ConfiguracionTienda !== 'undefined') {
+            if (ConfiguracionTienda.aplicarClasesAnchoTickets) ConfiguracionTienda.aplicarClasesAnchoTickets();
+            if (ConfiguracionTienda.actualizarBotonesAncho) ConfiguracionTienda.actualizarBotonesAncho();
         }
 
         const modal = document.getElementById('modal-recibo-venta');
