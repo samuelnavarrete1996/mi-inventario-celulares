@@ -1452,7 +1452,12 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         p_ventas_dias.append(tenant_id)
     q_ventas_dias += " GROUP BY date(v.fecha_venta) ORDER BY dia ASC"
     cursor.execute(q_ventas_dias, p_ventas_dias)
-    ventas_dias = [dict(r) for r in cursor.fetchall()]
+    ventas_dias = []
+    for r in cursor.fetchall():
+        d = dict(r)
+        if "dia" in d and d["dia"] is not None:
+            d["dia"] = str(d["dia"])
+        ventas_dias.append(d)
 
     # 7. Distribución por Grados
     q_grados = "SELECT grado, COUNT(id) as total FROM equipos WHERE estado = 'Disponible'"
@@ -1491,8 +1496,8 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     SELECT 
         COALESCE(e.modelo, vi.nombre_item, 'Celular') as nombre,
         COUNT(vi.id) as unidades,
-        ROUND(SUM(vi.precio_final), 2) as recaudado,
-        ROUND(SUM(vi.margen_ganancia), 2) as ganancia
+        COALESCE(SUM(vi.precio_final), 0) as recaudado,
+        COALESCE(SUM(vi.margen_ganancia), 0) as ganancia
     FROM venta_items vi
     JOIN ventas v ON vi.venta_id = v.id
     LEFT JOIN equipos e ON vi.equipo_id = e.id
@@ -1503,17 +1508,25 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     if tenant_id is not None:
         q_top_cel += " AND v.tenant_id = ?"
         p_top_cel.append(tenant_id)
-    q_top_cel += " GROUP BY nombre ORDER BY unidades DESC, ganancia DESC LIMIT 5"
+    q_top_cel += " GROUP BY 1 ORDER BY unidades DESC, ganancia DESC LIMIT 5"
     cursor.execute(q_top_cel, p_top_cel)
-    top_celulares = [dict(r) for r in cursor.fetchall()]
+    top_celulares = [
+        {
+            "nombre": r["nombre"],
+            "unidades": int(r["unidades"]),
+            "recaudado": round(float(r["recaudado"] or 0), 2),
+            "ganancia": round(float(r["ganancia"] or 0), 2)
+        }
+        for r in cursor.fetchall()
+    ]
 
     # 10. Top Accesorios Más Vendidos en el Mes
     q_top_acc = """
     SELECT 
         COALESCE(a.nombre, vi.nombre_item, 'Accesorio') as nombre,
-        SUM(vi.cantidad) as unidades,
-        ROUND(SUM(vi.precio_final), 2) as recaudado,
-        ROUND(SUM(vi.margen_ganancia), 2) as ganancia
+        COALESCE(SUM(vi.cantidad), 0) as unidades,
+        COALESCE(SUM(vi.precio_final), 0) as recaudado,
+        COALESCE(SUM(vi.margen_ganancia), 0) as ganancia
     FROM venta_items vi
     JOIN ventas v ON vi.venta_id = v.id
     LEFT JOIN accesorios a ON vi.accesorio_id = a.id
@@ -1524,9 +1537,17 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     if tenant_id is not None:
         q_top_acc += " AND v.tenant_id = ?"
         p_top_acc.append(tenant_id)
-    q_top_acc += " GROUP BY nombre ORDER BY unidades DESC, ganancia DESC LIMIT 5"
+    q_top_acc += " GROUP BY 1 ORDER BY unidades DESC, ganancia DESC LIMIT 5"
     cursor.execute(q_top_acc, p_top_acc)
-    top_accesorios = [dict(r) for r in cursor.fetchall()]
+    top_accesorios = [
+        {
+            "nombre": r["nombre"],
+            "unidades": int(r["unidades"]),
+            "recaudado": round(float(r["recaudado"] or 0), 2),
+            "ganancia": round(float(r["ganancia"] or 0), 2)
+        }
+        for r in cursor.fetchall()
+    ]
 
     conn.close()
 

@@ -95,3 +95,11 @@ async def test_dashboard_separado_sanitizado_vendedor():
         assert data["accesorios_capital_inventario"] is None
         assert data["capital_inventario_total"] is None
         assert data["total_ganancias_mes"] is None
+
+def test_postgres_sql_conversion_strftime():
+    from app.postgres_client import _convert_sql_for_postgres
+    sql_sqlite = "SELECT * FROM ventas v WHERE strftime('%Y-%m', v.fecha_venta) = ?"
+    converted = _convert_sql_for_postgres(sql_sqlite)
+    assert "strftime" not in converted.lower()
+    assert "SUBSTR" in converted
+

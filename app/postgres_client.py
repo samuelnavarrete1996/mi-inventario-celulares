@@ -104,6 +104,9 @@ def _convert_sql_for_postgres(sql: str) -> str:
     )
 
     # 4. Traducción de funciones de fecha SQLite -> PostgreSQL
+    res = re.sub(r"strftime\s*\(\s*['\"]%Y-%m['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 7)", res, flags=re.I)
+    res = re.sub(r"strftime\s*\(\s*['\"]%Y-%m-%d['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 10)", res, flags=re.I)
+    res = re.sub(r"strftime\s*\(\s*['\"]%Y['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 4)", res, flags=re.I)
     res = re.sub(r"date\('now',\s*'-30 days',\s*'localtime'\)", "(CURRENT_DATE - INTERVAL '30 days')", res, flags=re.I)
     res = re.sub(r"date\('now',\s*'localtime'\)", "CURRENT_DATE", res, flags=re.I)
     res = re.sub(r"date\('now'\)", "CURRENT_DATE", res, flags=re.I)
