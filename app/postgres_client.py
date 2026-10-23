@@ -108,17 +108,89 @@ def _convert_sql_for_postgres(sql: str) -> str:
     res = re.sub(r"date\('now',\s*'localtime'\)", "CURRENT_DATE", res, flags=re.I)
     res = re.sub(r"date\('now'\)", "CURRENT_DATE", res, flags=re.I)
 
-    res = re.sub(r"strftime\s*\(\s*['\"]%Y-%m['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 7)", res, flags=re.I)
-    res = re.sub(r"strftime\s*\(\s*['\"]%Y-%m-%d['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 10)", res, flags=re.I)
-    res = re.sub(r"strftime\s*\(\s*['\"]%Y['\"]\s*,\s*([^)]+)\s*\)", r"SUBSTR((\1)::text, 1, 4)", res, flags=re.I)
+    # Parser robusto para strftime(...) con soporte de paréntesis anidados (ej. COALESCE(...))
+    pattern_strftime = re.compile(r"strftime\s*\(", re.IGNORECASE)
+    pos = 0
+    while True:
+        match = pattern_strftime.search(res, pos)
+        if not match:
+            break
+        start_idx = match.start()
+        open_paren_idx = match.end() - 1
 
-    def _sub_repl(m):
-        col = m.group(1).strip()
-        if col.endswith("::text"):
-            return f"SUBSTR({col}, {m.group(2)}, {m.group(3)})"
-        return f"SUBSTR(({col})::text, {m.group(2)}, {m.group(3)})"
+        depth = 1
+        i = open_paren_idx + 1
+        in_squote = False
+        while i < len(res) and depth > 0:
+            char = res[i]
+            if char == "'":
+                in_squote = not in_squote
+            elif not in_squote:
+                if char == '(':
+                    depth += 1
+                elif char == ')':
+                    depth -= 1
+            i += 1
 
-    res = re.sub(r"\bsubstr\s*\(\s*([^,]+?)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", _sub_repl, res, flags=re.I)
+        if depth != 0:
+            pos = match.end()
+            continue
+
+        args_str = res[open_paren_idx + 1:i - 1].strip()
+        m_fmt = re.match(r"^(['\"])(%Y(?:-%m(?:-%d)?)?)\1\s*,\s*(.+)$", args_str, re.DOTALL | re.IGNORECASE)
+        if m_fmt:
+            fmt = m_fmt.group(2)
+            expr = m_fmt.group(3).strip()
+            length = 7 if fmt == "%Y-%m" else (10 if fmt == "%Y-%m-%d" else 4)
+            replacement = f"SUBSTR(({expr})::text, 1, {length})"
+            res = res[:start_idx] + replacement + res[i:]
+            pos = start_idx + len(replacement)
+        else:
+            pos = i
+
+    # Parser robusto para substr(...) con soporte de expresiones anidadas
+    pattern_substr = re.compile(r"\bsubstr\s*\(", re.IGNORECASE)
+    pos = 0
+    while True:
+        match = pattern_substr.search(res, pos)
+        if not match:
+            break
+        start_idx = match.start()
+        open_paren_idx = match.end() - 1
+
+        depth = 1
+        i = open_paren_idx + 1
+        in_squote = False
+        while i < len(res) and depth > 0:
+            char = res[i]
+            if char == "'":
+                in_squote = not in_squote
+            elif not in_squote:
+                if char == '(':
+                    depth += 1
+                elif char == ')':
+                    depth -= 1
+            i += 1
+
+        if depth != 0:
+            pos = match.end()
+            continue
+
+        args_str = res[open_paren_idx + 1:i - 1].strip()
+        m_args = re.match(r"^(.+?)\s*,\s*(\d+)\s*,\s*(\d+)$", args_str, re.DOTALL)
+        if m_args:
+            expr = m_args.group(1).strip()
+            start_num = m_args.group(2)
+            len_num = m_args.group(3)
+            if expr.endswith("::text"):
+                replacement = f"SUBSTR({expr}, {start_num}, {len_num})"
+            else:
+                replacement = f"SUBSTR(({expr})::text, {start_num}, {len_num})"
+            res = res[:start_idx] + replacement + res[i:]
+            pos = start_idx + len(replacement)
+        else:
+            pos = i
+
     res = re.sub(r"\bdate\s*\(\s*([a-zA-Z0-9_.%]+)\s*\)", r"SUBSTR((\1)::text, 1, 10)", res, flags=re.I)
     return res
 

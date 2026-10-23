@@ -914,10 +914,10 @@ def get_historial_ventas(
             q_rep += " AND r.tenant_id = ?"
             p_rep.append(tenant_id)
         if fecha_inicio:
-            q_rep += " AND date(COALESCE(r.fecha_entrega, r.fecha_ingreso)) >= date(?)"
+            q_rep += " AND substr(COALESCE(r.fecha_entrega, r.fecha_ingreso), 1, 10) >= ?"
             p_rep.append(fecha_inicio)
         if fecha_fin:
-            q_rep += " AND date(COALESCE(r.fecha_entrega, r.fecha_ingreso)) <= date(?)"
+            q_rep += " AND substr(COALESCE(r.fecha_entrega, r.fecha_ingreso), 1, 10) <= ?"
             p_rep.append(fecha_fin)
         q_rep += " ORDER BY r.id DESC LIMIT ?"
         p_rep.append(limit)
@@ -1591,7 +1591,7 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         COUNT(v.id) as total_unidades
     FROM ventas v
     WHERE strftime('%Y-%m', v.fecha_venta) = ?
-      AND v.id NOT IN (SELECT DISTINCT venta_id FROM venta_items)
+      AND v.id NOT IN (SELECT DISTINCT venta_id FROM venta_items WHERE venta_id IS NOT NULL)
       AND v.equipo_id IS NOT NULL
     """
     p_cel_legacy = [mes_actual_str]
@@ -1601,9 +1601,9 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     cursor.execute(q_cel_legacy, p_cel_legacy)
     cel_legacy_row = cursor.fetchone()
 
-    cel_ventas = round(float(cel_items_row["total_ventas"]) + float(cel_legacy_row["total_ventas"]), 2)
-    cel_ganancias = round(float(cel_items_row["total_ganancias"]) + float(cel_legacy_row["total_ganancias"]), 2)
-    cel_unidades = int(cel_items_row["total_unidades"]) + int(cel_legacy_row["total_unidades"])
+    cel_ventas = round(float((cel_items_row["total_ventas"] if cel_items_row else 0) or 0) + float((cel_legacy_row["total_ventas"] if cel_legacy_row else 0) or 0), 2)
+    cel_ganancias = round(float((cel_items_row["total_ganancias"] if cel_items_row else 0) or 0) + float((cel_legacy_row["total_ganancias"] if cel_legacy_row else 0) or 0), 2)
+    cel_unidades = int((cel_items_row["total_unidades"] if cel_items_row else 0) or 0) + int((cel_legacy_row["total_unidades"] if cel_legacy_row else 0) or 0)
     cel_margen_pct = round((cel_ganancias / cel_ventas * 100), 1) if cel_ventas > 0 else 0.0
 
     # 2. Métricas de Accesorios y Servicios en el mes actual
@@ -1624,9 +1624,9 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     cursor.execute(q_acc_items, p_acc_items)
     acc_items_row = cursor.fetchone()
 
-    acc_ventas = round(float(acc_items_row["total_ventas"]), 2)
-    acc_ganancias = round(float(acc_items_row["total_ganancias"]), 2)
-    acc_unidades = int(acc_items_row["total_unidades"])
+    acc_ventas = round(float((acc_items_row["total_ventas"] if acc_items_row else 0) or 0), 2)
+    acc_ganancias = round(float((acc_items_row["total_ganancias"] if acc_items_row else 0) or 0), 2)
+    acc_unidades = int((acc_items_row["total_unidades"] if acc_items_row else 0) or 0)
     acc_margen_pct = round((acc_ganancias / acc_ventas * 100), 1) if acc_ventas > 0 else 0.0
 
     # 2.5 Métricas de Taller / Reparaciones en el mes actual
@@ -1637,7 +1637,7 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
         COUNT(id) as total_unidades
     FROM reparaciones
     WHERE estado != 'Cancelado'
-      AND strftime('%Y-%m', COALESCE(fecha_entrega, fecha_ingreso)) = ?
+      AND substr(COALESCE(fecha_entrega, fecha_ingreso), 1, 7) = ?
     """
     p_rep_mes = [mes_actual_str]
     if tenant_id is not None:
@@ -1646,9 +1646,9 @@ def get_dashboard_metrics(tenant_id: Optional[int] = None) -> Dict[str, Any]:
     cursor.execute(q_rep_mes, p_rep_mes)
     rep_mes_row = cursor.fetchone()
 
-    rep_ventas = round(float(rep_mes_row["total_ventas"] or 0), 2)
-    rep_ganancias = round(float(rep_mes_row["total_ganancias"] or 0), 2)
-    rep_unidades = int(rep_mes_row["total_unidades"] or 0)
+    rep_ventas = round(float((rep_mes_row["total_ventas"] if rep_mes_row else 0) or 0), 2)
+    rep_ganancias = round(float((rep_mes_row["total_ganancias"] if rep_mes_row else 0) or 0), 2)
+    rep_unidades = int((rep_mes_row["total_unidades"] if rep_mes_row else 0) or 0)
     rep_margen_pct = round((rep_ganancias / rep_ventas * 100), 1) if rep_ventas > 0 else 0.0
 
     # 3. Totales Consolidados del Mes (Celulares + Accesorios + Taller)

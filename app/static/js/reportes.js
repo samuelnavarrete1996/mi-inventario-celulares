@@ -73,7 +73,10 @@ const Reportes = {
     async cargarDashboard() {
         try {
             const res = await fetch('/api/reportes/dashboard');
-            if (!res.ok) throw new Error("Error al obtener métricas del dashboard.");
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || "Error al obtener métricas del dashboard.");
+            }
 
             const data = await res.json();
             this.datosDashboard = data;
@@ -168,7 +171,7 @@ const Reportes = {
 
         } catch (err) {
             console.error("Error cargando dashboard:", err);
-            App.showToast("Error al cargar métricas del mes", "error");
+            App.showToast(err.message || "Error al cargar métricas del mes", "error");
         }
     },
 
