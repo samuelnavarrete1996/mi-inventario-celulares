@@ -511,9 +511,9 @@ def registrar_venta_carrito(
 
         if es_cred and anticipo > 0:
             cursor.execute("""
-            INSERT INTO abonos_ventas_credito (venta_id, monto, fecha, metodo_pago, notas, usuario)
-            VALUES (?, ?, ?, 'Efectivo', 'Anticipo inicial', 'Cajero')
-            """, (venta_id, anticipo, now))
+            INSERT INTO abonos_ventas_credito (venta_id, monto, fecha, metodo_pago, notas, usuario, tenant_id)
+            VALUES (?, ?, ?, 'Efectivo', 'Anticipo inicial', 'Cajero', ?)
+            """, (venta_id, anticipo, now, final_tenant_id))
 
         # 5. Insertar items y actualizar estado/stock de forma atómica (Compare-And-Swap)
         for det in detalles_items:
@@ -1017,25 +1017,33 @@ def get_notas_credito(
     conn = get_db_connection(tenant_id=tenant_id)
     cursor = conn.cursor()
 
+    today_iso = datetime.now().strftime("%Y-%m-%d")
+
     # Actualización automática de estado Vencida si pasó la fecha límite
     try:
         upd_sql = """
         UPDATE ventas
         SET estado_credito = 'Vencida'
-        WHERE es_credito = 1
-          AND saldo_pendiente > 0
-          AND date('now', 'localtime') > date(fecha_vencimiento)
+        WHERE COALESCE(es_credito, 0) = 1
+          AND COALESCE(saldo_pendiente, 0) > 0
+          AND fecha_vencimiento IS NOT NULL
+          AND fecha_vencimiento != ''
+          AND ? > SUBSTR(fecha_vencimiento, 1, 10)
           AND (estado_credito IS NULL OR estado_credito != 'Vencida')
         """
-        upd_params = []
+        upd_params = [today_iso]
         if tenant_id is not None:
             upd_sql += " AND tenant_id = ?"
             upd_params.append(tenant_id)
         upd_sql += ";"
         cursor.execute(upd_sql, upd_params)
         conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("No se pudo actualizar estado_credito automático: %s", repr(e))
+        try:
+            conn.rollback()
+        except Exception:
+            pass
 
     query_nc = """
     SELECT 
@@ -1050,27 +1058,19 @@ def get_notas_credito(
         v.estado_credito,
         v.tenant_id,
         v.sucursal_id,
-        c.nombre as cliente_nombre,
-        c.telefono as cliente_telefono,
-        CAST(ROUND(julianday(date(v.fecha_vencimiento)) - julianday(date('now', 'localtime'))) AS INTEGER) as dias_restantes
+        COALESCE(c.nombre, 'Cliente General') as cliente_nombre,
+        COALESCE(c.telefono, '') as cliente_telefono,
+        0 as dias_restantes
     FROM ventas v
-    JOIN clientes c ON v.cliente_id = c.id
-    WHERE v.es_credito = 1
+    LEFT JOIN clientes c ON v.cliente_id = c.id
+    WHERE COALESCE(v.es_credito, 0) = 1
     """
     params_nc = []
     if tenant_id is not None:
         query_nc += " AND v.tenant_id = ?"
         params_nc.append(tenant_id)
 
-    query_nc += """
-    ORDER BY 
-        CASE 
-            WHEN v.saldo_pendiente > 0 AND date('now', 'localtime') > date(v.fecha_vencimiento) THEN 1
-            WHEN v.saldo_pendiente > 0 THEN 2
-            ELSE 3
-        END,
-        v.fecha_vencimiento ASC
-    """
+    query_nc += " ORDER BY v.id DESC"
     cursor.execute(query_nc, params_nc)
     rows = cursor.fetchall()
 
@@ -1081,22 +1081,23 @@ def get_notas_credito(
     monto_total_por_cobrar = 0.0
     monto_total_vencido = 0.0
 
+    today_date = datetime.now().date()
+
     for r in rows:
         d = dict(r)
         v_id = d["id"]
         # Cálculo seguro y consistente de días restantes
         f_venc_raw = d.get("fecha_vencimiento")
+        dias_rest = 0
         if f_venc_raw:
             try:
                 f_venc_date = datetime.strptime(str(f_venc_raw)[:10], "%Y-%m-%d").date()
-                dias_rest = (f_venc_date - datetime.now().date()).days
+                dias_rest = (f_venc_date - today_date).days
             except Exception:
-                dias_rest = d.get("dias_restantes") or 0
-        else:
-            dias_rest = d.get("dias_restantes") or 0
+                dias_rest = 0
         d["dias_restantes"] = dias_rest
 
-        saldo = float(d["saldo_pendiente"] or 0)
+        saldo = float(d.get("saldo_pendiente") or 0)
 
         if saldo <= 0.01:
             est = "Liquidada"
@@ -1109,21 +1110,27 @@ def get_notas_credito(
         d["estado_calculado"] = est
 
         # Artículos de la venta
-        cursor.execute("""
-        SELECT COALESCE(nombre_item, 'Artículo') as nombre, cantidad, precio_final
-        FROM venta_items WHERE venta_id = ?
-        """, (v_id,))
-        its = cursor.fetchall()
-        d["articulos_resumen"] = ", ".join([f"{it['nombre']} (x{it['cantidad']})" for it in its]) if its else "Artículo"
+        try:
+            cursor.execute("""
+            SELECT COALESCE(nombre_item, 'Artículo') as nombre, cantidad, precio_final
+            FROM venta_items WHERE venta_id = ?
+            """, (v_id,))
+            its = cursor.fetchall()
+            d["articulos_resumen"] = ", ".join([f"{it['nombre']} (x{it['cantidad']})" for it in its]) if its else "Artículo"
+        except Exception:
+            d["articulos_resumen"] = "Artículo"
 
         # Historial de abonos
-        cursor.execute("""
-        SELECT id, monto, fecha, metodo_pago, notas, usuario
-        FROM abonos_ventas_credito WHERE venta_id = ? ORDER BY id ASC
-        """, (v_id,))
-        abonos = [dict(a) for a in cursor.fetchall()]
+        try:
+            cursor.execute("""
+            SELECT id, monto, fecha, metodo_pago, notas, usuario
+            FROM abonos_ventas_credito WHERE venta_id = ? ORDER BY id ASC
+            """, (v_id,))
+            abonos = [dict(a) for a in cursor.fetchall()]
+        except Exception:
+            abonos = []
         d["abonos"] = abonos
-        d["total_abonado"] = round(sum(float(a["monto"]) for a in abonos), 2)
+        d["total_abonado"] = round(sum(float(a.get("monto") or 0) for a in abonos), 2)
 
         if saldo > 0.01:
             total_pendientes += 1
@@ -1136,6 +1143,15 @@ def get_notas_credito(
 
         if not estado_filtro or estado_filtro.lower() in ("todos", "todas") or est.lower() == estado_filtro.lower():
             notas.append(d)
+
+    # Ordenar en Python: primero notas vencidas, luego por vencer, luego vigentes, luego liquidadas
+    def orden_credito(item):
+        est = item.get("estado_calculado")
+        prio = 1 if est == "Vencida" else (2 if est == "Por Vencer" else (3 if est == "Vigente" else 4))
+        dias = item.get("dias_restantes", 0)
+        return (prio, dias, -item.get("id", 0))
+
+    notas.sort(key=orden_credito)
 
     conn.close()
 
@@ -1188,9 +1204,9 @@ def registrar_abono_credito(
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         cursor.execute("""
-        INSERT INTO abonos_ventas_credito (venta_id, monto, fecha, metodo_pago, notas, usuario)
-        VALUES (?, ?, ?, ?, ?, ?);
-        """, (venta_id, monto, now, metodo_pago, notas or "Abono a cuenta", usuario or "Caja"))
+        INSERT INTO abonos_ventas_credito (venta_id, monto, fecha, metodo_pago, notas, usuario, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """, (venta_id, monto, now, metodo_pago, notas or "Abono a cuenta", usuario or "Caja", tenant_id))
 
         cursor.execute("""
         UPDATE ventas 

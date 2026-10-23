@@ -88,7 +88,7 @@ def listar_notas_credito(
         return sanitizar_datos_sensibles(data, tenant.user)
     except Exception as e:
         logger.error("Error al obtener notas de crédito: %s", repr(e))
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al obtener notas de crédito.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al obtener notas de crédito: {str(e)}")
 
 @router.get("/creditos/alertas")
 def obtener_alertas_credito(
@@ -112,7 +112,7 @@ def obtener_alertas_credito(
         }
     except Exception as e:
         logger.error("Error al obtener alertas de crédito: %s", repr(e))
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al obtener alertas de crédito.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al obtener alertas de crédito: {str(e)}")
 
 @router.post("/creditos/{venta_id}/abono")
 def abonar_a_nota_credito(

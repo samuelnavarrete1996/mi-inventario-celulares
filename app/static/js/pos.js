@@ -1584,7 +1584,10 @@ ${garantiaWp}
         try {
             const url = `/api/pos/creditos?estado=${encodeURIComponent(this.filtroEstadoCredito)}`;
             const res = await fetch(url);
-            if (!res.ok) throw new Error("Error al consultar notas de crédito");
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || "Error al consultar notas de crédito");
+            }
             const data = await res.json();
 
             this.notasCredito = data.notas || [];

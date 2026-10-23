@@ -162,3 +162,23 @@ def test_postgres_sql_conversion_julianday():
     assert "julianday" not in converted.lower()
     assert "CURRENT_DATE" in converted
 
+def test_postgres_sql_conversion_date_comparisons():
+    from app.postgres_client import _convert_sql_for_postgres
+    sql = "SELECT * FROM ventas WHERE date('now', 'localtime') > date(fecha_vencimiento);"
+    converted = _convert_sql_for_postgres(sql)
+    # Debe asegurar que la comparación sea compatible entre tipos (evitando date > text)
+    assert "(CURRENT_DATE)::text" in converted or "::date" in converted
+
+def test_get_notas_credito_filtros():
+    res_todos = crud.get_notas_credito(estado_filtro="Todos", tenant_id=1)
+    assert "notas" in res_todos
+    assert "total_pendientes" in res_todos
+    assert "monto_total_por_cobrar" in res_todos
+
+    res_vigentes = crud.get_notas_credito(estado_filtro="Vigente", tenant_id=1)
+    assert isinstance(res_vigentes["notas"], list)
+
+    res_vencidas = crud.get_notas_credito(estado_filtro="Vencida", tenant_id=1)
+    assert isinstance(res_vencidas["notas"], list)
+
+

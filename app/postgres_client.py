@@ -192,6 +192,11 @@ def _convert_sql_for_postgres(sql: str) -> str:
             pos = i
 
     res = re.sub(r"\bdate\s*\(\s*([a-zA-Z0-9_.%]+)\s*\)", r"SUBSTR((\1)::text, 1, 10)", res, flags=re.I)
+
+    # Reemplazo de comparaciones directas entre CURRENT_DATE y SUBSTR (evita operator does not exist: date > text)
+    res = re.sub(r"\bCURRENT_DATE\s*([<>=!]+)\s*SUBSTR\(", r"(CURRENT_DATE)::text \1 SUBSTR(", res, flags=re.I)
+    res = re.sub(r"SUBSTR\((.+?)\)\s*([<>=!]+)\s*CURRENT_DATE\b", r"SUBSTR(\1) \2 (CURRENT_DATE)::text", res, flags=re.I)
+
     return res
 
 

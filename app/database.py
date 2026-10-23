@@ -490,7 +490,25 @@ def _init_postgres_db(conn, cursor):
         ("garantias_historial", "equipo_id", "INTEGER REFERENCES equipos(id) ON DELETE CASCADE"),
         ("historial_ventas_cambios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("venta_items", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("ventas", "monto_efectivo", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("ventas", "monto_transferencia", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("ventas", "monto_tarjeta", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("ventas", "monto_garantia", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("ventas", "notas", "TEXT"),
+        ("ventas", "es_credito", "INTEGER NOT NULL DEFAULT 0"),
+        ("ventas", "plazo_dias", "INTEGER NOT NULL DEFAULT 0"),
+        ("ventas", "fecha_vencimiento", "TEXT"),
+        ("ventas", "monto_credito", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("ventas", "monto_anticipo", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("ventas", "saldo_pendiente", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("ventas", "estado_credito", "VARCHAR(40)"),
         ("abonos_ventas_credito", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("abonos_ventas_credito", "venta_id", "INTEGER REFERENCES ventas(id) ON DELETE CASCADE"),
+        ("abonos_ventas_credito", "monto", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+        ("abonos_ventas_credito", "fecha", "TEXT"),
+        ("abonos_ventas_credito", "metodo_pago", "VARCHAR(50) NOT NULL DEFAULT 'Efectivo'"),
+        ("abonos_ventas_credito", "notas", "TEXT"),
+        ("abonos_ventas_credito", "usuario", "VARCHAR(100)"),
     ]
     for tbl, col, col_def in column_checks:
         try:
@@ -499,6 +517,10 @@ def _init_postgres_db(conn, cursor):
             _safe_exec(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_def};")
         except Exception:
             pass
+
+    # Asegurar índices para ventas a crédito
+    _safe_exec("CREATE INDEX IF NOT EXISTS idx_ventas_credito ON ventas(es_credito, estado_credito, fecha_vencimiento);")
+    _safe_exec("CREATE INDEX IF NOT EXISTS idx_abonos_venta_id ON abonos_ventas_credito(venta_id);")
 
     # Relajar restricciones NOT NULL heredadas en cortes_caja en PostgreSQL
     for col_relax in ["fecha_hora", "monto_efectivo", "monto_transferencia", "monto_tarjeta", "efectivo_esperado", "efectivo_real", "usuario"]:
@@ -739,9 +761,13 @@ def init_db():
         metodo_pago TEXT NOT NULL DEFAULT 'Efectivo',
         notas TEXT,
         usuario TEXT,
+        tenant_id INTEGER,
         FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE
     );
     """)
+    cur_cols_ab = [c[1] for c in cursor.execute("PRAGMA table_info(abonos_ventas_credito);").fetchall()]
+    if "tenant_id" not in cur_cols_ab:
+        cursor.execute("ALTER TABLE abonos_ventas_credito ADD COLUMN tenant_id INTEGER;")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_ventas_credito ON ventas(es_credito, estado_credito, fecha_vencimiento);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_abonos_venta_id ON abonos_ventas_credito(venta_id);")
 
