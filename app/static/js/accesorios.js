@@ -125,9 +125,9 @@ const Accesorios = {
                         ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200">🟡 Bajo (${acc.stock})</span>`
                         : `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">🟢 ${acc.stock} pzas</span>`));
 
-            const pMay = acc.precio_mayoreo || acc.precio_venta || 0;
-            const p20 = acc.precio_20_pzs || pMay;
-            const pCaja = acc.precio_caja || acc.costo_compra || p20;
+            const pMenudeo = acc.precio_venta || acc.precio_mayoreo || 0;
+            const pMayoreo = acc.precio_20_pzs || acc.precio_mayoreo || pMenudeo;
+            const pCaja = acc.precio_caja || acc.costo_compra || pMayoreo;
 
             const imgHtml = acc.imagen_url 
                 ? `<img src="${App.sanitizeUrl(acc.imagen_url)}" onclick="event.stopPropagation(); Accesorios.verFotoGrande('${App.sanitizeUrl(acc.imagen_url)}', '${App.escapeHtml(acc.nombre).replace(/'/g, "\\'")}')" class="w-10 h-10 object-contain rounded-xl border border-slate-200 bg-white p-1 flex-shrink-0 shadow-2xs cursor-pointer hover:scale-110 hover:border-blue-400 transition-all" alt="${App.escapeHtml(acc.nombre)}" title="Haz clic para ver foto ampliada" onerror="this.onerror=null; this.src='/static/icons/icon-192.png'">`
@@ -148,8 +148,8 @@ const Accesorios = {
                     </div>
                 </td>
                 <td class="py-3 px-4 text-slate-600 whitespace-nowrap">${App.escapeHtml(acc.categoria)}</td>
-                <td class="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">${App.formatCurrency(pMay)}</td>
-                <td class="py-3 px-4 whitespace-nowrap"><span class="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">${App.formatCurrency(p20)}</span></td>
+                <td class="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">${App.formatCurrency(pMenudeo)}</td>
+                <td class="py-3 px-4 whitespace-nowrap"><span class="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">${App.formatCurrency(pMayoreo)}</span></td>
                 <td class="py-3 px-4 whitespace-nowrap"><span class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">${App.formatCurrency(pCaja)}</span></td>
                 <td class="py-3 px-4">${stockBadge}</td>
                 <td class="py-3 px-4 text-right space-x-1 whitespace-nowrap">
@@ -359,20 +359,20 @@ const Accesorios = {
         const color = document.getElementById('input-acc-color')?.value?.trim() || null;
         const codigo_barras = document.getElementById('input-acc-codigo')?.value?.trim() || null;
         const imagen_url = document.getElementById('input-acc-imagen-url')?.value?.trim() || null;
-        const precio_mayoreo = parseFloat(document.getElementById('input-acc-precio').value) || 0;
-        const precio_20_pzs = parseFloat(document.getElementById('input-acc-20-pzs')?.value) || precio_mayoreo;
+        const precio_menudeo = parseFloat(document.getElementById('input-acc-precio').value) || 0;
+        const precio_mayoreo = parseFloat(document.getElementById('input-acc-20-pzs')?.value) || precio_menudeo;
         const precio_caja = parseFloat(document.getElementById('input-acc-caja')?.value) || 0;
         let costo_compra = parseFloat(document.getElementById('input-acc-costo').value) || 0;
         
         if (!costo_compra && precio_caja > 0) costo_compra = precio_caja;
         if (!costo_compra && precio_mayoreo > 0) costo_compra = precio_mayoreo;
 
-        const precio_venta = precio_mayoreo;
+        const precio_venta = precio_menudeo;
         const stock = parseInt(document.getElementById('input-acc-stock').value, 10) || 0;
         const es_servicio = document.getElementById('input-acc-servicio').checked;
 
         if (!nombre || precio_venta <= 0) {
-            App.showToast("Ingresa un nombre y precio de mayoreo válidos", "error");
+            App.showToast("Ingresa un nombre y precio de menudeo válidos", "error");
             return;
         }
 
@@ -383,9 +383,9 @@ const Accesorios = {
             codigo_barras,
             imagen_url,
             costo_compra, 
-            precio_venta, 
-            precio_mayoreo, 
-            precio_20_pzs, 
+            precio_venta: precio_menudeo, 
+            precio_mayoreo: precio_mayoreo, 
+            precio_20_pzs: precio_mayoreo, 
             precio_caja: precio_caja || costo_compra,
             stock, 
             es_servicio 

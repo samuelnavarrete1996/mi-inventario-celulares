@@ -2260,6 +2260,7 @@ def actualizar_stock_masivo(
             nuevo_stock = it.get("stock")
             p_menudeo = it.get("precio_venta")
             p_mayoreo = it.get("precio_mayoreo")
+            p_20_pzs = it.get("precio_20_pzs") or p_mayoreo
             p_caja = it.get("precio_caja")
 
             if tenant_id is not None:
@@ -2282,6 +2283,11 @@ def actualizar_stock_masivo(
                 if p_mayoreo is not None and float(p_mayoreo) >= 0:
                     updates.append("precio_mayoreo = ?")
                     u_params.append(round(float(p_mayoreo), 2))
+                    updates.append("precio_20_pzs = ?")
+                    u_params.append(round(float(p_mayoreo), 2))
+                elif p_20_pzs is not None and float(p_20_pzs) >= 0:
+                    updates.append("precio_20_pzs = ?")
+                    u_params.append(round(float(p_20_pzs), 2))
                 if p_caja is not None and float(p_caja) >= 0:
                     updates.append("precio_caja = ?")
                     u_params.append(round(float(p_caja), 2))

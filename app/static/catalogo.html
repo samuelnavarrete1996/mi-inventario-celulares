@@ -78,7 +78,7 @@
                 Celulares Garantizados & Accesorios por Mayoreo
             </h2>
             <p class="text-xs sm:text-sm text-blue-100 max-w-lg mx-auto">
-                Arma tu pedido agregando productos al carrito. Al comprar <span class="font-bold underline decoration-amber-400 text-amber-200">+20 piezas</span> de un modelo se aplica automáticamente el precio especial.
+                Arma tu pedido agregando productos al carrito. Al comprar <span class="font-bold underline decoration-amber-400 text-amber-200">a partir de 20 piezas</span> de un accesorio se aplica automáticamente el precio de Mayoreo.
             </p>
         </div>
     </div>
@@ -177,8 +177,8 @@
                     📦
                 </div>
                 <div>
-                    <h4 class="font-bold text-slate-900 text-sm">Mayoreo y Descuento por Volumen</h4>
-                    <p class="text-xs text-slate-500 mt-0.5">Precios desde 1 pieza, con tarifa preferencial a partir de 20 pzs y caja cerrada.</p>
+                    <h4 class="font-bold text-slate-900 text-sm">Menudeo, Mayoreo y Caja</h4>
+                    <p class="text-xs text-slate-500 mt-0.5">Precios desde 1 pieza (Menudeo), tarifa de Mayoreo a partir de 20 pzs y precio especial por Caja.</p>
                 </div>
             </div>
 
@@ -399,7 +399,7 @@
                         <span id="cart-subtotal" class="font-bold text-slate-700">$0.00</span>
                     </div>
                     <div id="cart-fila-ahorro" class="flex justify-between text-emerald-600 font-bold hidden bg-emerald-50/70 px-2 py-1 rounded-lg border border-emerald-100">
-                        <span>🎉 Ahorro Mayorista (+20 pzs):</span>
+                        <span>🎉 Ahorro Mayorista / Caja:</span>
                         <span id="cart-ahorro">-$0.00</span>
                     </div>
                     <div class="pt-2 border-t border-slate-100 flex justify-between items-baseline">
@@ -800,8 +800,8 @@
                 empty.classList.add('hidden');
 
                 grid.innerHTML = lista.map(acc => {
-                    const pMay = acc.precio_mayoreo || acc.precio_venta || 0;
-                    const p20 = acc.precio_20_pzs || pMay;
+                    const pMen = acc.precio_venta || acc.precio_mayoreo || 0;
+                    const pMay = acc.precio_20_pzs || acc.precio_mayoreo || pMen;
                     const pCaja = acc.precio_caja || acc.precio_20_pzs || pMay;
 
                     const imgHtml = acc.imagen_url 
@@ -830,30 +830,30 @@
                             <h4 class="font-bold text-slate-900 text-sm leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">${this.escapeHtml(acc.nombre)}</h4>
                         </div>
 
-                        <!-- 3 Niveles de Precio Mayorista -->
+                        <!-- 3 Niveles de Precio (Menudeo, Mayoreo y Caja) -->
                         <div class="pt-2.5 mt-2.5 border-t border-slate-100 space-y-2">
                             <div class="bg-slate-50 rounded-xl p-2 border border-slate-100 grid grid-cols-3 gap-1 text-center">
                                 <div>
-                                    <span class="text-[9px] uppercase font-extrabold text-slate-400 block tracking-tight">Mayoreo</span>
-                                    <span class="text-xs font-black text-slate-900 leading-tight block mt-0.5">$${pMay.toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
+                                    <span class="text-[9px] uppercase font-extrabold text-slate-500 block tracking-tight">Menudeo</span>
+                                    <span class="text-xs font-black text-slate-900 leading-tight block mt-0.5">$${pMen.toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
                                 </div>
                                 <div class="border-x border-slate-200/80 bg-blue-50/60 rounded-md">
-                                    <span class="text-[9px] uppercase font-extrabold text-blue-600 block tracking-tight">+20 Pzs</span>
-                                    <span class="text-xs font-black text-blue-700 leading-tight block mt-0.5">$${p20.toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
+                                    <span class="text-[9px] uppercase font-extrabold text-blue-600 block tracking-tight">Mayoreo</span>
+                                    <span class="text-xs font-black text-blue-700 leading-tight block mt-0.5">$${pMay.toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
                                 </div>
                                 <div>
-                                    <span class="text-[9px] uppercase font-extrabold text-emerald-600 block tracking-tight">Por Caja</span>
+                                    <span class="text-[9px] uppercase font-extrabold text-emerald-600 block tracking-tight">Caja</span>
                                     <span class="text-xs font-black text-emerald-700 leading-tight block mt-0.5">$${pCaja.toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
                                 </div>
                             </div>
 
                             <!-- Botones de Agregar al Carrito -->
                             <div class="grid grid-cols-2 gap-1.5">
-                                <button onclick="Catalogo.agregarAlCarrito('accesorio', ${acc.id}, 1)" class="w-full py-2 px-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer" title="Agregar 1 pieza a precio mayoreo">
-                                    <span>🛒 +1 Mayoreo</span>
+                                <button onclick="Catalogo.agregarAlCarrito('accesorio', ${acc.id}, 1)" class="w-full py-2 px-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer" title="Agregar 1 pieza a precio menudeo">
+                                    <span>🛒 +1 Menudeo</span>
                                 </button>
-                                <button onclick="Catalogo.agregarAlCarrito('accesorio', ${acc.id}, 20)" class="w-full py-2 px-1.5 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 active:from-blue-900 active:to-indigo-900 text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer" title="Agregar 20 piezas con precio especial">
-                                    <span>📦 +20 Pzs</span>
+                                <button onclick="Catalogo.agregarAlCarrito('accesorio', ${acc.id}, 20)" class="w-full py-2 px-1.5 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 active:from-blue-900 active:to-indigo-900 text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer" title="Agregar 20 piezas con precio mayoreo">
+                                    <span>📦 +20 Mayoreo</span>
                                 </button>
                             </div>
                         </div>
@@ -910,9 +910,9 @@
                     const acc = this.accesorios.find(a => a.id === id);
                     if (!acc) return;
 
-                    const pMay = acc.precio_mayoreo || acc.precio_venta || 0;
-                    const p20 = acc.precio_20_pzs || pMay;
-                    const pCaja = acc.precio_caja || p20;
+                    const pMen = acc.precio_venta || acc.precio_mayoreo || 0;
+                    const pMay = acc.precio_20_pzs || acc.precio_mayoreo || pMen;
+                    const pCaja = acc.precio_caja || pMay;
 
                     if (itemExistente) {
                         itemExistente.cantidad += cantidadASumar;
@@ -924,8 +924,9 @@
                             categoria: acc.categoria,
                             color: acc.color || null,
                             imagen_url: acc.imagen_url,
+                            precio_venta: pMen,
                             precio_mayoreo: pMay,
-                            precio_20_pzs: p20,
+                            precio_20_pzs: pMay,
                             precio_caja: pCaja,
                             cantidad: cantidadASumar
                         });
@@ -934,7 +935,7 @@
                     const cantFinal = itemExistente ? itemExistente.cantidad : cantidadASumar;
                     const labelProd = acc.color ? `${acc.nombre} (${acc.color})` : acc.nombre;
                     if (cantFinal >= 20) {
-                        this.mostrarToast(`¡${labelProd} alcanzó ${cantFinal} pzs! Precio especial de +20 pzs aplicado ($${p20})`, '🎉');
+                        this.mostrarToast(`¡${labelProd} alcanzó ${cantFinal} pzs! Precio de Mayoreo aplicado ($${pMay})`, '🎉');
                     } else {
                         this.mostrarToast(`Agregado al carrito: ${labelProd} (${cantFinal} pzs)`, '🛒');
                     }
@@ -992,7 +993,7 @@
                 }
             },
 
-            // --- LÓGICA DE PRECIOS DINÁMICOS (+20 PZS Y POR CAJA) ---
+            // --- LÓGICA DE PRECIOS DINÁMICOS (MENUDEO, MAYOREO Y CAJA) ---
             calcularItem(item) {
                 if (item.tipo === 'equipo') {
                     const pUnit = item.precio_venta || 0;
@@ -1006,27 +1007,27 @@
                     };
                 } else {
                     const cant = item.cantidad || 1;
-                    const pMay = item.precio_mayoreo || item.precio_venta || 0;
-                    const p20 = (item.precio_20_pzs && item.precio_20_pzs > 0) ? item.precio_20_pzs : pMay;
-                    const pCaja = (item.precio_caja && item.precio_caja > 0) ? item.precio_caja : p20;
+                    const pMen = item.precio_venta || item.precio_mayoreo || 0;
+                    const pMay = (item.precio_20_pzs && item.precio_20_pzs > 0) ? item.precio_20_pzs : (item.precio_mayoreo || pMen);
+                    const pCaja = (item.precio_caja && item.precio_caja > 0) ? item.precio_caja : pMay;
 
-                    let precioUnitario = pMay;
-                    let nivelTexto = 'Mayoreo (1+)';
+                    let precioUnitario = pMen;
+                    let nivelTexto = 'Menudeo';
                     let aplica20 = false;
                     let aplicaCaja = false;
                     let ahorro = 0;
 
-                    // Escala de precios por volumen: Caja (+50 pzs) > +20 Pzs > Mayoreo (1+)
-                    if (cant >= 50 && pCaja < pMay) {
+                    // Escala de precios por volumen: Caja (+50 pzs) > Mayoreo (+20 pzs) > Menudeo
+                    if (cant >= 50 && pCaja < pMen) {
                         precioUnitario = pCaja;
-                        nivelTexto = 'Por Caja / +50 Pzs (Tarifa Preferencial)';
+                        nivelTexto = 'Caja (Tarifa Preferencial)';
                         aplicaCaja = true;
-                        ahorro = Math.max(0, (pMay - pCaja) * cant);
-                    } else if (cant >= 20 && p20 < pMay) {
-                        precioUnitario = p20;
-                        nivelTexto = '+20 Pzs (Precio Especial)';
+                        ahorro = Math.max(0, (pMen - pCaja) * cant);
+                    } else if (cant >= 20 && pMay < pMen) {
+                        precioUnitario = pMay;
+                        nivelTexto = 'Mayoreo (+20 Pzs)';
                         aplica20 = true;
-                        ahorro = Math.max(0, (pMay - p20) * cant);
+                        ahorro = Math.max(0, (pMen - pMay) * cant);
                     }
 
                     const subtotal = cant * precioUnitario;
@@ -1037,8 +1038,9 @@
                         aplica20: aplica20,
                         aplicaCaja: aplicaCaja,
                         ahorro: ahorro,
-                        pMay: pMay,
-                        p20: p20,
+                        pMen: pMen,
+                        pMay: pMen,
+                        p20: pMay,
                         pCaja: pCaja,
                         faltanPara20: Math.max(0, 20 - cant),
                         faltanParaCaja: Math.max(0, 50 - cant)
@@ -1100,31 +1102,31 @@
                             ? `${item.modelo} (${item.capacidad_gb}GB - ${item.color})`
                             : (item.color ? `${item.nombre} (${item.color})` : item.nombre);
 
-                        // Mensaje o badge de la regla de volumen (+20 pzs y Por Caja)
+                        // Mensaje o badge de la regla de volumen (Menudeo, Mayoreo y Caja)
                         let infoPrecioHtml = '';
                         if (item.tipo === 'accesorio') {
                             if (calc.aplicaCaja) {
                                 infoPrecioHtml = `
                                 <div class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-black">
-                                    <span>👑 Tarifa Por Caja (+50): $${calc.precioUnitario.toFixed(2)} c/u</span>
-                                    <span class="text-slate-400 line-through">($${calc.pMay.toFixed(2)})</span>
+                                    <span>👑 Tarifa Caja (+50): $${calc.precioUnitario.toFixed(2)} c/u</span>
+                                    <span class="text-slate-400 line-through">($${calc.pMen.toFixed(2)})</span>
                                 </div>`;
                             } else if (calc.aplica20) {
                                 infoPrecioHtml = `
                                 <div class="flex items-center justify-between text-[10px] bg-blue-50 text-blue-800 border border-blue-200 p-1.5 rounded-lg">
-                                    <span class="font-bold">✨ Precio +20 Pzs: $${calc.precioUnitario.toFixed(2)} c/u</span>
+                                    <span class="font-bold">✨ Precio Mayoreo (+20): $${calc.precioUnitario.toFixed(2)} c/u</span>
                                     ${calc.pCaja < calc.p20 ? `
                                     <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 50)" class="text-emerald-700 font-black ml-1.5 underline cursor-pointer hover:text-emerald-900" title="Alcanzar 50 pzs para precio caja">
                                         Subir a Caja ($${calc.pCaja.toFixed(2)})
                                     </button>` : ''}
                                 </div>`;
-                            } else if (calc.faltanPara20 > 0 && calc.p20 < calc.pMay) {
+                            } else if (calc.faltanPara20 > 0 && calc.p20 < calc.pMen) {
                                 infoPrecioHtml = `
                                 <div class="flex items-center justify-between text-[10px] text-slate-500 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                                    <span>Mayoreo: $${calc.precioUnitario.toFixed(2)} c/u</span>
+                                    <span>Menudeo: $${calc.precioUnitario.toFixed(2)} c/u</span>
                                     <div class="flex items-center gap-1">
                                         <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 20)" class="text-blue-600 hover:text-blue-800 font-black underline cursor-pointer">
-                                            +20 Pzs ($${calc.p20.toFixed(2)})
+                                            Mayoreo ($${calc.p20.toFixed(2)})
                                         </button>
                                         ${calc.pCaja < calc.p20 ? `
                                         <button onclick="Catalogo.fijarCantidad('${item.tipo}', ${item.id}, 50)" class="text-emerald-600 hover:text-emerald-800 font-black underline cursor-pointer ml-1">
@@ -1133,7 +1135,7 @@
                                     </div>
                                 </div>`;
                             } else {
-                                infoPrecioHtml = `<span class="text-[11px] text-slate-500 font-medium">Mayoreo: $${calc.precioUnitario.toFixed(2)} c/u</span>`;
+                                infoPrecioHtml = `<span class="text-[11px] text-slate-500 font-medium">Menudeo: $${calc.precioUnitario.toFixed(2)} c/u</span>`;
                             }
                         } else {
                             infoPrecioHtml = `<span class="text-[11px] text-slate-500 font-medium">Grado ${item.grado} • $${calc.precioUnitario.toFixed(2)}</span>`;
@@ -1273,9 +1275,9 @@
                         texto += `   • Cantidad: 1 unidad\n`;
                         texto += `   • Precio: $${calc.precioUnitario.toLocaleString('es-MX', {minimumFractionDigits: 2})}\n`;
                     } else {
-                        let tagDescuento = ' (Mayoreo 1+)';
-                        if (calc.aplicaCaja) tagDescuento = ' (👑 Precio Por Caja aplicado)';
-                        else if (calc.aplica20) tagDescuento = ' (✨ Precio +20 Pzs aplicado)';
+                        let tagDescuento = ' (Menudeo)';
+                        if (calc.aplicaCaja) tagDescuento = ' (👑 Precio Caja aplicado)';
+                        else if (calc.aplica20) tagDescuento = ' (✨ Precio Mayoreo aplicado)';
 
                         const nombreFinal = item.color ? `${item.nombre} (${item.color})` : item.nombre;
                         texto += `${numero} *${nombreFinal}*\n`;

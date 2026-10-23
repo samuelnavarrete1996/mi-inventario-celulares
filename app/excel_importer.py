@@ -309,7 +309,7 @@ def generar_plantilla_stock_accesorios_excel(
                 int(a.get("stock", 0) or 0),
                 int(a.get("stock", 0) or 0),
                 float(a.get("precio_venta") or 0.0),
-                float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0),
+                float(a.get("precio_20_pzs") or a.get("precio_mayoreo") or a.get("precio_venta") or 0.0),
                 float(a.get("precio_caja") or a.get("costo_compra") or 0.0)
             ])
 
@@ -378,7 +378,7 @@ def generar_plantilla_stock_accesorios_csv(
                 int(a.get("stock", 0) or 0),
                 int(a.get("stock", 0) or 0),
                 float(a.get("precio_venta") or 0.0),
-                float(a.get("precio_mayoreo") or a.get("precio_venta") or 0.0),
+                float(a.get("precio_20_pzs") or a.get("precio_mayoreo") or a.get("precio_venta") or 0.0),
                 float(a.get("precio_caja") or a.get("costo_compra") or 0.0)
             ])
 
@@ -511,6 +511,7 @@ def importar_stock_accesorios_excel(
                     item_dict["precio_venta"] = val_menudeo
                 if val_mayoreo is not None:
                     item_dict["precio_mayoreo"] = val_mayoreo
+                    item_dict["precio_20_pzs"] = val_mayoreo
                 if val_caja is not None:
                     item_dict["precio_caja"] = val_caja
                 items_to_update.append(item_dict)
@@ -522,6 +523,7 @@ def importar_stock_accesorios_excel(
                     "stock": val_stock or 0,
                     "precio_venta": val_menudeo or val_mayoreo or 0.0,
                     "precio_mayoreo": val_mayoreo or val_menudeo or 0.0,
+                    "precio_20_pzs": val_mayoreo or val_menudeo or 0.0,
                     "precio_caja": val_caja or val_mayoreo or 0.0
                 })
     else:
@@ -613,6 +615,7 @@ def importar_stock_accesorios_excel(
                     item_dict["precio_venta"] = val_menudeo
                 if val_mayoreo is not None:
                     item_dict["precio_mayoreo"] = val_mayoreo
+                    item_dict["precio_20_pzs"] = val_mayoreo
                 if val_caja is not None:
                     item_dict["precio_caja"] = val_caja
                 items_to_update.append(item_dict)
@@ -624,6 +627,7 @@ def importar_stock_accesorios_excel(
                     "stock": val_stock or 0,
                     "precio_venta": val_menudeo or val_mayoreo or 0.0,
                     "precio_mayoreo": val_mayoreo or val_menudeo or 0.0,
+                    "precio_20_pzs": val_mayoreo or val_menudeo or 0.0,
                     "precio_caja": val_caja or val_mayoreo or 0.0
                 })
 
