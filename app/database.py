@@ -420,6 +420,7 @@ def _init_postgres_db(conn, cursor):
         ("usuarios", "sucursal_id", "INTEGER REFERENCES sucursales(id) ON DELETE SET NULL"),
         ("movimientos_stock_accesorios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("garantias_historial", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
+        ("garantias_historial", "equipo_id", "INTEGER REFERENCES equipos(id) ON DELETE CASCADE"),
         ("historial_ventas_cambios", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("venta_items", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
         ("abonos_ventas_credito", "tenant_id", "INTEGER REFERENCES tenants(id) ON DELETE CASCADE"),
@@ -673,7 +674,7 @@ def init_db():
         motivo TEXT NOT NULL,
         falla_descripcion TEXT,
         estado_equipo_recibido TEXT NOT NULL DEFAULT 'En Garantia' CHECK(estado_equipo_recibido IN ('En Garantia', 'Disponible', 'Baja por Garantia')),
-        solucion TEXT NOT NULL DEFAULT 'Reemplazo' CHECK(solucion IN ('Reemplazo', 'Reingreso a Inventario', 'Reembolso')),
+        solucion TEXT NOT NULL DEFAULT 'Reemplazo' CHECK(solucion IN ('Reemplazo', 'Reingreso a Inventario', 'Reembolso', 'Nota de Crédito', 'Reparación')),
         equipo_reemplazo_id INTEGER,
         monto_cubierto REAL NOT NULL DEFAULT 0,
         notas TEXT,
@@ -681,6 +682,24 @@ def init_db():
         FOREIGN KEY (equipo_id) REFERENCES equipos (id) ON DELETE RESTRICT,
         FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE RESTRICT,
         FOREIGN KEY (equipo_reemplazo_id) REFERENCES equipos (id) ON DELETE SET NULL
+    );
+    """)
+
+    # 5.1 Tabla Historial de Estados de Garantía y Trazabilidad (SQLite)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS garantias_historial (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        garantia_id INTEGER,
+        equipo_id INTEGER,
+        estado_anterior TEXT,
+        estado_nuevo TEXT,
+        fecha_cambio TEXT NOT NULL,
+        usuario TEXT,
+        observaciones TEXT,
+        tenant_id INTEGER,
+        FOREIGN KEY (garantia_id) REFERENCES garantias(id) ON DELETE CASCADE,
+        FOREIGN KEY (equipo_id) REFERENCES equipos(id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
     );
     """)
 
@@ -818,6 +837,8 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_equipo ON garantias(equipo_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_venta ON garantias(venta_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_fecha ON garantias(fecha_devolucion);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_hist_equipo ON garantias_historial(equipo_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_garantias_hist_tenant ON garantias_historial(tenant_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_accesorios_categoria ON accesorios(categoria);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes_caja(fecha_corte);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_reparaciones_folio ON reparaciones(folio);")
@@ -836,6 +857,8 @@ def init_db():
         ("cortes_caja", True),
         ("clientes", False),
         ("usuarios", True),
+        ("garantias", True),
+        ("garantias_historial", False),
     ]
 
     for tabla, tiene_sucursal in tablas_multitenant:
@@ -858,6 +881,14 @@ def init_db():
             pass
 
     # Índices únicos multi-tenant compuestos
+    try:
+        cursor.execute("PRAGMA table_info(garantias_historial);")
+        gh_cols = [row["name"] for row in cursor.fetchall()]
+        if gh_cols and "equipo_id" not in gh_cols:
+            cursor.execute("ALTER TABLE garantias_historial ADD COLUMN equipo_id INTEGER REFERENCES equipos(id) ON DELETE CASCADE;")
+    except Exception:
+        pass
+
     try:
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_equipos_tenant_imei ON equipos(tenant_id, imei);")
     except Exception:

@@ -49,10 +49,17 @@ def listar_equipos(
     solo_disponibles: bool = Query(True, description="Mostrar solo equipos con estado 'Disponible'"),
     search: Optional[str] = Query(None, max_length=100, description="Búsqueda por modelo, IMEI o color"),
     grado: Optional[str] = Query(None, max_length=5, description="Filtrar por grado: A, B o C"),
+    estado: Optional[str] = Query(None, max_length=25, description="Filtrar por estado: Disponible, En Garantia, Vendido, todos"),
     tenant: TenantContext = Depends(get_current_tenant)
 ):
     """Obtiene la lista de equipos en inventario. Oculta costos confidenciales si no es dueño."""
-    equipos = crud.get_equipos(solo_disponibles=solo_disponibles, search=search, grado=grado, tenant_id=tenant.tenant_id)
+    equipos = crud.get_equipos(
+        solo_disponibles=solo_disponibles,
+        search=search,
+        grado=grado,
+        estado=estado,
+        tenant_id=tenant.tenant_id
+    )
     return sanitizar_datos_sensibles(equipos, tenant.user)
 
 @router.post("", response_model=EquipoResponse, status_code=status.HTTP_201_CREATED)

@@ -410,8 +410,8 @@ class GarantiaCreate(BaseModel):
 
     @field_validator('solucion')
     def validate_solucion(cls, v):
-        if v not in ('Reemplazo', 'Reingreso a Inventario', 'Reembolso'):
-            raise ValueError("solucion debe ser 'Reemplazo', 'Reingreso a Inventario' o 'Reembolso'")
+        if v not in ('Reemplazo', 'Reingreso a Inventario', 'Reembolso', 'Nota de Crédito', 'Reparación'):
+            raise ValueError("solucion debe ser 'Reemplazo', 'Reingreso a Inventario', 'Reembolso', 'Nota de Crédito' o 'Reparación'")
         return v
 
     @field_validator('monto_cubierto')
@@ -442,6 +442,23 @@ class GarantiaResponse(BaseModel):
     dias_garantia_permitidos: int
     dias_transcurridos: int
     dentro_de_garantia: bool
+
+class RestablecerEquipoGarantiaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nuevo_grado: Optional[str] = Field(None, max_length=5, description="Nuevo grado estético del equipo (A, B o C)")
+    nuevo_precio_venta: Optional[float] = Field(None, ge=0, description="Nuevo precio de venta")
+    costo_adicional: Optional[float] = Field(0.0, ge=0, description="Costo adicional de reparación o refacciones")
+    notas: Optional[str] = Field(None, max_length=500, description="Observaciones técnicas o de reparación")
+
+    @field_validator('nuevo_grado')
+    def validate_grado(cls, v):
+        if v is not None and v.strip() and v.strip().upper() not in ('A', 'B', 'C'):
+            raise ValueError("El grado debe ser A, B o C")
+        return v.strip().upper() if v and v.strip() else None
+
+    @field_validator('nuevo_precio_venta', 'costo_adicional')
+    def validate_precios_finitos(cls, v, info):
+        return _check_finite_float(v, info.field_name)
 
 class DashboardMetrics(BaseModel):
     total_ganancias_mes: float

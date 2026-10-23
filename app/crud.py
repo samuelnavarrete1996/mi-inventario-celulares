@@ -67,6 +67,7 @@ def get_equipos(
     solo_disponibles: bool = True,
     search: Optional[str] = None,
     grado: Optional[str] = None,
+    estado: Optional[str] = None,
     tenant_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Obtiene equipos con filtros opcionales y aislamiento multi-tenant estricto."""
@@ -80,9 +81,13 @@ def get_equipos(
         query += " AND tenant_id = ?"
         params.append(tenant_id)
 
-    if solo_disponibles:
+    if estado:
+        if estado.strip().lower() != 'todos':
+            query += " AND estado = ?"
+            params.append(estado.strip())
+    elif solo_disponibles:
         query += " AND estado = 'Disponible'"
-    
+
     if grado:
         query += " AND grado = ?"
         params.append(grado.upper())
@@ -1226,12 +1231,31 @@ def procesar_devolucion_garantia(
             data.equipo_reemplazo_id, monto_cubierto, data.notas
         ))
         garantia_id = cursor.lastrowid
+        if not garantia_id:
+            cursor.execute("SELECT id FROM garantias WHERE venta_id = ? AND equipo_id = ? ORDER BY id DESC LIMIT 1;", (venta["venta_id"], eq["id"]))
+            r_gid = cursor.fetchone()
+            garantia_id = r_gid["id"] if r_gid else None
 
         # 2. Actualizar estado del equipo devuelto
         if tenant_id is not None:
             cursor.execute("UPDATE equipos SET estado = ? WHERE id = ? AND tenant_id = ?", (data.estado_equipo_recibido, eq["id"], tenant_id))
         else:
             cursor.execute("UPDATE equipos SET estado = ? WHERE id = ?", (data.estado_equipo_recibido, eq["id"]))
+
+        # 3. Registrar en historial de garantías y trazabilidad del equipo
+        try:
+            cursor.execute("""
+            INSERT INTO garantias_historial (
+                garantia_id, equipo_id, estado_anterior, estado_nuevo, fecha_cambio, usuario, observaciones, tenant_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """, (
+                garantia_id, eq["id"], eq.get("estado", "Vendido"), data.estado_equipo_recibido,
+                now, "Garantía/Recepción", f"Devolución por garantía: {data.motivo}. Falla: {data.falla_descripcion or 'N/A'}. Solución: {data.solucion}.",
+                tenant_id
+            ))
+        except Exception:
+            pass
 
         conn.commit()
 
@@ -1300,6 +1324,108 @@ def get_historial_garantias(limit: int = 100, tenant_id: Optional[int] = None) -
     conn.close()
 
     return [dict(r) for r in rows]
+
+def restablecer_equipo_garantia(
+    equipo_id: int,
+    nuevo_grado: Optional[str] = None,
+    nuevo_precio_venta: Optional[float] = None,
+    costo_adicional: Optional[float] = 0.0,
+    notas: Optional[str] = None,
+    usuario: Optional[str] = "Admin",
+    tenant_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Restaura un equipo (por ejemplo de 'En Garantia' o 'Baja por Garantia') a 'Disponible',
+    actualizando opcionalmente su grado, precio de venta, costo de compra acumulado
+    y registrando la auditoría del cambio en garantias_historial.
+    """
+    conn = get_db_connection(tenant_id=tenant_id)
+    cursor = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        _begin_immediate(cursor)
+
+        # 1. Obtener y validar el equipo
+        if tenant_id is not None:
+            cursor.execute("SELECT * FROM equipos WHERE id = ? AND tenant_id = ?;", (equipo_id, tenant_id))
+        else:
+            cursor.execute("SELECT * FROM equipos WHERE id = ?;", (equipo_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError(f"No se encontró el equipo con ID {equipo_id} en el inventario.")
+
+        eq = format_equipo_dict(row)
+        estado_anterior = eq["estado"]
+
+        # 2. Preparar campos a actualizar
+        updates = ["estado = 'Disponible'"]
+        params = []
+
+        grado_final = eq["grado"]
+        if nuevo_grado and nuevo_grado.strip():
+            grado_final = nuevo_grado.strip().upper()
+            updates.append("grado = ?")
+            params.append(grado_final)
+
+        precio_final = eq["precio_venta"]
+        if nuevo_precio_venta is not None and nuevo_precio_venta > 0:
+            precio_final = float(nuevo_precio_venta)
+            updates.append("precio_venta = ?")
+            params.append(precio_final)
+
+        costo_extra = float(costo_adicional or 0.0)
+        costo_acumulado = eq["costo_compra"] + costo_extra
+        if costo_extra > 0:
+            updates.append("costo_compra = ?")
+            params.append(costo_acumulado)
+
+        if tenant_id is not None:
+            params.extend([equipo_id, tenant_id])
+            cursor.execute(f"UPDATE equipos SET {', '.join(updates)} WHERE id = ? AND tenant_id = ?;", params)
+        else:
+            params.append(equipo_id)
+            cursor.execute(f"UPDATE equipos SET {', '.join(updates)} WHERE id = ?;", params)
+
+        # 3. Vincular a la última garantía si existió
+        cursor.execute("SELECT id FROM garantias WHERE equipo_id = ? ORDER BY id DESC LIMIT 1;", (equipo_id,))
+        row_g = cursor.fetchone()
+        last_garantia_id = row_g["id"] if row_g else None
+
+        obs = f"Puesto funcional y reingresado a inventario disponible. Grado: {grado_final}. Precio venta: ${precio_final:,.2f}."
+        if costo_extra > 0:
+            obs += f" Costo refacción/reparación: ${costo_extra:,.2f}."
+        if notas and notas.strip():
+            obs += f" Notas técnicas: {notas.strip()}"
+
+        try:
+            cursor.execute("""
+            INSERT INTO garantias_historial (
+                garantia_id, equipo_id, estado_anterior, estado_nuevo, fecha_cambio, usuario, observaciones, tenant_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """, (
+                last_garantia_id, equipo_id, estado_anterior, 'Disponible',
+                now, usuario or "Admin", obs, tenant_id
+            ))
+        except Exception:
+            pass
+
+        conn.commit()
+
+        # 4. Retornar equipo actualizado
+        if tenant_id is not None:
+            cursor.execute("SELECT * FROM equipos WHERE id = ? AND tenant_id = ?;", (equipo_id, tenant_id))
+        else:
+            cursor.execute("SELECT * FROM equipos WHERE id = ?;", (equipo_id,))
+        row_updated = cursor.fetchone()
+        return format_equipo_dict(row_updated)
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 # --- REPORTES Y DASHBOARD ---
 
@@ -2303,6 +2429,85 @@ def obtener_historial_imei(imei: str, tenant_id: Optional[int] = None) -> Dict[s
                 "imei_defectuoso": cr["orig_imei"]
             }
         })
+
+    # Evento 5: Transiciones de estado y reingreso a funcional (garantias_historial)
+    try:
+        if tenant_id is not None:
+            cursor.execute("""
+            SELECT id, garantia_id, estado_anterior, estado_nuevo, fecha_cambio, usuario, observaciones
+            FROM garantias_historial
+            WHERE equipo_id = ? AND tenant_id = ?
+            ORDER BY id ASC;
+            """, (eq["id"], tenant_id))
+        else:
+            cursor.execute("""
+            SELECT id, garantia_id, estado_anterior, estado_nuevo, fecha_cambio, usuario, observaciones
+            FROM garantias_historial
+            WHERE equipo_id = ?
+            ORDER BY id ASC;
+            """, (eq["id"],))
+        hist_filas = cursor.fetchall()
+        for gh in hist_filas:
+            if gh["estado_nuevo"] == "Disponible":
+                eventos.append({
+                    "tipo": "RESTAURADO",
+                    "fecha": gh["fecha_cambio"],
+                    "titulo": "Puesto Funcional / Reingreso a Stock",
+                    "descripcion": gh["observaciones"] or "Equipo reacondicionado/reparado y puesto nuevamente como funcional para venta.",
+                    "detalles": {
+                        "usuario": gh["usuario"] or "Técnico",
+                        "estado_anterior": gh["estado_anterior"],
+                        "estado_nuevo": gh["estado_nuevo"]
+                    }
+                })
+            elif gh["estado_nuevo"] in ("En Garantia", "Baja por Garantia") and not gh["garantia_id"]:
+                eventos.append({
+                    "tipo": "GARANTIA_RECLAMO",
+                    "fecha": gh["fecha_cambio"],
+                    "titulo": f"Cambio de Estado: {gh['estado_nuevo']}",
+                    "descripcion": gh["observaciones"] or f"Estado modificado a {gh['estado_nuevo']}.",
+                    "detalles": {
+                        "usuario": gh["usuario"],
+                        "estado_anterior": gh["estado_anterior"],
+                        "estado_nuevo": gh["estado_nuevo"]
+                    }
+                })
+    except Exception:
+        pass
+
+    # Evento 6: Órdenes de Servicio Técnico en Taller
+    try:
+        if tenant_id is not None:
+            cursor.execute("""
+            SELECT id, folio, equipo_modelo, descripcion_falla, costo_estimado, estado, fecha_ingreso, tecnico_asignado
+            FROM reparaciones
+            WHERE imei_serie = ? AND tenant_id = ?
+            ORDER BY id ASC;
+            """, (clean_imei, tenant_id))
+        else:
+            cursor.execute("""
+            SELECT id, folio, equipo_modelo, descripcion_falla, costo_estimado, estado, fecha_ingreso, tecnico_asignado
+            FROM reparaciones
+            WHERE imei_serie = ?
+            ORDER BY id ASC;
+            """, (clean_imei,))
+        reparaciones = cursor.fetchall()
+        for rep in reparaciones:
+            costo_val = rep["costo_estimado"] or 0
+            eventos.append({
+                "tipo": "REPARACION_TALLER",
+                "fecha": rep["fecha_ingreso"],
+                "titulo": f"Taller: Orden #{rep['folio']}",
+                "descripcion": f"Falla: {rep['descripcion_falla']}. Estado: {rep['estado']}. Costo: ${costo_val:,.2f}.",
+                "detalles": {
+                    "folio": rep["folio"],
+                    "estado": rep["estado"],
+                    "tecnico": rep["tecnico_asignado"] or "No asignado",
+                    "costo": costo_val
+                }
+            })
+    except Exception:
+        pass
 
     # Ordenar cronológicamente
     eventos.sort(key=lambda x: x["fecha"])

@@ -192,16 +192,56 @@ const Garantias = {
         }
     },
 
-    async consultarHistorialIMEI(imei) {
-        if (!imei) return;
+    abrirModalBuscarHistorial(imei = '') {
         const modal = document.getElementById('modal-historial-imei');
+        const inputModal = document.getElementById('input-buscar-imei-modal');
+        const titleImei = document.getElementById('historial-imei-titulo');
+        const subImei = document.getElementById('historial-imei-subtitulo');
+        const badgeEstado = document.getElementById('historial-imei-estado');
+        const containerEventos = document.getElementById('timeline-imei-eventos');
+
+        if (modal) modal.classList.remove('hidden');
+
+        if (imei && imei.trim()) {
+            this.consultarHistorialIMEI(imei.trim());
+        } else {
+            if (titleImei) titleImei.textContent = "Búsqueda de Historial IMEI 360°";
+            if (subImei) subImei.textContent = "Ingresa los 15 dígitos de cualquier celular para auditar su ciclo de vida.";
+            if (badgeEstado) badgeEstado.textContent = "";
+            if (containerEventos) {
+                containerEventos.innerHTML = `
+                    <div class="py-12 text-center text-slate-400">
+                        <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <h4 class="font-bold text-slate-700 text-sm">Auditoría Universal de IMEI</h4>
+                        <p class="text-xs text-slate-400 mt-1 max-w-xs mx-auto">Ingresa un IMEI en la barra superior para ver ingresos, ventas, garantías, reparaciones y reingresos.</p>
+                    </div>
+                `;
+            }
+            if (inputModal) {
+                inputModal.value = '';
+                setTimeout(() => inputModal.focus(), 150);
+            }
+        }
+    },
+
+    async consultarHistorialIMEI(imei) {
+        if (!imei || !imei.trim()) {
+            App.showToast("Por favor ingresa un IMEI válido.", "warning");
+            return;
+        }
+        const cleanImei = imei.trim();
+        const modal = document.getElementById('modal-historial-imei');
+        const inputModal = document.getElementById('input-buscar-imei-modal');
         const containerEventos = document.getElementById('timeline-imei-eventos');
         const titleImei = document.getElementById('historial-imei-titulo');
         const subImei = document.getElementById('historial-imei-subtitulo');
         const badgeEstado = document.getElementById('historial-imei-estado');
 
         if (modal) modal.classList.remove('hidden');
-        if (titleImei) titleImei.textContent = `Consultando IMEI ${imei}...`;
+        if (inputModal) inputModal.value = cleanImei;
+        if (titleImei) titleImei.textContent = `Consultando IMEI ${cleanImei}...`;
         if (containerEventos) {
             containerEventos.innerHTML = `
                 <div class="py-8 text-center text-slate-400">
@@ -212,10 +252,10 @@ const Garantias = {
         }
 
         try {
-            const res = await fetch(`/api/garantias/historial-imei/${encodeURIComponent(imei)}`);
+            const res = await fetch(`/api/garantias/historial-imei/${encodeURIComponent(cleanImei)}`);
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.detail || "No se encontró historial");
+                throw new Error(err.detail || "No se encontró historial para este IMEI");
             }
             const data = await res.json();
 
@@ -243,7 +283,9 @@ const Garantias = {
                         'INGRESO': { icon: '📥', bg: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
                         'VENTA': { icon: '🏷️', bg: 'bg-blue-50 text-blue-600 border-blue-200' },
                         'GARANTIA_RECLAMO': { icon: '🛡️', bg: 'bg-amber-50 text-amber-600 border-amber-200' },
-                        'REEMPLAZO': { icon: '🔄', bg: 'bg-purple-50 text-purple-600 border-purple-200' }
+                        'REEMPLAZO': { icon: '🔄', bg: 'bg-purple-50 text-purple-600 border-purple-200' },
+                        'RESTAURADO': { icon: '🛠️', bg: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
+                        'REPARACION_TALLER': { icon: '🔧', bg: 'bg-indigo-50 text-indigo-600 border-indigo-200' }
                     };
                     const conf = iconMap[ev.tipo] || { icon: '📌', bg: 'bg-slate-50 text-slate-600 border-slate-200' };
 
@@ -275,6 +317,113 @@ const Garantias = {
     cerrarModalHistorial() {
         const modal = document.getElementById('modal-historial-imei');
         if (modal) modal.classList.add('hidden');
+    },
+
+    abrirModalRestablecer(equipo) {
+        if (!equipo) return;
+        const modal = document.getElementById('modal-restablecer-equipo');
+        const inputId = document.getElementById('restablecer-equipo-id');
+        const inputImeiHidden = document.getElementById('restablecer-equipo-imei-hidden');
+        const txtModelo = document.getElementById('restablecer-equipo-modelo');
+        const txtImei = document.getElementById('restablecer-equipo-imei');
+        const txtGradoPrev = document.getElementById('restablecer-equipo-grado-previo');
+        const selectGrado = document.getElementById('restablecer-nuevo-grado');
+        const inputPrecio = document.getElementById('restablecer-nuevo-precio');
+        const inputCostoExtra = document.getElementById('restablecer-costo-adicional');
+        const txtNotas = document.getElementById('restablecer-notas');
+
+        if (inputId) inputId.value = equipo.id;
+        if (inputImeiHidden) inputImeiHidden.value = equipo.imei;
+        if (txtModelo) txtModelo.textContent = `${equipo.modelo} (${equipo.capacidad_gb}GB • ${equipo.color})`;
+        if (txtImei) txtImei.textContent = equipo.imei;
+        if (txtGradoPrev) txtGradoPrev.textContent = `Grado ${equipo.grado}`;
+        if (selectGrado) selectGrado.value = (equipo.grado || 'A').toUpperCase();
+        if (inputPrecio) inputPrecio.value = equipo.precio_venta || '';
+        if (inputCostoExtra) inputCostoExtra.value = '0.00';
+        if (txtNotas) txtNotas.value = '';
+
+        if (modal) modal.classList.remove('hidden');
+    },
+
+    cerrarModalRestablecer() {
+        const modal = document.getElementById('modal-restablecer-equipo');
+        if (modal) modal.classList.add('hidden');
+    },
+
+    async procesarRestablecerEquipo() {
+        const equipoId = document.getElementById('restablecer-equipo-id')?.value;
+        const imei = document.getElementById('restablecer-equipo-imei-hidden')?.value;
+        const nuevoGrado = document.getElementById('restablecer-nuevo-grado')?.value;
+        const nuevoPrecio = parseFloat(document.getElementById('restablecer-nuevo-precio')?.value);
+        const costoExtra = parseFloat(document.getElementById('restablecer-costo-adicional')?.value) || 0.0;
+        const notas = document.getElementById('restablecer-notas')?.value.trim();
+
+        if (!equipoId) {
+            App.showToast("ID de equipo no especificado.", "error");
+            return;
+        }
+
+        if (isNaN(nuevoPrecio) || nuevoPrecio < 0) {
+            App.showToast("Ingresa un precio de venta válido.", "warning");
+            return;
+        }
+
+        const btnSubmit = document.getElementById('btn-submit-restablecer');
+        const originalText = btnSubmit ? btnSubmit.innerHTML : '';
+
+        try {
+            if (btnSubmit) {
+                btnSubmit.disabled = true;
+                btnSubmit.innerHTML = `
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg> Restableciendo a stock...
+                `;
+            }
+
+            const payload = {
+                nuevo_grado: nuevoGrado,
+                nuevo_precio_venta: nuevoPrecio,
+                costo_adicional: costoExtra,
+                notas: notas
+            };
+
+            const res = await fetch(`/api/garantias/restablecer-equipo/${equipoId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || "Error al restablecer equipo.");
+            }
+
+            App.showToast(`Equipo ${data.modelo} puesto funcional y reingresado a stock disponible.`, "success");
+            this.cerrarModalRestablecer();
+
+            // Refrescar inventario y métricas
+            if (typeof Inventario !== 'undefined' && Inventario.cargarEquipos) {
+                Inventario.cargarEquipos();
+            }
+            if (typeof App !== 'undefined' && App.updateHeaderStats) {
+                App.updateHeaderStats();
+            }
+
+            // Mostrar el historial actualizado con el nuevo evento
+            if (imei) {
+                this.consultarHistorialIMEI(imei);
+            }
+
+        } catch (err) {
+            App.showToast(err.message, "error");
+        } finally {
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = originalText;
+            }
+        }
     }
 };
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, status, Depends
 from typing import List, Optional, Dict, Any
 from app import crud
-from app.models import GarantiaCreate, GarantiaResponse
+from app.models import GarantiaCreate, GarantiaResponse, RestablecerEquipoGarantiaCreate
 from app.security import get_current_user, sanitizar_datos_sensibles, get_current_tenant
 from app.dependencies import TenantContext
 
@@ -82,4 +82,35 @@ def obtener_historial_completo_imei(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al consultar el historial del IMEI."
+        )
+
+@router.post("/restablecer-equipo/{equipo_id}")
+def restablecer_equipo_garantia(
+    equipo_id: int,
+    datos: RestablecerEquipoGarantiaCreate,
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    """
+    Restaura un equipo devuelto por garantía a estado 'Disponible',
+    actualizando su grado estético, nuevo precio de venta y guardando
+    la auditoría del cambio en garantias_historial.
+    """
+    try:
+        usuario_nombre = tenant.user.get("nombre") or tenant.user.get("username") or "Admin"
+        resultado = crud.restablecer_equipo_garantia(
+            equipo_id=equipo_id,
+            nuevo_grado=datos.nuevo_grado,
+            nuevo_precio_venta=datos.nuevo_precio_venta,
+            costo_adicional=datos.costo_adicional,
+            notas=datos.notas,
+            usuario=usuario_nombre,
+            tenant_id=tenant.tenant_id
+        )
+        return sanitizar_datos_sensibles(resultado, tenant.user)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al restablecer el equipo de garantía a disponible."
         )
